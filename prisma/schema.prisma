@@ -1,0 +1,590 @@
+// This is a manual Prisma schema. In a real environment, you would run `npx prisma init`.
+// For the purpose of this plan, I'm providing the schema definition here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Task {
+  id          String  @id @default(uuid())
+  title       String
+  description String
+  status      String  @default("Pending")
+  priority    String  @default("Medium")
+  progress    Int     @default(0)
+  deadline    String?
+  fromUnit    String
+  toUnit      String
+  timestamp   String // Storing formatted string for frontend compatibility
+  replies     String? // JSON stringified replies
+}
+
+model Meeting {
+  id        String  @id @default(uuid())
+  title     String
+  content   String
+  date      String
+  time      String
+  location  String?
+  organizer String
+}
+
+model Well {
+  id            String        @id
+  unit          String
+  block         String?
+  status        String
+  pressure      Float
+  injectionRate Float
+  lastUpdate    DateTime      @default(now())
+  // Relations
+  measures      WellMeasure[]
+}
+
+model WaterCutRecord {
+  id         String   @id @default(uuid())
+  unit       String
+  block      String
+  wellNo     String
+  sampleDate DateTime @db.Date
+  waterCut   Float
+  tester     String
+  remark     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([unit])
+  @@index([block])
+  @@index([wellNo])
+  @@index([sampleDate])
+  @@index([waterCut])
+}
+
+model InjectionTechRecord {
+  id              String   @id @default(uuid())
+  wellNo          String
+  block           String
+  workArea        String
+  process         String
+  packerCount     Int
+  packerModels    Json
+  bottomStructure String
+  washable        String
+  doublePacker    String
+  washReminder    String?
+  lastWorkDate    DateTime @db.Date
+  runningDate     DateTime @db.Date
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([wellNo])
+  @@index([block])
+  @@index([workArea])
+  @@index([process])
+  @@index([packerCount])
+  @@index([bottomStructure])
+}
+
+model WellFlushingRecord {
+  id                String   @id @default(uuid())
+  unit              String
+  wellNo            String
+  washDate          DateTime @db.Date
+  daysSinceLastWash Int
+  method            String
+  equipmentPressure Float?
+  duration          Float?
+  totalWater        Float?
+  firstLevel        Json
+  secondLevel       Json
+  suspendedMatter   Json
+  remark            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([unit])
+  @@index([wellNo])
+  @@index([washDate])
+}
+
+model AbnormalWellRecord {
+  id                     String   @id @default(uuid())
+  category               String
+  wellNo                 String
+  block                  String
+  unit                   String
+  process                String
+  normalDaily            String?
+  normalOilPressure      String?
+  normalCasingPressure   String?
+  normalLayerPressure    String?
+  abnormalDaily          String?
+  abnormalOilPressure    String?
+  abnormalCasingPressure String?
+  abnormalLayerPressure  String?
+  suggestion             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([category])
+  @@index([wellNo])
+  @@index([block])
+  @@index([unit])
+  @@index([process])
+}
+
+model WellMeasure {
+  id          String  @id @default(uuid())
+  wellId      String
+  well        Well    @relation(fields: [wellId], references: [id])
+  date        String
+  type        String // 洗井 (Flushing), 调配 (Adjustment), 维护 (Maintenance), etc.
+  description String
+  status      String // Pending, Completed
+  result      String?
+}
+
+model AdjustmentRecord {
+  id            String   @id @default(uuid())
+  wellId        String
+  currentRate   Float
+  suggestedRate Float
+  reason        String
+  status        String // Proposed, Approved, Executed
+  timestamp     DateTime @default(now())
+}
+
+model DynamicAdjustmentRecord {
+  id                   String   @id @default(uuid())
+  adjustmentWaterWell  String
+  injectionProcess     String?
+  adjustmentDate       DateTime @db.Date
+  beforeDailyInjection Float?
+  afterDailyInjection  Float?
+  adjustmentPurpose    String
+  trackedOilWell       String
+  beforeDailyLiquid    Float?
+  beforeDailyOil       Float?
+  beforeWaterCut       Float?
+  afterDailyLiquid     Float?
+  afterDailyOil        Float?
+  afterWaterCut        Float?
+  diffDailyLiquid      Float?
+  diffDailyOil         Float?
+  diffWaterCut         Float?
+  stageDays            Int?
+  cumulativeOil        Float?
+  remark               String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([adjustmentDate])
+  @@index([adjustmentWaterWell])
+  @@index([trackedOilWell])
+  @@index([adjustmentPurpose])
+}
+
+model ConcentricTestRecord {
+  id             String   @id @default(uuid())
+  wellNo         String
+  testDate       DateTime @db.Date
+  allocatorCount Int
+  freedom        String?
+  partialStroke  String?
+  fullyStuck     String?
+  layerFreedom   Json
+  dailyInjection Json
+  remark         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([wellNo])
+  @@index([testDate])
+}
+
+model SmartTestRecord {
+  id               String   @id @default(uuid())
+  wellNo           String
+  testDate         DateTime @db.Date
+  allocatorCount   Int
+  dailyAllocation  Json
+  dailyInjection   Json
+  allocationDiff   Json
+  nozzleOpening    Json
+  wellheadPressure String
+  innerPressure    Json
+  outerPressure    Json
+  remark           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([wellNo])
+  @@index([testDate])
+}
+
+model SingleWellInjectionEvaluationRecord {
+  id             String   @id @default(uuid())
+  wellNo         String
+  process        String
+  unit           String
+  evaluationDate DateTime @db.Date
+  intervalCount  Int
+  actualCount    Int
+  qualifiedCount Int
+  unqualified    Json
+  remark         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([wellNo])
+  @@index([process])
+  @@index([unit])
+  @@index([evaluationDate])
+}
+
+model SingleWellSealEvaluationRecord {
+  id                 String   @id @default(uuid())
+  wellNo             String
+  process            String
+  evaluationDate     DateTime @db.Date
+  intervalCount      Int
+  actualCount        Int
+  needSealCount      Int
+  qualifiedSealCount Int
+  sealStats          Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([wellNo])
+  @@index([process])
+  @@index([evaluationDate])
+}
+
+model ZonalIndicatorSummaryRecord {
+  id            String   @id @default(uuid())
+  category      String
+  process       String
+  wellCount     Int
+  processRate   String
+  intervalCount Int
+  actualCount   Int
+  level         String
+  segmentSeal   Json
+  fullSeal      Json
+  allocation    Json
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([category])
+  @@index([process])
+  @@index([sortOrder])
+}
+
+model DynamicAnalysisRecord {
+  id             String   @id @default(uuid())
+  kind           String
+  unit           String
+  block          String
+  wellNo         String?
+  endValues      Json
+  averageValues  Json
+  lastYearValues Json
+  diffMonth      Json
+  diffYear       Json
+  advice         Json
+  status         String?
+  process        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([kind])
+  @@index([unit])
+  @@index([block])
+  @@index([wellNo])
+}
+
+model PressureData {
+  id       String @id @default(uuid())
+  wellId   String
+  date     String
+  pressure Float
+  flowRate Float
+}
+
+model User {
+  id       String  @id @default(uuid())
+  name     String
+  empId    String  @unique
+  email    String?
+  password String  @default("123456") // In production, use hashing
+  role     String  @default("OPERATOR") // ADMIN, ANALYST, OPERATOR
+  unit     String
+  status   String  @default("Active") // Active, Inactive
+  phone    String?
+  gender   String? @default("男")
+}
+
+model Notification {
+  id      String  @id @default(uuid())
+  userId  String? // If null, it's global
+  title   String
+  content String
+  type    String  @default("info") // error, warning, success, info
+  time    String
+  isRead  Boolean @default(false)
+}
+
+model AuditLog {
+  id        String  @id @default(uuid())
+  user      String
+  role      String
+  action    String
+  details   String
+  timestamp String
+  ip        String?
+}
+
+model DeptResponsibility {
+  unit           String @id
+  responsibility String @db.Text
+}
+
+model SystemConfig {
+  key   String @id
+  value String @db.Text
+}
+
+model OracleRefreshBatch {
+  id             String                    @id @default(uuid())
+  dataset        String
+  status         String                    @default("PENDING")
+  trigger        String                    @default("startup")
+  isActive       Boolean                   @default(false)
+  startedAt      DateTime                  @default(now())
+  finishedAt     DateTime?
+  rowCount       Int                       @default(0)
+  error          String?                   @db.Text
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  productionRows ProductionWellSnapshot[]
+  waterRows      WaterBlockDailySnapshot[]
+
+  @@index([dataset, isActive])
+  @@index([dataset, status])
+  @@index([startedAt])
+}
+
+model ProductionWellSnapshot {
+  id          String             @id @default(uuid())
+  batchId     String
+  batch       OracleRefreshBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  unit        String
+  oracleScope String
+  jh          String
+  rq          String
+  station     String
+  block       String
+  liquid      Float
+  oil         Float
+  diluent     Float
+  waterCut    Float
+  gas         Float
+  rank        Int
+  createdAt   DateTime           @default(now())
+
+  @@unique([batchId, unit, rank])
+  @@index([batchId])
+  @@index([unit, rq])
+  @@index([unit, block])
+}
+
+model WaterBlockDailySnapshot {
+  id          String             @id @default(uuid())
+  batchId     String
+  batch       OracleRefreshBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  unit        String
+  oracleScope String
+  block       String
+  rq          String
+  total       Int
+  open        Int
+  injection   Float
+  createdAt   DateTime           @default(now())
+
+  @@unique([batchId, unit, block, rq])
+  @@index([batchId])
+  @@index([unit, rq])
+  @@index([unit, block])
+}
+
+model OracleImportRun {
+  id         String    @id @default(uuid())
+  dataset    String
+  status     String    @default("PENDING")
+  trigger    String    @default("manual")
+  scopeType  String    @default("unit")
+  scopeValue String
+  startDate  String
+  endDate    String
+  chunkKey   String
+  rowCount   Int       @default(0)
+  error      String?   @db.Text
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  productionRows ProductionWellHistory[]
+  waterRows      WaterWellHistory[]
+
+  @@index([dataset, status])
+  @@index([startedAt])
+  @@index([scopeType, scopeValue])
+  @@index([dataset, chunkKey])
+}
+
+model ProductionWellHistory {
+  id              String          @id @default(uuid())
+  importRunId     String
+  importRun       OracleImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+  unit            String
+  oracleScope     String
+  factory         String
+  jh              String
+  rq              DateTime        @db.Date
+  productionHours Float
+  liquid          Float
+  oil             Float
+  diluent         Float
+  waterCut        Float
+  gas             Float
+  dailyGas        Float
+  tailGas         Float
+  station         String
+  block           String
+  remark          String?
+  cc              Float?
+  strokeCount     Float?
+  pumpDiameter    Float?
+  loadedAt        DateTime        @default(now())
+
+  @@unique([oracleScope, jh, rq])
+  @@index([importRunId])
+  @@index([unit, rq])
+  @@index([jh, rq])
+  @@index([factory, rq])
+}
+
+model WaterWellHistory {
+  id                 String          @id @default(uuid())
+  importRunId        String
+  importRun          OracleImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+  unit               String
+  oracleScope        String
+  factory            String
+  jh                 String
+  rq                 DateTime        @db.Date
+  block              String
+  station            String
+  productionHours    Float
+  injectionMode      String
+  trunkPressure      Float
+  oilPressure        Float
+  casingPressure     Float
+  valveGroupPressure Float
+  manifoldPressure   Float
+  wellheadIron       Float
+  wellheadImpurity   Float
+  allocatedWater     Float
+  dailyWater         Float
+  injectedLiquid     Float
+  allocatedLayers    Float
+  overflow           Float
+  remarkCode         String?
+  remark             String?
+  loadedAt           DateTime        @default(now())
+
+  @@unique([oracleScope, jh, rq])
+  @@index([importRunId])
+  @@index([unit, rq])
+  @@index([jh, rq])
+  @@index([factory, rq])
+  @@index([block, rq])
+}
+
+model WellHistoryPdf {
+  id             String               @id @default(uuid())
+  wellNo         String               @unique
+  unit           String
+  block          String?
+  fileUrl        String
+  storedFileName String
+  originalName   String
+  mimeType       String
+  size           Int
+  remark         String?
+  uploadedAt     DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  archive        WellHistoryArchive?
+  extracts       WellHistoryExtract[]
+}
+
+model WellHistoryArchive {
+  id           String              @id @default(uuid())
+  wellNo       String              @unique
+  displayName  String
+  unit         String
+  block        String?
+  remark       String?
+  currentPdfId String?             @unique
+  currentPdf   WellHistoryPdf?     @relation(fields: [currentPdfId], references: [id])
+  extract      WellHistoryExtract?
+  uploadedAt   DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([unit])
+  @@index([block])
+  @@index([displayName])
+}
+
+model WellHistoryExtract {
+  id                 String             @id @default(uuid())
+  archiveId          String             @unique
+  pdfId              String             @unique
+  wellNo             String
+  title              String?
+  summary            String?
+  layersText         String?
+  interpretationText String?
+  conclusionText     String?
+  rawExtractText     String?
+  extractStatus      String             @default("pending")
+  extractSource      String?
+  reviewStatus       String             @default("unreviewed")
+  reviewRemark       String?
+  archive            WellHistoryArchive @relation(fields: [archiveId], references: [id])
+  pdf                WellHistoryPdf     @relation(fields: [pdfId], references: [id])
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([wellNo])
+  @@index([extractStatus])
+  @@index([reviewStatus])
+}
+
+model WellHistoryPdfOverlay {
+  id           String   @id @default(cuid())
+  wellNo       String
+  pdfId        String
+  elementsJson Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([wellNo, pdfId])
+}

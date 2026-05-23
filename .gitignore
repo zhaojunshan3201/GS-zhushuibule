@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+uploads/
+tmp-ppt-batch/
+.codex-runtime/
+.superpowers/
+.codex-dev.*
+water_injection_db_dump.sql
+backfill.json
+tmp_*.py

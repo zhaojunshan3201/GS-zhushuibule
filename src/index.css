@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cnpc-red: #a31b1b;
+  --color-cnpc-red-dark: #7f1515;
+  --color-cnpc-yellow: #ffcc00;
+  --color-cnpc-blue: #0056a3;
+  --color-shell-bg: #f8fafc;
+  --color-shell-panel: #ffffff;
+  --color-shell-border: #d8e2ec;
+  --color-table-header-bg: #e6f0f9;
+  --color-table-header-text: #1a2b3c;
+  --color-table-border: #acc6de;
+  --color-link-blue: #0000ee;
+  --color-action-red: #ff0000;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-shell-bg text-gray-900;
+  }
+}
+
+@layer components {
+  .shell-app {
+    @apply min-h-screen bg-shell-bg text-gray-900;
+  }
+
+  .shell-topbar {
+    @apply sticky top-0 z-40 bg-white;
+  }
+
+  .shell-topbar-inner {
+    @apply mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 py-4 lg:px-6;
+  }
+
+  .shell-topbar-brand {
+    @apply flex items-center gap-4;
+  }
+
+  .shell-topbar-nav {
+    @apply border-t-4 border-cnpc-yellow bg-cnpc-red;
+  }
+
+  .shell-topbar-nav-inner {
+    @apply mx-auto flex max-w-[1700px] items-center gap-0 overflow-x-auto px-4 lg:px-6;
+  }
+
+  .shell-content {
+    @apply mx-auto w-full max-w-[1700px] px-4 py-4 lg:px-6 lg:py-6;
+  }
+
+  .shell-panel {
+    @apply rounded-3xl border border-shell-border bg-shell-panel shadow-sm;
+  }
+
+  .shell-toolbar {
+    @apply flex flex-wrap items-center gap-3 rounded-2xl border border-shell-border bg-white px-4 py-3 shadow-sm;
+  }
+
+  .shell-section-title {
+    @apply text-xl font-black tracking-tight text-gray-900 lg:text-2xl;
+  }
+
+  .shell-nav-link {
+    @apply inline-flex items-center border-b-4 border-transparent px-7 py-4 text-base font-bold text-white transition-colors;
+  }
+
+  .shell-nav-link-active {
+    @apply border-cnpc-yellow bg-[#8f1016] text-cnpc-yellow;
+  }
+
+  .shell-nav-link-idle {
+    @apply hover:border-cnpc-yellow/70 hover:text-cnpc-yellow;
+  }
+
+  .shell-primary-btn {
+    @apply inline-flex items-center justify-center rounded-xl bg-cnpc-red px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-cnpc-red-dark;
+  }
+
+  .shell-link {
+    @apply text-link-blue underline underline-offset-2 transition-colors hover:text-cnpc-blue;
+  }
+
+  .shell-danger-text {
+    @apply text-action-red;
+  }
+
+  .cnpc-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .cnpc-table th {
+    @apply whitespace-nowrap border border-table-border bg-table-header-bg px-2 py-1.5 text-center font-bold text-table-header-text;
+  }
+
+  .cnpc-table td {
+    @apply border border-table-border bg-white px-2 py-1 text-center text-gray-700;
+  }
+
+  .cnpc-table tr:hover td {
+    @apply bg-gray-50;
+  }
+
+  .cnpc-table-report th {
+    @apply px-3 py-3 text-[15px];
+  }
+
+  .cnpc-table-report td {
+    @apply px-3 py-2.5 text-[15px];
+  }
+
+  .cnpc-table-compact th {
+    @apply px-2 py-2 text-[13px];
+  }
+
+  .cnpc-table-compact td {
+    @apply px-2 py-1.5 text-[13px];
+  }
+
+  .cnpc-table-water-cut th {
+    @apply h-8 px-2 py-0 text-[13px];
+  }
+
+  .cnpc-table-water-cut td {
+    @apply h-[29px] px-2 py-0 text-[13px] text-[#001a33];
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #edf2f7;
+    border-radius: 9999px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #9fbfe3;
+    border-radius: 10px;
+    border: 2px solid #edf2f7;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #7ea6d2;
+  }
+}
