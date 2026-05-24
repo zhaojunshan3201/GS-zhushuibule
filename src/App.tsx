@@ -23,6 +23,17 @@ import {
 import { PDFDocument } from "pdf-lib";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import {
+  CartesianGrid,
+  LabelList,
+  Legend,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { cn } from "./lib/utils";
 import {
   DYNAMIC_ADJUSTMENT_PURPOSES,
@@ -263,6 +274,49 @@ type ZonalIndicatorSummaryRecord = {
   sortOrder: number;
 };
 
+type IndicatorCurveRecord = {
+  id: string;
+  unit: string;
+  block: string;
+  wellNo: string;
+  testDate: string;
+  testInterval: string;
+  injection1: number;
+  pressure1: number;
+  injection2: number;
+  pressure2: number;
+  injection3: number;
+  pressure3: number;
+  injection4: number;
+  pressure4: number;
+  injection5: number;
+  pressure5: number;
+};
+
+type IndicatorCurveFilters = {
+  wellNo: string;
+  testDate: string;
+  testInterval: string;
+};
+
+type IndicatorCurveForm = {
+  unit: string;
+  block: string;
+  wellNo: string;
+  testDate: string;
+  testInterval: string;
+  injection1: string;
+  pressure1: string;
+  injection2: string;
+  pressure2: string;
+  injection3: string;
+  pressure3: string;
+  injection4: string;
+  pressure4: string;
+  injection5: string;
+  pressure5: string;
+};
+
 type DynamicAnalysisRecord = {
   id: string;
   kind: "overall-oil" | "overall-water" | "single-oil" | "single-water";
@@ -277,6 +331,18 @@ type DynamicAnalysisRecord = {
   advice: string[];
   status?: string | null;
   process?: string | null;
+};
+
+type HomeReserveOverviewRow = {
+  id?: string;
+  unit: "采一" | "采二" | "合计";
+  block: string;
+  oilArea: number;
+  producingReserve: number;
+  recoverableReserve: number;
+  recoveryRate: number;
+  lastYearOil: number;
+  rowType: "block" | "subtotal" | "total";
 };
 
 const NAV_ITEMS: Array<{ id: PageType; label: string }> = [
@@ -343,21 +409,94 @@ function PageShell({ title, subtitle, children }: { title: string; subtitle?: st
 }
 
 function HomePage() {
+  const [rows, setRows] = useState<HomeReserveOverviewRow[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    axios.get<{ rows: HomeReserveOverviewRow[] }>("/api/home-reserve-overview")
+      .then(({ data }) => {
+        if (active) {
+          setRows(data.rows);
+          setError("");
+        }
+      })
+      .catch((err) => {
+        if (active) setError(err?.response?.data?.error || "主页储量概览加载失败");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const formatValue = (value: number, suffix = "") => {
+    if (!Number.isFinite(value)) return "";
+    return `${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.?0+$/, "")}${suffix}`;
+  };
+  const tableBorder = "border border-[#8ebdff]";
+  const headCellClass = `${tableBorder} bg-[#dceefc] px-2 py-2 text-center text-[13px] font-bold leading-tight text-[#001a33]`;
+  const bodyCellClass = `${tableBorder} bg-white px-2 py-2 text-center text-[13px] leading-tight text-black`;
+
   return (
-    <PageShell title="主页" subtitle="本地开发服务已启动，当前可继续开发单井井史、动态分析和其它业务页面。">
-      <div className="grid gap-4 md:grid-cols-3">
-        {[
-          ["本地数据库", "使用 PostgreSQL 缓存数据继续开发"],
-          ["Oracle", "当前未配置，不影响已同步数据页面"],
-          ["单井井史", "支持 PPT/PPTX 批量导入并转 PDF 预览"],
-        ].map(([title, desc]) => (
-          <div key={title} className="border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-gray-900">{title}</p>
-            <p className="mt-2 text-sm text-gray-500">{desc}</p>
-          </div>
-        ))}
+    <div className="border border-[#8ebdff] bg-white">
+      <h1 className="border-b border-[#8ebdff] bg-[#f8fbff] py-1 text-center text-[22px] font-bold leading-tight text-[#d40000]">
+        储量概览列表
+      </h1>
+      <div className="overflow-x-auto bg-white">
+        <table className="w-full min-w-[980px] table-fixed border-collapse text-center">
+          <colgroup>
+            <col className="w-[90px]" />
+            <col className="w-[150px]" />
+            <col className="w-[120px]" />
+            <col className="w-[120px]" />
+            <col className="w-[120px]" />
+            <col className="w-[135px]" />
+            <col className="w-[135px]" />
+          </colgroup>
+          <thead>
+            <tr>
+              {["单位", "区块", "含油面积", "动用储量", "可采储量", "标定采收率", "上年度产油"].map((header) => (
+                <th key={header} className={headCellClass}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className={`${bodyCellClass} py-5 text-gray-500`}>
+                  {error || "正在加载..."}
+                </td>
+              </tr>
+            ) : rows.map((row, index) => {
+              const showUnit = index === 0 || row.unit === "合计" || rows[index - 1]?.unit !== row.unit;
+              const unitRowSpan = row.unit === "采一" || row.unit === "采二" ? 4 : 1;
+              return (
+                <tr key={`${row.unit}-${row.block || "total"}`} className={row.rowType === "subtotal" || row.rowType === "total" ? "font-normal" : ""}>
+                  {showUnit && (
+                    <td rowSpan={unitRowSpan} className={`${bodyCellClass} align-middle`}>
+                      {row.unit}
+                    </td>
+                  )}
+                  {row.rowType === "total" ? (
+                    <td className={bodyCellClass} />
+                  ) : (
+                    <td className={bodyCellClass}>{row.block}</td>
+                  )}
+                  <td className={bodyCellClass}>{formatValue(row.oilArea)}</td>
+                  <td className={bodyCellClass}>{formatValue(row.producingReserve)}</td>
+                  <td className={bodyCellClass}>{formatValue(row.recoverableReserve)}</td>
+                  <td className={bodyCellClass}>{formatValue(row.recoveryRate, "%")}</td>
+                  <td className={bodyCellClass}>{formatValue(row.lastYearOil)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {error && rows.length > 0 && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </div>
-    </PageShell>
+    </div>
   );
 }
 
@@ -1838,90 +1977,353 @@ function ZonalIndicatorSummaryPage() {
 
 function IndicatorCurvePage() {
   const headers = ["单位", "区块", "井号", "测试日期", "测试井段", "日注1", "压力1", "日注2", "压力2", "日注3", "压力3", "日注4", "压力4", "日注5", "压力5"];
-  const rows = Array.from({ length: 38 }, (_, index) => {
-    const date = new Date(2026, 4, 18 - index);
-    const block = `区块${(index % 3) + 1}`;
-    const interval = ["Ⅰ-Ⅱ", "Ⅱ-Ⅲ", "Ⅲ-Ⅳ", "Ⅰ-Ⅲ"][index % 4];
-    const baseInjection = 32 - (index % 6) * 2.1;
-    const basePressure = 11.2 - (index % 5) * 0.3;
-
-    return [
-      index % 2 === 0 ? "采油作业一区" : "采油作业二区",
-      block,
-      `GS-${String(index + 101).padStart(3, "0")}`,
-      date.toISOString().slice(0, 10),
-      interval,
-      baseInjection.toFixed(1),
-      basePressure.toFixed(1),
-      (baseInjection - 3.4).toFixed(1),
-      (basePressure - 0.4).toFixed(1),
-      (baseInjection - 7.8).toFixed(1),
-      (basePressure - 0.9).toFixed(1),
-      (baseInjection - 12.1).toFixed(1),
-      (basePressure - 1.4).toFixed(1),
-      index % 5 === 0 ? "0" : (baseInjection - 17.2).toFixed(1),
-      index % 5 === 0 ? "0" : (basePressure - 2).toFixed(1),
-    ];
-  });
   const pageSize = 15;
-  const totalPages = Math.ceil(rows.length / pageSize);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const createEmptyIndicatorCurveForm = (): IndicatorCurveForm => ({
+    unit: "采油作业一区",
+    block: "区块1",
+    wellNo: "",
+    testDate: new Date().toISOString().slice(0, 10),
+    testInterval: "Ⅰ-Ⅱ",
+    injection1: "",
+    pressure1: "",
+    injection2: "",
+    pressure2: "",
+    injection3: "",
+    pressure3: "",
+    injection4: "",
+    pressure4: "",
+    injection5: "",
+    pressure5: "",
+  });
+  const [records, setRecords] = useState<IndicatorCurveRecord[]>([]);
+  const [chartRecords, setChartRecords] = useState<IndicatorCurveRecord[]>([]);
+  const [optionRecords, setOptionRecords] = useState<IndicatorCurveRecord[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("1");
-  const visibleRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const [filters, setFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
+  const [appliedFilters, setAppliedFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
+  const [selectedCurveIds, setSelectedCurveIds] = useState<string[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
+  const [formError, setFormError] = useState("");
+  const [form, setForm] = useState<IndicatorCurveForm>(() => createEmptyIndicatorCurveForm());
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const queryParams = (page: number, size: number) => ({
+    page,
+    pageSize: size,
+    wellNo: appliedFilters.wellNo || undefined,
+    testInterval: appliedFilters.testInterval || undefined,
+    fromDate: appliedFilters.testDate || undefined,
+    toDate: appliedFilters.testDate || undefined,
+  });
+  const wellOptions = useMemo(() => Array.from(new Set(optionRecords.map((row) => row.wellNo))).sort(), [optionRecords]);
+  const dateOptions = useMemo(() => Array.from(new Set(optionRecords.map((row) => String(row.testDate).slice(0, 10)))).sort().reverse(), [optionRecords]);
+  const intervalOptions = useMemo(() => Array.from(new Set(optionRecords.map((row) => row.testInterval))).sort(), [optionRecords]);
+  const hasAppliedFilters = Boolean(appliedFilters.wellNo || appliedFilters.testDate || appliedFilters.testInterval);
+  const selectedCurveRecords = useMemo(
+    () => selectedCurveIds
+      .map((id) => records.find((row) => row.id === id) || chartRecords.find((row) => row.id === id))
+      .filter((row): row is IndicatorCurveRecord => Boolean(row)),
+    [chartRecords, records, selectedCurveIds],
+  );
+  const displayedChartRecords = selectedCurveRecords.length ? selectedCurveRecords : hasAppliedFilters ? chartRecords : records.slice(0, 1);
+  const chartSeries = useMemo(() => displayedChartRecords.map((row) => ({
+    id: row.id,
+    name: `${row.wellNo} / ${String(row.testDate).slice(0, 10)} / ${row.testInterval}`,
+    points: [
+      { injection: row.injection1, pressure: row.pressure1 },
+      { injection: row.injection2, pressure: row.pressure2 },
+      { injection: row.injection3, pressure: row.pressure3 },
+      { injection: row.injection4, pressure: row.pressure4 },
+      { injection: row.injection5, pressure: row.pressure5 },
+    ].sort((a, b) => a.injection - b.injection),
+  })), [displayedChartRecords]);
+  const chartColors = ["#d7000f", "#005bac", "#00a56a", "#8b5cf6", "#f97316", "#0f766e", "#7c2d12", "#1d4ed8"];
+  const toVisibleRow = (row: IndicatorCurveRecord) => [
+    row.unit,
+    row.block,
+    row.wellNo,
+    String(row.testDate).slice(0, 10),
+    row.testInterval,
+    row.injection1.toFixed(1),
+    row.pressure1.toFixed(1),
+    row.injection2.toFixed(1),
+    row.pressure2.toFixed(1),
+    row.injection3.toFixed(1),
+    row.pressure3.toFixed(1),
+    row.injection4.toFixed(1),
+    row.pressure4.toFixed(1),
+    row.injection5.toFixed(1),
+    row.pressure5.toFixed(1),
+  ];
   const goToPage = (page: number) => {
     const nextPage = Math.min(totalPages, Math.max(1, page));
     setCurrentPage(nextPage);
     setJumpPage(String(nextPage));
   };
+  const applyFilters = () => {
+    setAppliedFilters(filters);
+    setSelectedCurveIds([]);
+    setCurrentPage(1);
+    setJumpPage("1");
+  };
+  const handleCurveRowClick = (recordId: string, event: React.MouseEvent<HTMLTableRowElement>) => {
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedCurveIds((current) => (current.includes(recordId) ? current.filter((id) => id !== recordId) : [...current, recordId]));
+      return;
+    }
+
+    setSelectedCurveIds([recordId]);
+  };
+  const openCreateForm = () => {
+    setForm(createEmptyIndicatorCurveForm());
+    setFormError("");
+    setShowForm(true);
+  };
+  const updateForm = (key: keyof IndicatorCurveForm, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+  const handleCreate = async () => {
+    const required = [form.unit, form.block, form.wellNo, form.testDate, form.testInterval];
+    const numericValues = [
+      form.injection1,
+      form.pressure1,
+      form.injection2,
+      form.pressure2,
+      form.injection3,
+      form.pressure3,
+      form.injection4,
+      form.pressure4,
+      form.injection5,
+      form.pressure5,
+    ];
+    if (required.some((value) => !value.trim()) || numericValues.some((value) => !value.trim() || !Number.isFinite(Number(value)))) {
+      setFormError("请完整填写单位、区块、井号、测试日期、测试井段，以及 5 组日注/压力数值");
+      return;
+    }
+
+    setSaving(true);
+    setFormError("");
+    try {
+      await axios.post("/api/indicator-curve-records", form);
+      setShowForm(false);
+      setForm(createEmptyIndicatorCurveForm());
+      setSelectedCurveIds([]);
+      setCurrentPage(1);
+      setJumpPage("1");
+      const optionResponse = await axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: { page: 1, pageSize: 200 } });
+      const pageResponse = await axios.get<{ rows: IndicatorCurveRecord[]; total: number }>("/api/indicator-curve-records", { params: queryParams(1, pageSize) });
+      const chartResponse = await axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: queryParams(1, 200) });
+      setOptionRecords(optionResponse.data.rows);
+      setRecords(pageResponse.data.rows);
+      setTotalRows(pageResponse.data.total);
+      setChartRecords(chartResponse.data.rows);
+    } catch (err: any) {
+      setFormError(err?.response?.data?.error || "指示曲线记录新增失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const refreshIndicatorCurveData = async (page = currentPage) => {
+    const [optionResponse, pageResponse, chartResponse] = await Promise.all([
+      axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: { page: 1, pageSize: 200 } }),
+      axios.get<{ rows: IndicatorCurveRecord[]; total: number }>("/api/indicator-curve-records", { params: queryParams(page, pageSize) }),
+      axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: queryParams(1, 200) }),
+    ]);
+    setOptionRecords(optionResponse.data.rows);
+    setRecords(pageResponse.data.rows);
+    setTotalRows(pageResponse.data.total);
+    setChartRecords(chartResponse.data.rows);
+  };
+  const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportStatus("");
+    setFormError("");
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        throw new Error("Excel 文件中没有可导入的工作表");
+      }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "" });
+      const parsedRows = rows
+        .map((row) => ({
+          unit: String(readExcelCell(row, ["单位"])).trim(),
+          block: String(readExcelCell(row, ["区块"])).trim(),
+          wellNo: String(readExcelCell(row, ["井号"])).trim(),
+          testDate: formatExcelDate(readExcelCell(row, ["测试日期", "日期"])),
+          testInterval: String(readExcelCell(row, ["测试井段", "井段"])).trim(),
+          injection1: String(readExcelCell(row, ["日注1"])).trim(),
+          pressure1: String(readExcelCell(row, ["压力1"])).trim(),
+          injection2: String(readExcelCell(row, ["日注2"])).trim(),
+          pressure2: String(readExcelCell(row, ["压力2"])).trim(),
+          injection3: String(readExcelCell(row, ["日注3"])).trim(),
+          pressure3: String(readExcelCell(row, ["压力3"])).trim(),
+          injection4: String(readExcelCell(row, ["日注4"])).trim(),
+          pressure4: String(readExcelCell(row, ["压力4"])).trim(),
+          injection5: String(readExcelCell(row, ["日注5"])).trim(),
+          pressure5: String(readExcelCell(row, ["压力5"])).trim(),
+        }))
+        .filter((row) => row.unit || row.block || row.wellNo || row.testDate || row.testInterval);
+
+      if (!parsedRows.length) {
+        throw new Error("未读取到可导入的数据，请确认表头包含单位、区块、井号、测试日期、测试井段、日注1-5、压力1-5");
+      }
+
+      const { data } = await axios.post<{ imported: number; skipped: number }>("/api/indicator-curve-records/import", { rows: parsedRows });
+      setImportStatus(`已导入 ${data.imported} 条${data.skipped ? `，跳过重复 ${data.skipped} 条` : ""}`);
+      setSelectedCurveIds([]);
+      setCurrentPage(1);
+      setJumpPage("1");
+      await refreshIndicatorCurveData(1);
+    } catch (err: any) {
+      setFormError(err?.response?.data?.error || err?.message || "Excel 导入失败");
+    } finally {
+      setImporting(false);
+    }
+  };
+  const handleDownloadTemplate = () => {
+    const worksheet = XLSX.utils.json_to_sheet([
+      {
+        "单位": "采油作业一区",
+        "区块": "区块1",
+        "井号": "GS-201",
+        "测试日期": "2026-05-24",
+        "测试井段": "Ⅰ-Ⅱ",
+        "日注1": 18,
+        "压力1": 7.8,
+        "日注2": 24,
+        "压力2": 8.6,
+        "日注3": 30,
+        "压力3": 9.3,
+        "日注4": 36,
+        "压力4": 10.1,
+        "日注5": 42,
+        "压力5": 10.8,
+      },
+      {
+        "单位": "采油作业一区",
+        "区块": "区块1",
+        "井号": "GS-201",
+        "测试日期": "2026-05-27",
+        "测试井段": "Ⅱ-Ⅲ",
+        "日注1": 20,
+        "压力1": 8.0,
+        "日注2": 26,
+        "压力2": 8.9,
+        "日注3": 32,
+        "压力3": 9.7,
+        "日注4": 38,
+        "压力4": 10.5,
+        "日注5": 44,
+        "压力5": 11.2,
+      },
+    ]);
+    worksheet["!cols"] = [
+      { wch: 16 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 12 },
+      ...Array.from({ length: 10 }, () => ({ wch: 10 })),
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "指示曲线导入模板");
+    XLSX.writeFile(workbook, "指示曲线导入模板.xlsx");
+  };
+  useEffect(() => {
+    axios
+      .get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: { page: 1, pageSize: 200 } })
+      .then(({ data }) => setOptionRecords(data.rows))
+      .catch(() => setOptionRecords([]));
+  }, []);
+  useEffect(() => {
+    axios
+      .get<{ rows: IndicatorCurveRecord[]; total: number }>("/api/indicator-curve-records", {
+        params: queryParams(currentPage, pageSize),
+      })
+      .then(({ data }) => {
+        setRecords(data.rows);
+        setTotalRows(data.total);
+      })
+      .catch(() => {
+        setRecords([]);
+        setTotalRows(0);
+      });
+  }, [currentPage, appliedFilters]);
+  useEffect(() => {
+    setSelectedCurveIds((current) => current.filter((id) => records.some((row) => row.id === id)));
+  }, [records]);
+  useEffect(() => {
+    axios
+      .get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", {
+        params: queryParams(1, 200),
+      })
+      .then(({ data }) => setChartRecords(data.rows))
+      .catch(() => setChartRecords([]));
+  }, [appliedFilters]);
   const filterClass = "h-6 rounded border border-[#8aaed3] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const headClass = "h-9 border border-[#99c7f3] bg-[#dceefc] px-2 text-center text-[13px] font-bold leading-tight text-[#001a33]";
   const cellClass = "h-9 border border-[#99c7f3] bg-white px-2 text-center text-[13px] leading-tight text-[#001a33]";
+  const selectableCellClass = (selected: boolean) => cn(cellClass, "group-hover:!bg-red-50", selected && "!bg-red-50 text-red-700");
 
   return (
     <div className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-1 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <label className="flex items-center gap-1">
-            <span>单位</span>
-            <select className={`${filterClass} w-32`} defaultValue="采油作业一区">
-              <option>采油作业一区</option>
-              <option>采油作业二区</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1">
-            <span>区块</span>
-            <select className={`${filterClass} w-24`} defaultValue="请选择">
-              <option>请选择</option>
-              <option>区块1</option>
-              <option>区块2</option>
-              <option>区块3</option>
+            <span>井号</span>
+            <select className={`${filterClass} w-24`} value={filters.wellNo} onChange={(event) => setFilters((prev) => ({ ...prev, wellNo: event.target.value }))}>
+              <option value="">全部</option>
+              {wellOptions.map((wellNo) => (
+                <option key={wellNo} value={wellNo}>{wellNo}</option>
+              ))}
             </select>
           </label>
           <label className="flex items-center gap-1">
             <span>测试日期</span>
-            <input type="date" className={`${filterClass} w-32`} defaultValue="2026-05-14" />
-            <span>至</span>
-            <input type="date" className={`${filterClass} w-32`} defaultValue="2026-05-18" />
-          </label>
-          <label className="flex items-center gap-1">
-            <span>测试井段</span>
-            <select className={`${filterClass} w-20`} defaultValue="请选择">
-              <option>请选择</option>
-              <option>Ⅰ-Ⅱ</option>
-              <option>Ⅱ-Ⅲ</option>
-              <option>Ⅲ-Ⅳ</option>
+            <select className={`${filterClass} w-32`} value={filters.testDate} onChange={(event) => setFilters((prev) => ({ ...prev, testDate: event.target.value }))}>
+              <option value="">全部</option>
+              {dateOptions.map((testDate) => (
+                <option key={testDate} value={testDate}>{testDate}</option>
+              ))}
             </select>
           </label>
           <label className="flex items-center gap-1">
-            <span>井号</span>
-            <input className={`${filterClass} w-24`} />
+            <span>测试井段</span>
+            <select className={`${filterClass} w-24`} value={filters.testInterval} onChange={(event) => setFilters((prev) => ({ ...prev, testInterval: event.target.value }))}>
+              <option value="">全部</option>
+              {intervalOptions.map((testInterval) => (
+                <option key={testInterval} value={testInterval}>{testInterval}</option>
+              ))}
+            </select>
           </label>
-          <button type="button" className="h-6 rounded border border-[#8aaed3] bg-[#d8e7f5] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#cfe1f2]">
+          <button type="button" onClick={applyFilters} className="h-6 rounded border border-[#8aaed3] bg-[#d8e7f5] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#cfe1f2]">
             确定
           </button>
+          <button type="button" onClick={openCreateForm} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
+            新增
+          </button>
+          <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelImport} />
+          <button type="button" disabled={importing} onClick={() => excelInputRef.current?.click()} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:opacity-50">
+            {importing ? "导入中" : "Excel导入"}
+          </button>
+          <button type="button" onClick={handleDownloadTemplate} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
+            模板下载
+          </button>
+          {importStatus && <span className="text-[12px] font-bold text-emerald-600">{importStatus}</span>}
+          {formError && !showForm && <span className="text-[12px] font-bold text-red-600">{formError}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
-          <span>第{currentPage}页 共{totalPages}页 共{rows.length}条</span>
+          <span>第{currentPage}页 共{totalPages}页 共{totalRows}条</span>
           <button type="button" onClick={() => goToPage(1)} className="font-bold text-[#0000ee] hover:underline">首页</button>
           <button type="button" onClick={() => goToPage(currentPage - 1)} className="font-bold text-[#0000ee] hover:underline">上一页</button>
           <button type="button" onClick={() => goToPage(currentPage + 1)} className="font-bold text-[#0000ee] hover:underline">下一页</button>
@@ -1939,9 +2341,51 @@ function IndicatorCurvePage() {
         </div>
       </div>
 
-      <h1 className="pb-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">指示曲线概览列表</h1>
+      <div className="sticky top-0 z-20 border-t border-[#99c7f3] bg-white shadow-sm">
+        <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">指示曲线概览列表</h1>
+        <div className="h-[360px] border border-[#99c7f3] bg-white">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 24, right: 32, bottom: 42, left: 28 }}>
+              <CartesianGrid stroke="#d7e8f8" />
+              <XAxis
+                dataKey="injection"
+                name="日注"
+                type="number"
+                tick={{ fontSize: 12, fill: "#001a33" }}
+                label={{ value: "日注", position: "insideBottom", offset: -24, fill: "#001a33", fontSize: 13 }}
+              />
+              <YAxis
+                dataKey="pressure"
+                name="压力"
+                type="number"
+                tick={{ fontSize: 12, fill: "#001a33" }}
+                label={{ value: "压力", angle: -90, position: "insideLeft", fill: "#001a33", fontSize: 13 }}
+              />
+              <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value, name) => [value, name === "pressure" ? "压力" : "日注"]} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {chartSeries.map((series, index) => (
+                <Scatter
+                  key={series.id}
+                  name={series.name}
+                  data={series.points}
+                  fill={chartColors[index % chartColors.length]}
+                  line={{ stroke: chartColors[index % chartColors.length], strokeWidth: 2 }}
+                  shape="circle"
+                >
+                  <LabelList
+                    dataKey="pressure"
+                    position="top"
+                    formatter={(value: number) => value.toFixed(1)}
+                    style={{ fill: chartColors[index % chartColors.length], fontSize: 12, fontWeight: 700 }}
+                  />
+                </Scatter>
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-      <div className="overflow-x-auto border-t border-[#99c7f3] bg-white">
+      <div className="max-h-[540px] overflow-auto border-t border-[#99c7f3] bg-white custom-scrollbar">
         <table className="w-full min-w-[1170px] table-fixed border-collapse bg-white">
           <colgroup>
             {headers.map((header) => (
@@ -1951,19 +2395,24 @@ function IndicatorCurvePage() {
           <thead>
             <tr>
               {headers.map((header) => (
-                <th key={header} className={headClass}>{header}</th>
+                <th key={header} className={`${headClass} sticky top-0 z-10`}>{header}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row) => (
-              <tr key={`${row[2]}-${row[3]}`}>
-                {row.map((value, valueIndex) => (
-                  <td key={`${row[2]}-${valueIndex}`} className={cellClass}>{value}</td>
-                ))}
-              </tr>
-            ))}
-            {Array.from({ length: pageSize - visibleRows.length }, (_, index) => (
+            {records.map((record) => {
+              const row = toVisibleRow(record);
+              const selected = selectedCurveIds.includes(record.id);
+
+              return (
+                <tr key={record.id} className="group cursor-pointer" onClick={(event) => handleCurveRowClick(record.id, event)}>
+                  {row.map((value, valueIndex) => (
+                    <td key={`${record.id}-${valueIndex}`} className={selectableCellClass(selected)}>{value}</td>
+                  ))}
+                </tr>
+              );
+            })}
+            {Array.from({ length: pageSize - records.length }, (_, index) => (
               <tr key={`empty-${index}`}>
                 {headers.map((header) => (
                   <td key={header} className={cellClass} />
@@ -1973,6 +2422,75 @@ function IndicatorCurvePage() {
           </tbody>
         </table>
       </div>
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto border border-shell-border bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">新增指示曲线</h2>
+              <button type="button" onClick={() => setShowForm(false)} className="text-sm font-bold text-gray-500 hover:text-gray-900">关闭</button>
+            </div>
+            {formError && <div className="mb-4 border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{formError}</div>}
+            <div className="grid gap-4 md:grid-cols-5">
+              <label className="block text-sm font-bold text-gray-700">
+                单位
+                <input value={form.unit} onChange={(event) => updateForm("unit", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+              </label>
+              <label className="block text-sm font-bold text-gray-700">
+                区块
+                <input value={form.block} onChange={(event) => updateForm("block", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+              </label>
+              <label className="block text-sm font-bold text-gray-700">
+                井号
+                <input value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+              </label>
+              <label className="block text-sm font-bold text-gray-700">
+                测试日期
+                <input type="date" value={form.testDate} onChange={(event) => updateForm("testDate", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+              </label>
+              <label className="block text-sm font-bold text-gray-700">
+                测试井段
+                <input value={form.testInterval} onChange={(event) => updateForm("testInterval", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+              </label>
+            </div>
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full min-w-[760px] border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className={headClass}>序号</th>
+                    {[1, 2, 3, 4, 5].map((index) => (
+                      <th key={`injection-head-${index}`} className={headClass}>日注{index}</th>
+                    ))}
+                    {[1, 2, 3, 4, 5].map((index) => (
+                      <th key={`pressure-head-${index}`} className={headClass}>压力{index}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className={cellClass}>数值</td>
+                    {([1, 2, 3, 4, 5] as const).map((index) => (
+                      <td key={`injection-${index}`} className={cellClass}>
+                        <input value={form[`injection${index}`]} onChange={(event) => updateForm(`injection${index}`, event.target.value)} className="w-full border border-gray-200 px-2 py-1 text-center outline-none focus:border-cnpc-red" />
+                      </td>
+                    ))}
+                    {([1, 2, 3, 4, 5] as const).map((index) => (
+                      <td key={`pressure-${index}`} className={cellClass}>
+                        <input value={form[`pressure${index}`]} onChange={(event) => updateForm(`pressure${index}`, event.target.value)} className="w-full border border-gray-200 px-2 py-1 text-center outline-none focus:border-cnpc-red" />
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowForm(false)} className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">取消</button>
+              <button type="button" disabled={saving} onClick={() => void handleCreate()} className="rounded bg-cnpc-red px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
+                {saving ? "保存中..." : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

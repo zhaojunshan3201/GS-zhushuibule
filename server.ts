@@ -39,6 +39,10 @@ import {
   normalizeSmartTestPayload,
 } from "./src/shared/secondBatchRecords";
 import {
+  buildHomeReserveOverviewRows,
+  buildHomeReserveOverviewSeedRows,
+} from "./src/shared/homeReserveOverview";
+import {
   getWellHistoryRenameHint,
   normalizeWellHistoryWellNo,
   parseWellHistoryImportFileName,
@@ -68,6 +72,7 @@ const snapshotPrisma = prisma as PrismaClient & {
   wellHistoryExtract?: any;
   wellHistoryPdfOverlay?: any;
   dynamicAdjustmentRecord?: any;
+  homeReserveOverviewRecord?: any;
 };
 const app = express();
 const PORT = 5000;
@@ -910,6 +915,17 @@ const buildWellFlushingWhere = (query: Record<string, unknown>) => {
   if (trimText(query.method)) where.method = trimText(query.method);
   const dateRange = buildDateRange(query.fromDate, query.toDate);
   if (Object.keys(dateRange).length) where.washDate = dateRange;
+  return where;
+};
+
+const buildIndicatorCurveWhere = (query: Record<string, unknown>) => {
+  const where: Record<string, unknown> = {};
+  if (trimText(query.unit)) where.unit = trimText(query.unit);
+  if (trimText(query.block)) where.block = trimText(query.block);
+  if (trimText(query.wellNo)) where.wellNo = { contains: trimText(query.wellNo), mode: "insensitive" };
+  if (trimText(query.testInterval)) where.testInterval = trimText(query.testInterval);
+  const dateRange = buildDateRange(query.fromDate, query.toDate);
+  if (Object.keys(dateRange).length) where.testDate = dateRange;
   return where;
 };
 
@@ -2404,6 +2420,7 @@ app.get("/api/seed", async (req, res) => {
 
     const seeds = buildCoreTableSeedRows();
     const secondBatchSeeds = buildSecondBatchSeedRows();
+    const homeReserveSeeds = buildHomeReserveOverviewSeedRows();
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         await prisma.$transaction(async (tx) => {
@@ -2484,6 +2501,12 @@ app.get("/api/seed", async (req, res) => {
           if ((await tx.dynamicAnalysisRecord.count()) === 0) {
             await tx.dynamicAnalysisRecord.createMany({
               data: secondBatchSeeds.dynamicAnalysisRows,
+              skipDuplicates: true,
+            });
+          }
+          if ((await tx.homeReserveOverviewRecord.count()) === 0) {
+            await tx.homeReserveOverviewRecord.createMany({
+              data: homeReserveSeeds,
               skipDuplicates: true,
             });
           }
@@ -3828,6 +3851,113 @@ app.delete("/api/zonal-indicator-summaries/:id", async (req, res) => {
   }
 });
 
+app.get("/api/indicator-curve-records", async (req, res) => {
+  try {
+    const { page, pageSize, skip, take } = normalizePagination(req.query);
+    const where = buildIndicatorCurveWhere(req.query as Record<string, unknown>);
+    const [rows, total] = await Promise.all([
+      prisma.indicatorCurveRecord.findMany({ where, orderBy: [{ wellNo: "asc" }, { testDate: "desc" }], skip, take }),
+      prisma.indicatorCurveRecord.count({ where }),
+    ]);
+    res.json(paginatedResponse(rows, total, page, pageSize));
+  } catch (error) {
+    res.status(500).json({ error: "Indicator curve records query failed", details: serializeError(error) });
+  }
+});
+
+app.post("/api/indicator-curve-records", async (req, res) => {
+  try {
+    const testDate = parseStrictDate(trimText(req.body.testDate));
+    const data = {
+      unit: trimText(req.body.unit),
+      block: trimText(req.body.block),
+      wellNo: trimText(req.body.wellNo),
+      testDate,
+      testInterval: trimText(req.body.testInterval),
+      injection1: Number(req.body.injection1),
+      pressure1: Number(req.body.pressure1),
+      injection2: Number(req.body.injection2),
+      pressure2: Number(req.body.pressure2),
+      injection3: Number(req.body.injection3),
+      pressure3: Number(req.body.pressure3),
+      injection4: Number(req.body.injection4),
+      pressure4: Number(req.body.pressure4),
+      injection5: Number(req.body.injection5),
+      pressure5: Number(req.body.pressure5),
+    };
+    const numericValues = [
+      data.injection1,
+      data.pressure1,
+      data.injection2,
+      data.pressure2,
+      data.injection3,
+      data.pressure3,
+      data.injection4,
+      data.pressure4,
+      data.injection5,
+      data.pressure5,
+    ];
+    if (!data.unit || !data.block || !data.wellNo || !data.testDate || !data.testInterval || numericValues.some((value) => !Number.isFinite(value))) {
+      return res.status(400).json({ error: "指示曲线记录缺少必填字段或数值格式不正确" });
+    }
+    const record = await prisma.indicatorCurveRecord.create({ data: data as any });
+    res.status(201).json(record);
+  } catch (error) {
+    res.status(500).json({ error: "指示曲线记录新增失败", details: serializeError(error) });
+  }
+});
+
+app.post("/api/indicator-curve-records/import", async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) {
+      return res.status(400).json({ error: "没有可导入的指示曲线数据" });
+    }
+
+    const data = rows.map((row, index) => {
+      const testDate = parseStrictDate(trimText(row.testDate));
+      const normalized = {
+        unit: trimText(row.unit),
+        block: trimText(row.block),
+        wellNo: trimText(row.wellNo),
+        testDate,
+        testInterval: trimText(row.testInterval),
+        injection1: Number(row.injection1),
+        pressure1: Number(row.pressure1),
+        injection2: Number(row.injection2),
+        pressure2: Number(row.pressure2),
+        injection3: Number(row.injection3),
+        pressure3: Number(row.pressure3),
+        injection4: Number(row.injection4),
+        pressure4: Number(row.pressure4),
+        injection5: Number(row.injection5),
+        pressure5: Number(row.pressure5),
+      };
+      const numericValues = [
+        normalized.injection1,
+        normalized.pressure1,
+        normalized.injection2,
+        normalized.pressure2,
+        normalized.injection3,
+        normalized.pressure3,
+        normalized.injection4,
+        normalized.pressure4,
+        normalized.injection5,
+        normalized.pressure5,
+      ];
+      if (!normalized.unit || !normalized.block || !normalized.wellNo || !normalized.testDate || !normalized.testInterval || numericValues.some((value) => !Number.isFinite(value))) {
+        throw new Error(`第 ${index + 1} 行缺少必填字段或日注/压力不是有效数字`);
+      }
+      return normalized;
+    });
+
+    const result = await prisma.indicatorCurveRecord.createMany({ data, skipDuplicates: true });
+    res.status(201).json({ imported: result.count, skipped: data.length - result.count });
+  } catch (error: any) {
+    res.status(400).json({ error: error?.message || "指示曲线 Excel 导入失败" });
+  }
+});
+
 app.get("/api/dynamic-analysis-records", async (req, res) => {
   try {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
@@ -3992,6 +4122,20 @@ app.get("/api/home-overview", async (req, res) => {
     res.json(overview);
   } catch (error: any) {
     res.status(500).json({ error: error?.message || "Home overview failed" });
+  }
+});
+
+app.get("/api/home-reserve-overview", async (_req, res) => {
+  try {
+    if (!snapshotPrisma.homeReserveOverviewRecord) {
+      throw new Error("Home reserve overview table not available");
+    }
+    const records = await snapshotPrisma.homeReserveOverviewRecord.findMany({
+      orderBy: [{ sortOrder: "asc" }, { unit: "asc" }, { block: "asc" }],
+    });
+    res.json({ rows: buildHomeReserveOverviewRows(records) });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Home reserve overview failed" });
   }
 });
 

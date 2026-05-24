@@ -286,6 +286,51 @@ model ZonalIndicatorSummaryRecord {
   @@index([sortOrder])
 }
 
+model IndicatorCurveRecord {
+  id          String   @id @default(uuid())
+  unit        String
+  block       String
+  wellNo      String
+  testDate    DateTime @db.Date
+  testInterval String
+  injection1  Float
+  pressure1   Float
+  injection2  Float
+  pressure2   Float
+  injection3  Float
+  pressure3   Float
+  injection4  Float
+  pressure4   Float
+  injection5  Float
+  pressure5   Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([unit])
+  @@index([block])
+  @@index([wellNo])
+  @@index([testDate])
+  @@unique([wellNo, testDate, testInterval])
+}
+
+model HomeReserveOverviewRecord {
+  id                 String   @id @default(uuid())
+  unit               String
+  block              String
+  oilArea            Float
+  producingReserve   Float
+  recoverableReserve Float
+  recoveryRate       Float
+  lastYearOil        Float
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([unit, block])
+  @@index([unit])
+  @@index([sortOrder])
+}
+
 model DynamicAnalysisRecord {
   id             String   @id @default(uuid())
   kind           String
