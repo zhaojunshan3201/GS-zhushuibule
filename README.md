@@ -148,6 +148,16 @@ DELETE /api/dynamic-analysis-records/:id
 
 ## 本地开发
 
+### Windows 局域网一键启动
+
+双击项目根目录的批处理文件：
+
+```text
+start-lan.bat
+```
+
+该脚本会检查 Node/npm、自动安装缺失依赖、生成 Prisma Client，并启动到 `0.0.0.0:5000`。启动窗口会显示本机访问地址和局域网访问地址。内网 Oracle 暂时不可用时，`ORACLE_*` 配置可以留空，系统会使用 PostgreSQL 中已有的最新缓存数据。
+
 ### 1. 安装依赖
 
 ```powershell
