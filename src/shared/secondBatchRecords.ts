@@ -356,6 +356,15 @@ export function filterDynamicAnalysisRowsByDiffThresholds<T extends DynamicAnaly
   );
 }
 
+export function getDynamicAnalysisEmptyQueryMessage(rowCount: number, queryApplied: boolean) {
+  if (!queryApplied || rowCount > 0) return null;
+  return "未查询到符合所设置条件的井";
+}
+
+export function getDynamicAnalysisDeleteMessage(record: { wellNo?: string | null; block?: string | null }) {
+  return `确认删除 ${record.wellNo || record.block || "该记录"} 的动态分析记录？`;
+}
+
 const CONCENTRIC_TEST_HISTORY_TEMPLATE_ROWS: Array<Omit<ConcentricTestSeedRow, "testDate">> = [
   { wellNo: "雷19-10", allocatorCount: 4, freedom: "完全自由", partialStroke: null, fullyStuck: null, layerFreedom: ["完全自由", "完全自由", "部分行程", "完全自由"], dailyInjection: ["32.5", "28.0", "18.6", "21.4"], remark: "第3层行程偏小" },
   { wellNo: "雷20-12侧", allocatorCount: 3, freedom: null, partialStroke: "部分行程", fullyStuck: null, layerFreedom: ["完全自由", "部分行程", "完全自由", "-"], dailyInjection: ["25.2", "16.8", "19.5", "-"], remark: "建议跟踪复测" },

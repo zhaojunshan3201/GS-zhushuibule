@@ -52,6 +52,8 @@ import {
   createEmptySingleWellInjectionEvaluationForm,
   createEmptySingleWellSealEvaluationForm,
   createEmptySmartTestForm,
+  getDynamicAnalysisDeleteMessage,
+  getDynamicAnalysisEmptyQueryMessage,
   type ConcentricTestForm,
   type SingleWellInjectionEvaluationForm,
   type SingleWellSealEvaluationForm,
@@ -520,6 +522,7 @@ function ZonalTableShell({
   toolbar,
   showFilters = true,
   showPagination = true,
+  showTitle = true,
   children,
 }: {
   title: string;
@@ -531,6 +534,7 @@ function ZonalTableShell({
   toolbar?: React.ReactNode;
   showFilters?: boolean;
   showPagination?: boolean;
+  showTitle?: boolean;
   children: React.ReactNode;
 }) {
   const filterClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
@@ -538,214 +542,219 @@ function ZonalTableShell({
   const displayPage = currentPage || 1;
   const displayTotal = totalItems || 568;
   const goToPage = (page: number) => onPageChange?.(Math.min(totalPages, Math.max(1, page)));
+  const showTopBar = Boolean(toolbar) || showFilters || showPagination;
 
   return (
     <div className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
-        {toolbar ? (
-          <div className="flex flex-wrap items-center gap-2">{toolbar}</div>
-        ) : showFilters && <div className="flex flex-wrap items-center gap-2">
-          {filterMode === "default" && (
-            <>
-              <label className="flex items-center gap-1">
-                <span>采油厂</span>
-                <select className={`${filterClass} w-24`} defaultValue="高齐采油厂">
-                  <option>高齐采油厂</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>作业区</span>
-                <select className={`${filterClass} w-36`} defaultValue="高采石油作业二区">
-                  <option>高采石油作业二区</option>
-                  <option>采油作业一区</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>设计单位</span>
-                <select className={`${filterClass} w-20`} defaultValue="请选择">
-                  <option>请选择</option>
-                  <option>地质研究所</option>
-                  <option>工艺研究所</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>井别</span>
-                <select className={`${filterClass} w-16`} defaultValue="油井">
-                  <option>油井</option>
-                  <option>水井</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>措施</span>
-                <select className={`${filterClass} w-20`} defaultValue="请选择">
-                  <option>请选择</option>
-                  <option>测调</option>
-                  <option>评价</option>
-                </select>
-              </label>
-            </>
+      {showTopBar && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
+          {toolbar ? (
+            <div className="flex flex-wrap items-center gap-2">{toolbar}</div>
+          ) : showFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              {filterMode === "default" && (
+                <>
+                  <label className="flex items-center gap-1">
+                    <span>采油厂</span>
+                    <select className={`${filterClass} w-24`} defaultValue="高齐采油厂">
+                      <option>高齐采油厂</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>作业区</span>
+                    <select className={`${filterClass} w-36`} defaultValue="高采石油作业二区">
+                      <option>高采石油作业二区</option>
+                      <option>采油作业一区</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>设计单位</span>
+                    <select className={`${filterClass} w-20`} defaultValue="请选择">
+                      <option>请选择</option>
+                      <option>地质研究所</option>
+                      <option>工艺研究所</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>井别</span>
+                    <select className={`${filterClass} w-16`} defaultValue="油井">
+                      <option>油井</option>
+                      <option>水井</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>措施</span>
+                    <select className={`${filterClass} w-20`} defaultValue="请选择">
+                      <option>请选择</option>
+                      <option>测调</option>
+                      <option>评价</option>
+                    </select>
+                  </label>
+                </>
+              )}
+              {filterMode === "single-injection" && (
+                <>
+                  <label className="flex items-center gap-1">
+                    <span>评价单位</span>
+                    <select className={`${filterClass} w-28`} defaultValue="采油作业一区">
+                      <option>采油作业一区</option>
+                      <option>采油作业二区</option>
+                      <option>地质研究所</option>
+                      <option>工艺研究所</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>分注工艺</span>
+                    <select className={`${filterClass} w-24`} defaultValue="请选择">
+                      <option>请选择</option>
+                      <option>同心分注</option>
+                      <option>智能分注</option>
+                      <option>桥式同心</option>
+                    </select>
+                  </label>
+                </>
+              )}
+              {filterMode === "single-seal" && (
+                <label className="flex items-center gap-1">
+                  <span>分注工艺</span>
+                  <select className={`${filterClass} w-24`} defaultValue="请选择">
+                    <option>请选择</option>
+                    <option>同心分注</option>
+                    <option>智能分注</option>
+                    <option>桥式同心</option>
+                  </select>
+                </label>
+              )}
+              {filterMode === "zonal-summary" && (
+                <label className="flex items-center gap-1">
+                  <span>分注工艺</span>
+                  <select className={`${filterClass} w-24`} defaultValue="请选择">
+                    <option>请选择</option>
+                    <option>油套</option>
+                    <option>同心双管</option>
+                    <option>同心三管</option>
+                    <option>桥式同心</option>
+                    <option>智能有缆</option>
+                    <option>智能无缆</option>
+                  </select>
+                </label>
+              )}
+              {filterMode === "abnormal" && (
+                <>
+                  <label className="flex items-center gap-1">
+                    <span>单位</span>
+                    <select className={`${filterClass} w-28`} defaultValue="采油作业一区">
+                      <option>采油作业一区</option>
+                      <option>采油作业二区</option>
+                      <option>采油作业三区</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>区块</span>
+                    <select className={`${filterClass} w-24`} defaultValue="请选择">
+                      <option>请选择</option>
+                      <option>区块1</option>
+                      <option>区块2</option>
+                      <option>区块3</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>井号</span>
+                    <input className={`${filterClass} w-24`} />
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>异常分类</span>
+                    <select className={`${filterClass} w-24`} defaultValue="请选择">
+                      <option>请选择</option>
+                      <option>欠注</option>
+                      <option>封隔器失效</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>注水工艺</span>
+                    <select className={`${filterClass} w-24`} defaultValue="请选择">
+                      <option>请选择</option>
+                      <option>分注</option>
+                      <option>同心分注</option>
+                      <option>智能分注</option>
+                    </select>
+                  </label>
+                </>
+              )}
+              {(filterMode === "default" || filterMode === "concentric") && (
+                <label className="flex items-center gap-1">
+                  <span>井号</span>
+                  <input className={`${filterClass} w-24`} />
+                </label>
+              )}
+              {filterMode === "concentric" && (
+                <label className="flex items-center gap-1">
+                  <span>测调日期</span>
+                  <input type="date" className={`${filterClass} w-32`} />
+                  <span>至</span>
+                  <input type="date" className={`${filterClass} w-32`} />
+                </label>
+              )}
+              {filterMode === "single-injection" && (
+                <label className="flex items-center gap-1">
+                  <span>井号</span>
+                  <input className={`${filterClass} w-24`} />
+                </label>
+              )}
+              {filterMode === "single-injection" && (
+                <label className="flex items-center gap-1">
+                  <span>评价日期</span>
+                  <input type="date" className={`${filterClass} w-32`} />
+                  <span>至</span>
+                  <input type="date" className={`${filterClass} w-32`} />
+                </label>
+              )}
+              {filterMode === "single-seal" && (
+                <>
+                  <label className="flex items-center gap-1">
+                    <span>评价日期</span>
+                    <input type="date" className={`${filterClass} w-32`} />
+                    <span>至</span>
+                    <input type="date" className={`${filterClass} w-32`} />
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>井号</span>
+                    <input className={`${filterClass} w-24`} />
+                  </label>
+                </>
+              )}
+              <button type="button" className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
+                确定
+              </button>
+            </div>
           )}
-          {filterMode === "single-injection" && (
-            <>
-              <label className="flex items-center gap-1">
-                <span>评价单位</span>
-                <select className={`${filterClass} w-28`} defaultValue="采油作业一区">
-                  <option>采油作业一区</option>
-                  <option>采油作业二区</option>
-                  <option>地质研究所</option>
-                  <option>工艺研究所</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>分注工艺</span>
-                <select className={`${filterClass} w-24`} defaultValue="请选择">
-                  <option>请选择</option>
-                  <option>同心分注</option>
-                  <option>智能分注</option>
-                  <option>桥式同心</option>
-                </select>
-              </label>
-            </>
+          {showPagination && (
+            <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
+              <span>第{displayPage}页 共{totalPages}页 共{displayTotal}条</span>
+              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(1)}>
+                首页
+              </button>
+              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage - 1)}>
+                上一页
+              </button>
+              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage + 1)}>
+                下一页
+              </button>
+              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(totalPages)}>
+                尾页
+              </button>
+              <span>跳转</span>
+              <input className="h-6 w-9 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none" value={displayPage} readOnly />
+              <span>页</span>
+              <button type="button" className="h-6 rounded border border-[#8aaed3] bg-[#d8e7f5] px-1 text-[11px] font-bold text-[#001a33]" onClick={() => goToPage(displayPage)}>
+                GO
+              </button>
+            </div>
           )}
-          {filterMode === "single-seal" && (
-            <label className="flex items-center gap-1">
-              <span>分注工艺</span>
-              <select className={`${filterClass} w-24`} defaultValue="请选择">
-                <option>请选择</option>
-                <option>同心分注</option>
-                <option>智能分注</option>
-                <option>桥式同心</option>
-              </select>
-            </label>
-          )}
-          {filterMode === "zonal-summary" && (
-            <label className="flex items-center gap-1">
-              <span>分注工艺</span>
-              <select className={`${filterClass} w-24`} defaultValue="请选择">
-                <option>请选择</option>
-                <option>油套</option>
-                <option>同心双管</option>
-                <option>同心三管</option>
-                <option>桥式同心</option>
-                <option>智能有缆</option>
-                <option>智能无缆</option>
-              </select>
-            </label>
-          )}
-          {filterMode === "abnormal" && (
-            <>
-              <label className="flex items-center gap-1">
-                <span>单位</span>
-                <select className={`${filterClass} w-28`} defaultValue="采油作业一区">
-                  <option>采油作业一区</option>
-                  <option>采油作业二区</option>
-                  <option>采油作业三区</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>区块</span>
-                <select className={`${filterClass} w-24`} defaultValue="请选择">
-                  <option>请选择</option>
-                  <option>区块1</option>
-                  <option>区块2</option>
-                  <option>区块3</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>井号</span>
-                <input className={`${filterClass} w-24`} />
-              </label>
-              <label className="flex items-center gap-1">
-                <span>异常分类</span>
-                <select className={`${filterClass} w-24`} defaultValue="请选择">
-                  <option>请选择</option>
-                  <option>欠注</option>
-                  <option>封隔器失效</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <span>注水工艺</span>
-                <select className={`${filterClass} w-24`} defaultValue="请选择">
-                  <option>请选择</option>
-                  <option>分注</option>
-                  <option>同心分注</option>
-                  <option>智能分注</option>
-                </select>
-              </label>
-            </>
-          )}
-          {(filterMode === "default" || filterMode === "concentric") && (
-            <label className="flex items-center gap-1">
-              <span>井号</span>
-              <input className={`${filterClass} w-24`} />
-            </label>
-          )}
-          {filterMode === "concentric" && (
-            <label className="flex items-center gap-1">
-              <span>测调日期</span>
-              <input type="date" className={`${filterClass} w-32`} />
-              <span>至</span>
-              <input type="date" className={`${filterClass} w-32`} />
-            </label>
-          )}
-          {filterMode === "single-injection" && (
-            <label className="flex items-center gap-1">
-              <span>井号</span>
-              <input className={`${filterClass} w-24`} />
-            </label>
-          )}
-          {filterMode === "single-injection" && (
-            <label className="flex items-center gap-1">
-              <span>评价日期</span>
-              <input type="date" className={`${filterClass} w-32`} />
-              <span>至</span>
-              <input type="date" className={`${filterClass} w-32`} />
-            </label>
-          )}
-          {filterMode === "single-seal" && (
-            <>
-              <label className="flex items-center gap-1">
-                <span>评价日期</span>
-                <input type="date" className={`${filterClass} w-32`} />
-                <span>至</span>
-                <input type="date" className={`${filterClass} w-32`} />
-              </label>
-              <label className="flex items-center gap-1">
-                <span>井号</span>
-                <input className={`${filterClass} w-24`} />
-              </label>
-            </>
-          )}
-          <button type="button" className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
-            确定
-          </button>
-        </div>}
-        {showPagination && (
-          <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
-            <span>第{displayPage}页 共{totalPages}页 共{displayTotal}条</span>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(1)}>
-              首页
-            </button>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage - 1)}>
-              上一页
-            </button>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage + 1)}>
-              下一页
-            </button>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(totalPages)}>
-              尾页
-            </button>
-            <span>跳转</span>
-            <input className="h-6 w-9 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none" value={displayPage} readOnly />
-            <span>页</span>
-            <button type="button" className="h-6 rounded border border-[#8aaed3] bg-[#d8e7f5] px-1 text-[11px] font-bold text-[#001a33]" onClick={() => goToPage(displayPage)}>
-              GO
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">{title}</h1>
+      {showTitle && <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">{title}</h1>}
       <div className="overflow-x-auto border-t border-[#99c7f3] bg-white">{children}</div>
     </div>
   );
@@ -1872,30 +1881,6 @@ function ZonalIndicatorSummaryPage() {
     void loadRecords();
   }, []);
 
-  const handleCreate = async () => {
-    const process = window.prompt("分注工艺", filters.process || "新增工艺")?.trim();
-    if (!process) return;
-    const payload = {
-      category: window.prompt("分类", filters.category || "地下测调")?.trim() || "",
-      process,
-      wellCount: Number(window.prompt("分注井数", "1") || "0"),
-      processRate: window.prompt("分注工艺占比", "1.0%")?.trim() || "0%",
-      intervalCount: Number(window.prompt("分注层段数", "1") || "0"),
-      actualCount: Number(window.prompt("实注层段数", "1") || "0"),
-      level: window.prompt("分注级别", "二级")?.trim() || "-",
-      segmentSeal: ["1", "1", "100%", "1", "100%"],
-      fullSeal: ["1", "100%", "1", "100%"],
-      allocation: ["1", "100%", "0", "1", "100%"],
-      sortOrder: records.length + 1,
-    };
-    try {
-      await axios.post("/api/zonal-indicator-summaries", payload);
-      await loadRecords();
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "分注指标汇总新增失败");
-    }
-  };
-
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
     if (!record || !window.confirm(`确认删除 ${record.category}/${record.process}？`)) return;
@@ -1914,14 +1899,18 @@ function ZonalIndicatorSummaryPage() {
         <span>分类</span><input className="h-6 w-24 border px-1" value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value })} />
         <span>工艺</span><input className="h-6 w-24 border px-1" value={filters.process} onChange={(event) => setFilters({ ...filters, process: event.target.value })} />
         <button className="h-6 rounded border bg-[#e4f0fa] px-3 font-bold" onClick={() => loadRecords()}>确定</button>
-        <button className="h-6 rounded border bg-[#e4f0fa] px-3 font-bold" onClick={handleCreate}>新增</button>
         <button className="h-6 rounded border bg-[#e4f0fa] px-3 font-bold disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
         <span>共{records.length}条</span>
         {error && <span className="text-red-600">{error}</span>}
       </div>
-      <ZonalTableShell title="分注指标汇总" filterMode="zonal-summary" showPagination={false}>
+      <ZonalTableShell title="分注指标汇总" filterMode="zonal-summary" showFilters={false} showPagination={false} showTitle={false}>
         <table className="w-full min-w-[1560px] border-collapse bg-white">
           <thead>
+            <tr>
+              <th colSpan={22} className="border border-[#9fc4e8] bg-[#f7fbff] px-2 py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">
+                分注指标汇总
+              </th>
+            </tr>
             <tr>
               {["水井总数", "分类", "分注工艺", "分注井数", "分注工艺占比", "分注层段数", "实注层段数", "分注级别"].map((header) => (
                 <th key={header} rowSpan={2} className={headClass}>{header}</th>
@@ -3588,6 +3577,8 @@ function DynamicAnalysisPage() {
   const [singleWaterYearFilters, setSingleWaterYearFilters] = useState({ unit: "采油作业一区", block: "", wellNo: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [emptyQueryMessage, setEmptyQueryMessage] = useState("");
+  const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<DynamicAnalysisRecord | null>(null);
   const defaultOilSingleThresholds = {
     liquid: "2",
     oil: "0.5",
@@ -3653,6 +3644,7 @@ function DynamicAnalysisPage() {
   const loadSingleOilMonthRecords = async (
     nextFilters = singleOilMonthFilters,
     thresholds?: { liquid: string; oil: string; water: string },
+    showEmptyAlert = false,
   ) => {
     try {
       setError("");
@@ -3673,6 +3665,8 @@ function DynamicAnalysisPage() {
       const { data } = await axios.get<PaginatedApiResponse<DynamicAnalysisRecord>>("/api/dynamic-analysis-records", { params });
       setSingleOilMonthRecords(data.rows);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
+      const emptyMessage = getDynamicAnalysisEmptyQueryMessage(data.rows.length, showEmptyAlert);
+      setEmptyQueryMessage(emptyMessage ?? "");
     } catch (err: any) {
       setError(err?.response?.data?.error || "油井单井对比上月数据加载失败");
     }
@@ -3681,6 +3675,7 @@ function DynamicAnalysisPage() {
   const loadSingleOilYearRecords = async (
     nextFilters = singleOilYearFilters,
     thresholds?: { liquid: string; oil: string; water: string },
+    showEmptyAlert = false,
   ) => {
     try {
       setError("");
@@ -3701,6 +3696,8 @@ function DynamicAnalysisPage() {
       const { data } = await axios.get<PaginatedApiResponse<DynamicAnalysisRecord>>("/api/dynamic-analysis-records", { params });
       setSingleOilYearRecords(data.rows);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
+      const emptyMessage = getDynamicAnalysisEmptyQueryMessage(data.rows.length, showEmptyAlert);
+      setEmptyQueryMessage(emptyMessage ?? "");
     } catch (err: any) {
       setError(err?.response?.data?.error || "油井单井对比上年数据加载失败");
     }
@@ -3709,6 +3706,7 @@ function DynamicAnalysisPage() {
   const loadSingleWaterMonthRecords = async (
     nextFilters = singleWaterMonthFilters,
     thresholds?: { injection: string },
+    showEmptyAlert = false,
   ) => {
     try {
       setError("");
@@ -3723,6 +3721,8 @@ function DynamicAnalysisPage() {
       const { data } = await axios.get<PaginatedApiResponse<DynamicAnalysisRecord>>("/api/dynamic-analysis-records", { params });
       setSingleWaterMonthRecords(data.rows);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
+      const emptyMessage = getDynamicAnalysisEmptyQueryMessage(data.rows.length, showEmptyAlert);
+      setEmptyQueryMessage(emptyMessage ?? "");
     } catch (err: any) {
       setError(err?.response?.data?.error || "水井单井对比上月数据加载失败");
     }
@@ -3731,6 +3731,7 @@ function DynamicAnalysisPage() {
   const loadSingleWaterYearRecords = async (
     nextFilters = singleWaterYearFilters,
     thresholds?: { injection: string },
+    showEmptyAlert = false,
   ) => {
     try {
       setError("");
@@ -3745,6 +3746,8 @@ function DynamicAnalysisPage() {
       const { data } = await axios.get<PaginatedApiResponse<DynamicAnalysisRecord>>("/api/dynamic-analysis-records", { params });
       setSingleWaterYearRecords(data.rows);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
+      const emptyMessage = getDynamicAnalysisEmptyQueryMessage(data.rows.length, showEmptyAlert);
+      setEmptyQueryMessage(emptyMessage ?? "");
     } catch (err: any) {
       setError(err?.response?.data?.error || "水井单井对比上年数据加载失败");
     }
@@ -3802,9 +3805,16 @@ function DynamicAnalysisPage() {
       ...singleWaterMonthRecords,
       ...singleWaterYearRecords,
     ].find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo || record.block} 的动态分析记录？`)) return;
+    if (!record) return;
+    setDeleteConfirmRecord(record);
+  };
+
+  const confirmDelete = async () => {
+    const record = deleteConfirmRecord;
+    if (!record) return;
     try {
       await axios.delete(`/api/dynamic-analysis-records/${record.id}`);
+      setDeleteConfirmRecord(null);
       setSelectedId(null);
       await loadRecords();
       await loadOverallOilRecords();
@@ -4087,118 +4097,164 @@ function DynamicAnalysisPage() {
     onChange: (values: { unit: string; block: string; wellNo: string }) => void,
     thresholds: { liquid: string; oil: string; water: string },
     onThresholdChange: (values: { liquid: string; oil: string; water: string }) => void,
-    onApply: () => void,
+    onApply: (
+      values: { unit: string; block: string; wellNo: string },
+      thresholds: { liquid: string; oil: string; water: string },
+    ) => void,
     totalCount?: number,
-  ) => (
-    <div className="flex flex-wrap items-center gap-4 px-2 py-2 text-xs text-slate-900">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-1">
-          单位
-          <select className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}><option value="">全部单位</option><option>采油作业一区</option></select>
-        </label>
-        <label className="inline-flex items-center gap-1">
-          区块
-          <select className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
-            <option value="">全部区块</option>
-            <option>区块1</option>
-            <option>区块2</option>
-            <option>区块3</option>
-            <option>区块4</option>
-            <option>区块5</option>
-          </select>
-        </label>
-        <label className="inline-flex items-center gap-1">
-          井号
-          <input className="h-6 w-24 rounded border border-[#a8bfd8] bg-white px-2 text-xs outline-none" value={values.wellNo} onChange={(event) => onChange({ ...values, wellNo: event.target.value })} />
-        </label>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {[
-          { key: "liquid" as const, label: "日产液", step: "0.1" },
-          { key: "oil" as const, label: "日产油", step: "0.1" },
-          { key: "water" as const, label: "含水", step: "0.1" },
-        ].map((item, index) => (
-          <label
-            key={item.key}
-            className={cn(
-              "inline-flex items-center gap-1 rounded border border-[#9fc4e8] px-3 py-1 font-bold text-slate-800",
-              index === 0 ? "bg-[#eaf4ff]" : "bg-white",
-            )}
-          >
-            <span>{item.label} 差值绝对值&gt;=</span>
-            <input
-              type="number"
-              min="0"
-              step={item.step}
-              value={thresholds[item.key]}
-              onChange={(event) => onThresholdChange({ ...thresholds, [item.key]: event.target.value })}
-              className="h-5 w-14 rounded border border-[#a8bfd8] bg-white px-1 text-center text-xs font-bold text-cnpc-red outline-none"
-            />
+  ) => {
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const formData = new FormData(event.currentTarget);
+      const nextValues = {
+        unit: String(formData.get("unit") ?? ""),
+        block: String(formData.get("block") ?? ""),
+        wellNo: String(formData.get("wellNo") ?? ""),
+      };
+      const nextThresholds = {
+        liquid: String(formData.get("liquid") ?? ""),
+        oil: String(formData.get("oil") ?? ""),
+        water: String(formData.get("water") ?? ""),
+      };
+      onChange(nextValues);
+      onThresholdChange(nextThresholds);
+      onApply(nextValues, nextThresholds);
+    };
+
+    return (
+      <form className="flex flex-wrap items-center gap-4 px-2 py-2 text-xs text-slate-900" onSubmit={handleSubmit}>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-1">
+            单位
+            <select name="unit" className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}><option value="">全部单位</option><option>采油作业一区</option></select>
           </label>
-        ))}
-        <button className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900" onClick={onApply}>确定</button>
-        <button className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900 disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
-        {typeof totalCount === "number" && (
-          <span className="rounded border border-[#9fc4e8] bg-white px-3 py-1 font-bold text-slate-800">
-            自动筛选总条数：<span className="text-cnpc-red">{totalCount}</span> 条
-          </span>
-        )}
-      </div>
-    </div>
-  );
+          <label className="inline-flex items-center gap-1">
+            区块
+            <select name="block" className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
+              <option value="">全部区块</option>
+              <option>区块1</option>
+              <option>区块2</option>
+              <option>区块3</option>
+              <option>区块4</option>
+              <option>区块5</option>
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1">
+            井号
+            <input name="wellNo" className="h-6 w-24 rounded border border-[#a8bfd8] bg-white px-2 text-xs outline-none" value={values.wellNo} onChange={(event) => onChange({ ...values, wellNo: event.target.value })} />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: "liquid" as const, label: "日产液", step: "0.1" },
+            { key: "oil" as const, label: "日产油", step: "0.1" },
+            { key: "water" as const, label: "含水", step: "0.1" },
+          ].map((item, index) => (
+            <label
+              key={item.key}
+              className={cn(
+                "inline-flex items-center gap-1 rounded border border-[#9fc4e8] px-3 py-1 font-bold text-slate-800",
+                index === 0 ? "bg-[#eaf4ff]" : "bg-white",
+              )}
+            >
+              <span>{item.label} 差值绝对值&gt;=</span>
+              <input
+                type="number"
+                name={item.key}
+                min="0"
+                step={item.step}
+                value={thresholds[item.key]}
+                onChange={(event) => onThresholdChange({ ...thresholds, [item.key]: event.target.value })}
+                className="h-5 w-14 rounded border border-[#a8bfd8] bg-white px-1 text-center text-xs font-bold text-cnpc-red outline-none"
+              />
+            </label>
+          ))}
+          <button type="submit" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900">确定</button>
+          <button type="button" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900 disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
+          {typeof totalCount === "number" && (
+            <span className="rounded border border-[#9fc4e8] bg-white px-3 py-1 font-bold text-slate-800">
+              自动筛选总条数：<span className="text-cnpc-red">{totalCount}</span> 条
+            </span>
+          )}
+        </div>
+      </form>
+    );
+  };
 
   const renderWaterSingleFilterBar = (
     values: { unit: string; block: string; wellNo: string },
     onChange: (values: { unit: string; block: string; wellNo: string }) => void,
     thresholds: { injection: string },
     onThresholdChange: (values: { injection: string }) => void,
-    onApply: () => void,
+    onApply: (
+      values: { unit: string; block: string; wellNo: string },
+      thresholds: { injection: string },
+    ) => void,
     totalCount?: number,
-  ) => (
-    <div className="flex flex-wrap items-center gap-4 px-2 py-2 text-xs text-slate-900">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-1">
-          单位
-          <select className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}><option value="">全部单位</option><option>采油作业一区</option></select>
-        </label>
-        <label className="inline-flex items-center gap-1">
-          区块
-          <select className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
-            <option value="">全部区块</option>
-            <option>区块1</option>
-            <option>区块2</option>
-            <option>区块3</option>
-            <option>区块4</option>
-            <option>区块5</option>
-          </select>
-        </label>
-        <label className="inline-flex items-center gap-1">
-          井号
-          <input className="h-6 w-24 rounded border border-[#a8bfd8] bg-white px-2 text-xs outline-none" value={values.wellNo} onChange={(event) => onChange({ ...values, wellNo: event.target.value })} />
-        </label>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-1 rounded border border-[#9fc4e8] bg-[#eaf4ff] px-3 py-1 font-bold text-slate-800">
-          <span>日注水 差值绝对值&gt;=</span>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={thresholds.injection}
-            onChange={(event) => onThresholdChange({ injection: event.target.value })}
-            className="h-5 w-14 rounded border border-[#a8bfd8] bg-white px-1 text-center text-xs font-bold text-cnpc-red outline-none"
-          />
-        </label>
-        <button className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900" onClick={onApply}>确定</button>
-        <button className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900 disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
-        {typeof totalCount === "number" && (
-          <span className="rounded border border-[#9fc4e8] bg-white px-3 py-1 font-bold text-slate-800">
-            自动筛选总条数：<span className="text-cnpc-red">{totalCount}</span> 条
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  ) => {
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const formData = new FormData(event.currentTarget);
+      const nextValues = {
+        unit: String(formData.get("unit") ?? ""),
+        block: String(formData.get("block") ?? ""),
+        wellNo: String(formData.get("wellNo") ?? ""),
+      };
+      const nextThresholds = {
+        injection: String(formData.get("injection") ?? ""),
+      };
+      onChange(nextValues);
+      onThresholdChange(nextThresholds);
+      onApply(nextValues, nextThresholds);
+    };
+
+    return (
+      <form className="flex flex-wrap items-center gap-4 px-2 py-2 text-xs text-slate-900" onSubmit={handleSubmit}>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-1">
+            单位
+            <select name="unit" className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}><option value="">全部单位</option><option>采油作业一区</option></select>
+          </label>
+          <label className="inline-flex items-center gap-1">
+            区块
+            <select name="block" className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
+              <option value="">全部区块</option>
+              <option>区块1</option>
+              <option>区块2</option>
+              <option>区块3</option>
+              <option>区块4</option>
+              <option>区块5</option>
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1">
+            井号
+            <input name="wellNo" className="h-6 w-24 rounded border border-[#a8bfd8] bg-white px-2 text-xs outline-none" value={values.wellNo} onChange={(event) => onChange({ ...values, wellNo: event.target.value })} />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1 rounded border border-[#9fc4e8] bg-[#eaf4ff] px-3 py-1 font-bold text-slate-800">
+            <span>日注水 差值绝对值&gt;=</span>
+            <input
+              type="number"
+              name="injection"
+              min="0"
+              step="0.1"
+              value={thresholds.injection}
+              onChange={(event) => onThresholdChange({ injection: event.target.value })}
+              className="h-5 w-14 rounded border border-[#a8bfd8] bg-white px-1 text-center text-xs font-bold text-cnpc-red outline-none"
+            />
+          </label>
+          <button type="submit" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900">确定</button>
+          <button type="button" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900 disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
+          {typeof totalCount === "number" && (
+            <span className="rounded border border-[#9fc4e8] bg-white px-3 py-1 font-bold text-slate-800">
+              自动筛选总条数：<span className="text-cnpc-red">{totalCount}</span> 条
+            </span>
+          )}
+        </div>
+      </form>
+    );
+  };
 
   const renderAnalysisPanel = (title: string, children: React.ReactNode, filterBar: React.ReactNode) => (
     <section className="overflow-hidden rounded border border-[#9fc4e8] bg-[#f8fbff] shadow-sm">
@@ -4218,6 +4274,14 @@ function DynamicAnalysisPage() {
     return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", styleMap[status])}>⊙ {status}</span>;
   };
   const analysisCellClass = (rowId?: string, extra?: string) => cn(tableCellClass, rowId && rowId === selectedId && selectedAnalysisCellClass, extra);
+  const formatAnalysisTableValue = (value: string) => {
+    const raw = String(value ?? "").trim();
+    const match = raw.match(/^([+-]?)(\d+(?:\.\d+)?)(%)?$/);
+    if (!match) return raw;
+    const [, sign, numericText, percent] = match;
+    const rounded = Number(numericText).toFixed(1).replace(/\.0$/, "");
+    return `${sign}${rounded}${percent ?? ""}`;
+  };
 
   const renderStatusTable = () => (
     <div className="overflow-x-auto">
@@ -4286,12 +4350,12 @@ function DynamicAnalysisPage() {
               <td className={analysisCellClass(row.id, "font-bold")}>{row.block}</td>
               {[...row.end, ...row.avg, ...row.lastYear].map((value, index) => (
                 <td key={`base-${index}`} className={analysisCellClass(row.id)}>
-                  {value}
+                  {formatAnalysisTableValue(value)}
                 </td>
               ))}
               {[...row.diffMonth, ...row.diffYear].map((value, index) => (
                 <td key={`diff-${index}`} className={analysisCellClass(row.id, getDiffClass(value))}>
-                  {value}
+                  {formatAnalysisTableValue(value)}
                 </td>
               ))}
             </tr>
@@ -4433,6 +4497,53 @@ function DynamicAnalysisPage() {
 
   return (
     <div className="space-y-5">
+      {emptyQueryMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4">
+          <div className="w-full max-w-sm overflow-hidden rounded border border-[#8fb7df] bg-white shadow-xl">
+            <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">
+              提示
+            </div>
+            <div className="px-6 py-8 text-center text-sm font-bold text-slate-800">{emptyQueryMessage}</div>
+            <div className="flex justify-center border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setEmptyQueryMessage("")}
+                className="h-7 min-w-20 rounded border border-[#2f80ed] bg-[#2f80ed] px-5 text-xs font-bold text-white shadow-sm hover:bg-[#1f6ed4]"
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteConfirmRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4">
+          <div className="w-full max-w-sm overflow-hidden rounded border border-[#8fb7df] bg-white shadow-xl">
+            <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">
+              提示
+            </div>
+            <div className="px-6 py-8 text-center text-sm font-bold text-slate-800">
+              {getDynamicAnalysisDeleteMessage(deleteConfirmRecord)}
+            </div>
+            <div className="flex justify-center gap-3 border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="h-7 min-w-20 rounded border border-[#2f80ed] bg-[#2f80ed] px-5 text-xs font-bold text-white shadow-sm hover:bg-[#1f6ed4]"
+              >
+                确定
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmRecord(null)}
+                className="h-7 min-w-20 rounded border border-[#9eb8d4] bg-white px-5 text-xs font-bold text-slate-800 shadow-sm hover:bg-[#eaf4ff]"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {error && <div className="rounded border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
       <div className="text-xs font-bold text-slate-700">共{totalItems}条，当前选中：{selectedId ? "1条" : "无"}</div>
       <div className="inline-flex rounded-xl bg-gray-100 p-1 shadow-sm">
@@ -4478,7 +4589,7 @@ function DynamicAnalysisPage() {
               setSingleOilMonthFilters,
               oilSingleMonthThresholds,
               setOilSingleMonthThresholds,
-              () => loadSingleOilMonthRecords(singleOilMonthFilters, oilSingleMonthThresholds),
+              (values, thresholds) => loadSingleOilMonthRecords(values, thresholds, true),
               apiSingleOilMonthRows.length,
             ),
           )}
@@ -4490,7 +4601,7 @@ function DynamicAnalysisPage() {
               setSingleOilYearFilters,
               oilSingleYearThresholds,
               setOilSingleYearThresholds,
-              () => loadSingleOilYearRecords(singleOilYearFilters, oilSingleYearThresholds),
+              (values, thresholds) => loadSingleOilYearRecords(values, thresholds, true),
               apiSingleOilYearRows.length,
             ),
           )}
@@ -4506,7 +4617,7 @@ function DynamicAnalysisPage() {
               setSingleWaterMonthFilters,
               waterSingleMonthThresholds,
               setWaterSingleMonthThresholds,
-              () => loadSingleWaterMonthRecords(singleWaterMonthFilters, waterSingleMonthThresholds),
+              (values, thresholds) => loadSingleWaterMonthRecords(values, thresholds, true),
               apiSingleWaterMonthRows.length,
             ),
           )}
@@ -4518,7 +4629,7 @@ function DynamicAnalysisPage() {
               setSingleWaterYearFilters,
               waterSingleYearThresholds,
               setWaterSingleYearThresholds,
-              () => loadSingleWaterYearRecords(singleWaterYearFilters, waterSingleYearThresholds),
+              (values, thresholds) => loadSingleWaterYearRecords(values, thresholds, true),
               apiSingleWaterYearRows.length,
             ),
           )}
@@ -5632,6 +5743,16 @@ function WellHistoryPage() {
             <h2 className="text-lg font-bold text-gray-900">批量导入进度</h2>
             <span className={cn("px-3 py-1 text-xs font-bold", importing ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>{importStatus}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="mb-4 inline-flex w-full items-center justify-center gap-2 bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Upload className="h-4 w-4" />
+            {importing ? "正在导入 PPT..." : "批量导入 PPT/PPTX"}
+          </button>
+          <p className="mb-4 text-xs leading-5 text-gray-500">一个 PPT/PPTX 对应一口井，以文件名作为井号归档。可一次选择多个文件导入。</p>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-slate-50 p-3"><p className="text-xs text-gray-500">总文件数</p><p className="mt-1 text-lg font-bold text-gray-900">{importTotal}</p></div>
             <div className="bg-slate-50 p-3"><p className="text-xs text-gray-500">已完成</p><p className="mt-1 text-lg font-bold text-gray-900">{completedCount}</p></div>

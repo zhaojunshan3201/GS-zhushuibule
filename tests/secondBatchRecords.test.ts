@@ -9,7 +9,9 @@ import {
   createEmptySingleWellInjectionEvaluationForm,
   createEmptySingleWellSealEvaluationForm,
   createEmptySmartTestForm,
+  getDynamicAnalysisDeleteMessage,
   filterDynamicAnalysisRowsByDiffThresholds,
+  getDynamicAnalysisEmptyQueryMessage,
   normalizeConcentricTestPayload,
   normalizeSingleWellInjectionEvaluationPayload,
   normalizeSingleWellSealEvaluationPayload,
@@ -191,4 +193,15 @@ test("filterDynamicAnalysisRowsByDiffThresholds applies water injection threshol
     }),
     [rows[0], rows[2]],
   );
+});
+
+test("getDynamicAnalysisEmptyQueryMessage only prompts on applied empty queries", () => {
+  assert.equal(getDynamicAnalysisEmptyQueryMessage(0, true), "未查询到符合所设置条件的井");
+  assert.equal(getDynamicAnalysisEmptyQueryMessage(1, true), null);
+  assert.equal(getDynamicAnalysisEmptyQueryMessage(0, false), null);
+});
+
+test("getDynamicAnalysisDeleteMessage names the selected well or block", () => {
+  assert.equal(getDynamicAnalysisDeleteMessage({ wellNo: "GS-W16", block: "区块1" }), "确认删除 GS-W16 的动态分析记录？");
+  assert.equal(getDynamicAnalysisDeleteMessage({ wellNo: null, block: "区块1" }), "确认删除 区块1 的动态分析记录？");
 });
