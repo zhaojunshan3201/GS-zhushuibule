@@ -3958,6 +3958,15 @@ app.post("/api/indicator-curve-records/import", async (req, res) => {
   }
 });
 
+app.delete("/api/indicator-curve-records/:id", async (req, res) => {
+  try {
+    await prisma.indicatorCurveRecord.delete({ where: { id: String(req.params.id) } });
+    res.status(204).end();
+  } catch {
+    res.status(404).json({ error: "Indicator curve record not found" });
+  }
+});
+
 app.get("/api/dynamic-analysis-records", async (req, res) => {
   try {
     const { page, pageSize, skip, take } = normalizePagination(req.query);

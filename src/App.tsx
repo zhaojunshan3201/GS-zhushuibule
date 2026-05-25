@@ -410,6 +410,72 @@ function PageShell({ title, subtitle, children }: { title: string; subtitle?: st
   );
 }
 
+function StyledConfirmDialog({
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "确定",
+  cancelText = "取消",
+}: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  cancelText?: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4">
+      <div className="w-full max-w-sm overflow-hidden rounded border border-[#8fb7df] bg-white shadow-xl">
+        <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">
+          提示
+        </div>
+        <div className="px-6 py-8 text-center text-sm font-bold text-slate-800">{message}</div>
+        <div className="flex justify-center gap-3 border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="h-7 min-w-20 rounded border border-[#2f80ed] bg-[#2f80ed] px-5 text-xs font-bold text-white shadow-sm hover:bg-[#1f6ed4]"
+          >
+            {confirmText}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-7 min-w-20 rounded border border-[#9eb8d4] bg-white px-5 text-xs font-bold text-slate-800 shadow-sm hover:bg-[#eaf4ff]"
+          >
+            {cancelText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useStyledConfirmDialog() {
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    message: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  const requestConfirm = (message: string, onConfirm: () => void | Promise<void>) => {
+    setPendingConfirm({ message, onConfirm });
+  };
+
+  const confirmDialog = pendingConfirm ? (
+    <StyledConfirmDialog
+      message={pendingConfirm.message}
+      onConfirm={() => {
+        const action = pendingConfirm.onConfirm;
+        setPendingConfirm(null);
+        void action();
+      }}
+      onCancel={() => setPendingConfirm(null)}
+    />
+  ) : null;
+
+  return { confirmDialog, requestConfirm };
+}
+
 function HomePage() {
   const [rows, setRows] = useState<HomeReserveOverviewRow[]>([]);
   const [error, setError] = useState("");
@@ -793,6 +859,7 @@ function ConcentricTestHistoryPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const loadRecords = async (page = currentPage, nextFilters = filters) => {
     try {
@@ -850,15 +917,17 @@ function ConcentricTestHistoryPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo} 的同心测调记录？`)) return;
-    try {
-      await axios.delete(`/api/concentric-test-records/${record.id}`);
-      setSelectedId(null);
-      const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      await loadRecords(nextPage);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "同心测调记录删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.wellNo} 的同心测调记录？`, async () => {
+      try {
+        await axios.delete(`/api/concentric-test-records/${record.id}`);
+        setSelectedId(null);
+        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        await loadRecords(nextPage);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "同心测调记录删除失败");
+      }
+    });
   };
 
   const toolbar = (
@@ -875,6 +944,7 @@ function ConcentricTestHistoryPage() {
 
   return (
     <div>
+      {confirmDialog}
       <ZonalTableShell title="同心测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1180px] border-collapse bg-white">
           <thead>
@@ -1027,6 +1097,7 @@ function SmartTestHistoryPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const loadRecords = async (page = currentPage, nextFilters = filters) => {
     try {
@@ -1088,14 +1159,16 @@ function SmartTestHistoryPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo} 的智能测调记录？`)) return;
-    try {
-      await axios.delete(`/api/smart-test-records/${record.id}`);
-      setSelectedId(null);
-      await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "智能测调记录删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.wellNo} 的智能测调记录？`, async () => {
+      try {
+        await axios.delete(`/api/smart-test-records/${record.id}`);
+        setSelectedId(null);
+        await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "智能测调记录删除失败");
+      }
+    });
   };
 
   const toolbar = (
@@ -1112,6 +1185,7 @@ function SmartTestHistoryPage() {
 
   return (
     <div>
+      {confirmDialog}
       <ZonalTableShell title="智能测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1680px] border-collapse bg-white">
           <thead>
@@ -1237,6 +1311,7 @@ function SingleWellInjectionEvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const loadRecords = async (page = currentPage, nextFilters = filters) => {
     try {
@@ -1294,14 +1369,16 @@ function SingleWellInjectionEvaluationPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo} 的单井注入评价？`)) return;
-    try {
-      await axios.delete(`/api/single-well-injection-evaluations/${record.id}`);
-      setSelectedId(null);
-      await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "单井注入评价删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.wellNo} 的单井注入评价？`, async () => {
+      try {
+        await axios.delete(`/api/single-well-injection-evaluations/${record.id}`);
+        setSelectedId(null);
+        await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "单井注入评价删除失败");
+      }
+    });
   };
 
   const toolbar = (
@@ -1318,6 +1395,7 @@ function SingleWellInjectionEvaluationPage() {
 
   return (
     <div>
+      {confirmDialog}
       <ZonalTableShell title="单井注入评价" filterMode="single-injection" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1180px] border-collapse bg-white">
           <thead>
@@ -1408,6 +1486,7 @@ function AbnormalWellsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const displayPage = Math.min(currentPage, totalPages);
 
@@ -1484,19 +1563,22 @@ function AbnormalWellsPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo} 的异常水井记录？`)) return;
-    try {
-      await axios.delete(`/api/abnormal-well-records/${record.id}`);
-      setSelectedId(null);
-      const nextPage = records.length === 1 && displayPage > 1 ? displayPage - 1 : displayPage;
-      await loadRecords(nextPage);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "异常水井记录删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.wellNo} 的异常水井记录？`, async () => {
+      try {
+        await axios.delete(`/api/abnormal-well-records/${record.id}`);
+        setSelectedId(null);
+        const nextPage = records.length === 1 && displayPage > 1 ? displayPage - 1 : displayPage;
+        await loadRecords(nextPage);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "异常水井记录删除失败");
+      }
+    });
   };
 
   return (
     <div className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1">
@@ -1695,6 +1777,7 @@ function SingleWellSealEvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const loadRecords = async (page = currentPage, nextFilters = filters) => {
     try {
@@ -1752,14 +1835,16 @@ function SingleWellSealEvaluationPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo} 的单井密封评价？`)) return;
-    try {
-      await axios.delete(`/api/single-well-seal-evaluations/${record.id}`);
-      setSelectedId(null);
-      await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "单井密封评价删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.wellNo} 的单井密封评价？`, async () => {
+      try {
+        await axios.delete(`/api/single-well-seal-evaluations/${record.id}`);
+        setSelectedId(null);
+        await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "单井密封评价删除失败");
+      }
+    });
   };
 
   const toolbar = (
@@ -1775,6 +1860,7 @@ function SingleWellSealEvaluationPage() {
 
   return (
     <div>
+      {confirmDialog}
       <ZonalTableShell title="单井密封评价" filterMode="single-seal" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1020px] border-collapse bg-white">
           <thead>
@@ -1864,6 +1950,7 @@ function ZonalIndicatorSummaryPage() {
   const [filters, setFilters] = useState({ category: "", process: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const loadRecords = async (nextFilters = filters) => {
     try {
@@ -1883,18 +1970,21 @@ function ZonalIndicatorSummaryPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.category}/${record.process}？`)) return;
-    try {
-      await axios.delete(`/api/zonal-indicator-summaries/${record.id}`);
-      setSelectedId(null);
-      await loadRecords();
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "分注指标汇总删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.category}/${record.process}？`, async () => {
+      try {
+        await axios.delete(`/api/zonal-indicator-summaries/${record.id}`);
+        setSelectedId(null);
+        await loadRecords();
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "分注指标汇总删除失败");
+      }
+    });
   };
 
   return (
     <div>
+      {confirmDialog}
       <div className="mb-2 flex flex-wrap items-center gap-2 rounded-sm border border-[#9fc4e8] bg-[#f7fbff] px-2 py-2 text-[12px]">
         <span>分类</span><input className="h-6 w-24 border px-1" value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value })} />
         <span>工艺</span><input className="h-6 w-24 border px-1" value={filters.process} onChange={(event) => setFilters({ ...filters, process: event.target.value })} />
@@ -2000,6 +2090,7 @@ function IndicatorCurvePage() {
   const [importStatus, setImportStatus] = useState("");
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState<IndicatorCurveForm>(() => createEmptyIndicatorCurveForm());
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const queryParams = (page: number, size: number) => ({
     page,
@@ -2068,6 +2159,9 @@ function IndicatorCurvePage() {
 
     setSelectedCurveIds([recordId]);
   };
+  const selectedDeleteRecord = selectedCurveIds.length === 1
+    ? records.find((row) => row.id === selectedCurveIds[0]) || chartRecords.find((row) => row.id === selectedCurveIds[0]) || null
+    : null;
   const openCreateForm = () => {
     setForm(createEmptyIndicatorCurveForm());
     setFormError("");
@@ -2127,6 +2221,21 @@ function IndicatorCurvePage() {
     setRecords(pageResponse.data.rows);
     setTotalRows(pageResponse.data.total);
     setChartRecords(chartResponse.data.rows);
+  };
+  const handleDelete = (record: IndicatorCurveRecord) => {
+    requestConfirm(`确认删除 ${record.wellNo} ${String(record.testDate).slice(0, 10)} ${record.testInterval} 的指示曲线记录？`, async () => {
+      setFormError("");
+      try {
+        await axios.delete(`/api/indicator-curve-records/${record.id}`);
+        setSelectedCurveIds([]);
+        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        setCurrentPage(nextPage);
+        setJumpPage(String(nextPage));
+        await refreshIndicatorCurveData(nextPage);
+      } catch (err: any) {
+        setFormError(err?.response?.data?.error || "指示曲线记录删除失败");
+      }
+    });
   };
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2266,6 +2375,7 @@ function IndicatorCurvePage() {
 
   return (
     <div className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-1 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <label className="flex items-center gap-1">
@@ -2300,6 +2410,14 @@ function IndicatorCurvePage() {
           </button>
           <button type="button" onClick={openCreateForm} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
             新增
+          </button>
+          <button
+            type="button"
+            disabled={!selectedDeleteRecord}
+            onClick={() => selectedDeleteRecord && handleDelete(selectedDeleteRecord)}
+            className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            删除
           </button>
           <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcelImport} />
           <button type="button" disabled={importing} onClick={() => excelInputRef.current?.click()} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:opacity-50">
@@ -2502,6 +2620,7 @@ function WellFlushingPage() {
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const filterClass = "h-6 rounded border border-[#8aaed3] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const headClass = "h-[38px] border border-[#8dbcf0] bg-[#dceefc] px-1 text-center text-[12px] font-bold leading-tight text-[#001a33]";
   const cellClass = "h-9 border border-[#8dbcf0] bg-white px-2 text-center text-[12px] leading-tight text-black";
@@ -2595,15 +2714,17 @@ function WellFlushingPage() {
 
   const handleDelete = async () => {
     const record = records.find((row) => row.id === selectedId);
-    if (!record || !window.confirm(`确认删除 ${record.wellNo} ${formatCell(record.washDate)} 的洗井记录？`)) return;
-    try {
-      await axios.delete(`/api/well-flushing-records/${record.id}`);
-      setSelectedId(null);
-      const nextPage = records.length === 1 && displayPage > 1 ? displayPage - 1 : displayPage;
-      await loadRecords(nextPage);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "水井洗井记录删除失败");
-    }
+    if (!record) return;
+    requestConfirm(`确认删除 ${record.wellNo} ${formatCell(record.washDate)} 的洗井记录？`, async () => {
+      try {
+        await axios.delete(`/api/well-flushing-records/${record.id}`);
+        setSelectedId(null);
+        const nextPage = records.length === 1 && displayPage > 1 ? displayPage - 1 : displayPage;
+        await loadRecords(nextPage);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "水井洗井记录删除失败");
+      }
+    });
   };
 
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2739,6 +2860,7 @@ function WellFlushingPage() {
 
   return (
     <div className="rounded-sm border border-[#8dbcf0] bg-white shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <label className="flex items-center gap-1">
@@ -2981,6 +3103,7 @@ function InjectionTechPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const filterClass = "h-6 rounded border border-[#9bbfe5] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const headerClass = "border border-[#99c7f3] bg-[#dceefc] px-2 py-2 text-center text-[13px] font-bold leading-tight text-[#001a33]";
   const cellClass = "h-10 border border-[#99c7f3] bg-white px-2 py-1 text-center text-[13px] leading-tight text-black";
@@ -3053,16 +3176,17 @@ function InjectionTechPage() {
     }
   };
   const handleDelete = async (record: InjectionTechRecord) => {
-    if (!window.confirm(`确认删除 ${record.wellNo} 的注水工艺记录？`)) return;
-    setError("");
-    try {
-      await axios.delete(`/api/injection-tech-records/${record.id}`);
-      const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      setCurrentPage(nextPage);
-      await loadRecords(nextPage, appliedFilters);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "注水工艺记录删除失败");
-    }
+    requestConfirm(`确认删除 ${record.wellNo} 的注水工艺记录？`, async () => {
+      setError("");
+      try {
+        await axios.delete(`/api/injection-tech-records/${record.id}`);
+        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        setCurrentPage(nextPage);
+        await loadRecords(nextPage, appliedFilters);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "注水工艺记录删除失败");
+      }
+    });
   };
   const modelCells = (value: unknown) => {
     const models = Array.isArray(value) ? value.map((item) => String(item)) : [];
@@ -3071,6 +3195,7 @@ function InjectionTechPage() {
 
   return (
     <div className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label className="flex items-center gap-1">
@@ -3292,6 +3417,7 @@ function WaterCutPage() {
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const totalPages = Math.max(1, Math.ceil(totalRows / WATER_CUT_PAGE_SIZE));
   const loadRecords = async (page = currentPage, nextFilters = appliedFilters) => {
     setLoading(true);
@@ -3354,16 +3480,17 @@ function WaterCutPage() {
     }
   };
   const handleDelete = async (record: WaterCutRecord) => {
-    if (!window.confirm(`确认删除 ${record.wellNo} ${apiDateOnly(record.sampleDate)} 的含水化验记录？`)) return;
-    setError("");
-    try {
-      await axios.delete(`/api/water-cuts/${record.id}`);
-      const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      setCurrentPage(nextPage);
-      await loadRecords(nextPage, appliedFilters);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "含水化验记录删除失败");
-    }
+    requestConfirm(`确认删除 ${record.wellNo} ${apiDateOnly(record.sampleDate)} 的含水化验记录？`, async () => {
+      setError("");
+      try {
+        await axios.delete(`/api/water-cuts/${record.id}`);
+        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        setCurrentPage(nextPage);
+        await loadRecords(nextPage, appliedFilters);
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "含水化验记录删除失败");
+      }
+    });
   };
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -3425,6 +3552,7 @@ function WaterCutPage() {
 
   return (
     <div className="rounded-md border border-[#9fc3e7] bg-white shadow-[0_0_0_1px_rgba(159,195,231,0.25)]">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label className="flex items-center gap-1">
@@ -4803,6 +4931,7 @@ function PdfJsPreview({ wellNo, fileUrl, pdfId }: { wellNo: string; fileUrl?: st
 
 type PdfTextNote = {
   id: string;
+  type: "text" | "image" | "table";
   pageNumber: number;
   x: number;
   y: number;
@@ -4810,8 +4939,15 @@ type PdfTextNote = {
   height: number;
   text: string;
   fontSize: number;
+  lineHeight?: number;
   editing: boolean;
+  imageDataUrl?: string;
+  tableRows?: number;
+  tableCols?: number;
+  tableCells?: string[];
 };
+
+type PdfSaveHandler = () => Promise<boolean>;
 
 type PdfOverlayResponse = {
   pdfId: string;
@@ -4857,7 +4993,7 @@ function wrapTextToWidth(text: string, maxWidth: number, measure: (value: string
   return lines;
 }
 
-function renderTextNoteToPng(text: string, width: number, height: number, fontSize = 12) {
+function renderTextNoteToPng(text: string, width: number, height: number, fontSize = 12, lineHeight = Math.max(12, fontSize + 4)) {
   const scale = 3;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(width * scale));
@@ -4871,7 +5007,6 @@ function renderTextNoteToPng(text: string, width: number, height: number, fontSi
   context.font = `${fontSize}px sans-serif`;
   context.textBaseline = "top";
 
-  const lineHeight = Math.max(12, fontSize + 4);
   const lines = wrapTextToWidth(text, Math.max(1, width - 4), (value) => context.measureText(value).width);
   lines.forEach((line, index) => {
     const y = 2 + index * lineHeight;
@@ -4883,17 +5018,57 @@ function renderTextNoteToPng(text: string, width: number, height: number, fontSi
   return canvas.toDataURL("image/png");
 }
 
+function renderTableNoteToPng(note: PdfTextNote, width: number, height: number) {
+  const scale = 3;
+  const rows = Math.max(1, note.tableRows || 3);
+  const cols = Math.max(1, note.tableCols || 3);
+  const cells = note.tableCells || [];
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("无法创建表格渲染画布");
+
+  context.scale(scale, scale);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.strokeStyle = "#1f2937";
+  context.lineWidth = 1;
+  context.fillStyle = "#000000";
+  context.font = `${note.fontSize || 12}px sans-serif`;
+  context.textBaseline = "top";
+
+  const cellWidth = width / cols;
+  const cellHeight = height / rows;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const x = col * cellWidth;
+      const y = row * cellHeight;
+      context.strokeRect(x, y, cellWidth, cellHeight);
+      const text = String(cells[row * cols + col] ?? "");
+      const lines = wrapTextToWidth(text, Math.max(1, cellWidth - 8), (value) => context.measureText(value).width);
+      lines.slice(0, Math.max(1, Math.floor(cellHeight / Math.max(12, (note.fontSize || 12) + 4)))).forEach((line, index) => {
+        context.fillText(line, x + 4, y + 4 + index * Math.max(12, (note.fontSize || 12) + 4));
+      });
+    }
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
 function PdfReaderEditor({
   wellNo,
   fileUrl,
   pdfId,
   onDirtyChange,
+  onSaveHandlerChange,
 }: {
   wellNo: string;
   fileUrl?: string;
   pdfId?: string;
   key?: React.Key;
   onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
 }) {
   const [pageNumbers, setPageNumbers] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
@@ -4912,6 +5087,7 @@ function PdfReaderEditor({
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pdfRef = useRef<any | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const canvasRefs = useRef(new Map<number, HTMLCanvasElement>());
@@ -4919,12 +5095,15 @@ function PdfReaderEditor({
   const noteLayerRefs = useRef(new Map<number, HTMLDivElement>());
   const dragRef = useRef<{ id: string; pageNumber: number; offsetX: number; offsetY: number } | null>(null);
   const resizeRef = useRef<{ id: string; pageNumber: number; startWidth: number; startHeight: number; startClientX: number; startClientY: number } | null>(null);
+  const copiedNoteRef = useRef<PdfTextNote | null>(null);
+  const saveHandlerRef = useRef<PdfSaveHandler | null>(null);
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const serializeNotes = (source: PdfTextNote[]) => ({
     version: 1,
     extraPageCount,
     elements: source.map((note) => ({
-      type: "text",
+      type: note.type,
       id: note.id,
       pageNumber: note.pageNumber,
       x: note.x,
@@ -4933,6 +5112,11 @@ function PdfReaderEditor({
       height: note.height,
       text: note.text,
       fontSize: note.fontSize,
+      lineHeight: note.lineHeight,
+      imageDataUrl: note.imageDataUrl,
+      tableRows: note.tableRows,
+      tableCols: note.tableCols,
+      tableCells: note.tableCells,
     })),
   });
 
@@ -4985,9 +5169,10 @@ function PdfReaderEditor({
           if (!cancelled) {
             restoredExtraPageCount = Math.max(0, Number(overlayResponse.data?.elementsJson?.extraPageCount ?? 0));
             const restored = (overlayResponse.data?.elementsJson?.elements ?? [])
-              .filter((element) => element?.type === "text")
+              .filter((element) => ["text", "image", "table"].includes(String(element?.type ?? "text")))
               .map((element) => ({
                 id: String(element.id ?? crypto.randomUUID()),
+                type: ["image", "table"].includes(String(element.type)) ? String(element.type) as PdfTextNote["type"] : "text",
                 pageNumber: Number(element.pageNumber ?? 1),
                 x: Number(element.x ?? 0.06),
                 y: Number(element.y ?? 0.06),
@@ -4995,6 +5180,11 @@ function PdfReaderEditor({
                 height: Number(element.height ?? 0.08),
                 text: String(element.text ?? ""),
                 fontSize: Number(element.fontSize ?? 12),
+                lineHeight: Number(element.lineHeight ?? 0) || undefined,
+                imageDataUrl: typeof element.imageDataUrl === "string" ? element.imageDataUrl : undefined,
+                tableRows: Number(element.tableRows ?? 3),
+                tableCols: Number(element.tableCols ?? 3),
+                tableCells: Array.isArray(element.tableCells) ? element.tableCells.map((cell) => String(cell ?? "")) : undefined,
                 editing: false,
               }));
             setNotes(restored);
@@ -5171,8 +5361,115 @@ function PdfReaderEditor({
     };
   }, []);
 
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      const element = target instanceof HTMLElement ? target : null;
+      if (!element) return false;
+      return Boolean(element.closest("input, textarea, select, [contenteditable='true']"));
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target) || !selectedNoteId) return;
+      const selectedNote = notes.find((note) => note.id === selectedNoteId);
+      if (!selectedNote) return;
+
+      const moveStep = event.shiftKey ? 0.02 : 0.005;
+      const copyToCurrentPage = () => {
+        const source = copiedNoteRef.current || selectedNote;
+        const noteId = `${currentPage}-${Date.now()}`;
+        setNotes((current) => [
+          ...current.map((note) => ({ ...note, editing: false })),
+          {
+            ...source,
+            id: noteId,
+            pageNumber: currentPage,
+            x: Math.min(0.92 - source.width, Math.max(0, source.pageNumber === currentPage ? source.x + 0.03 : source.x)),
+            y: Math.min(0.95 - source.height, Math.max(0, source.pageNumber === currentPage ? source.y + 0.03 : source.y)),
+            editing: false,
+          },
+        ]);
+        setSelectedNoteId(noteId);
+        setActiveNoteId(noteId);
+        markDirty();
+      };
+      const moveToPage = (pageDelta: number) => {
+        const nextPage = Math.min(pageNumbers.length, Math.max(1, selectedNote.pageNumber + pageDelta));
+        if (nextPage === selectedNote.pageNumber) return;
+        setNotes((current) => current.map((note) => (note.id === selectedNote.id ? { ...note, pageNumber: nextPage, editing: false } : note)));
+        setCurrentPage(nextPage);
+        setActiveNoteId(selectedNote.id);
+        markDirty();
+        window.setTimeout(() => scrollToPage(nextPage), 0);
+      };
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        deleteSelectedNote();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        copiedNoteRef.current = { ...selectedNote, editing: false };
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+        event.preventDefault();
+        copyToCurrentPage();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        copiedNoteRef.current = { ...selectedNote, editing: false };
+        copyToCurrentPage();
+        return;
+      }
+      if ((event.altKey || event.ctrlKey || event.metaKey) && event.key === "PageUp") {
+        event.preventDefault();
+        moveToPage(-1);
+        return;
+      }
+      if ((event.altKey || event.ctrlKey || event.metaKey) && event.key === "PageDown") {
+        event.preventDefault();
+        moveToPage(1);
+        return;
+      }
+      const moveByKey: Record<string, [number, number]> = {
+        ArrowLeft: [-moveStep, 0],
+        ArrowRight: [moveStep, 0],
+        ArrowUp: [0, -moveStep],
+        ArrowDown: [0, moveStep],
+      };
+      const delta = moveByKey[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      setNotes((current) =>
+        current.map((note) =>
+          note.id === selectedNote.id
+            ? {
+                ...note,
+                x: Math.min(0.98 - note.width, Math.max(0, note.x + delta[0])),
+                y: Math.min(0.98 - note.height, Math.max(0, note.y + delta[1])),
+                editing: false,
+              }
+            : note,
+        ),
+      );
+      setActiveNoteId(selectedNote.id);
+      markDirty();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentPage, notes, pageNumbers.length, selectedNoteId]);
+
   const scrollToPage = (pageNumber: number) => {
-    pageRefs.current.get(pageNumber)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const pageElement = pageRefs.current.get(pageNumber);
+    const scrollElement = scrollRef.current;
+    if (!pageElement || !scrollElement) return;
+    scrollElement.scrollTo({
+      top: pageElement.offsetTop - scrollElement.offsetTop,
+      behavior: "smooth",
+    });
   };
 
   const startNoteDrag = (note: PdfTextNote, event: React.MouseEvent<HTMLElement>) => {
@@ -5199,13 +5496,77 @@ function PdfReaderEditor({
       {
         id: noteId,
         pageNumber,
+        type: "text",
         x: 0.08,
-        y: 0.78,
+        y: 0.12,
         width: 0.24,
         height: 0.075,
         text: "",
         fontSize: 12,
+        lineHeight: 16,
         editing: true,
+      },
+    ]);
+    setSelectedNoteId(noteId);
+    setActiveNoteId(noteId);
+    markDirty();
+  };
+
+  const createImageNote = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const pageNumber = currentPage || pageNumbers[0];
+      const imageDataUrl = String(reader.result || "");
+      if (!pageNumber || !imageDataUrl) return;
+      const noteId = `${pageNumber}-image-${Date.now()}`;
+      setNotes((current) => [
+        ...current.map((note) => ({ ...note, editing: false })),
+        {
+          id: noteId,
+          type: "image",
+          pageNumber,
+          x: 0.08,
+          y: 0.12,
+          width: 0.35,
+          height: 0.22,
+          text: "",
+          fontSize: 12,
+          editing: false,
+          imageDataUrl,
+        },
+      ]);
+      setSelectedNoteId(noteId);
+      setActiveNoteId(noteId);
+      markDirty();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const createTableNote = () => {
+    const pageNumber = currentPage || pageNumbers[0];
+    if (!pageNumber) return;
+    const rows = 3;
+    const cols = 3;
+    const noteId = `${pageNumber}-table-${Date.now()}`;
+    setNotes((current) => [
+      ...current.map((note) => ({ ...note, editing: false })),
+      {
+        id: noteId,
+        type: "table",
+        pageNumber,
+        x: 0.08,
+        y: 0.12,
+        width: 0.42,
+        height: 0.2,
+        text: "",
+        fontSize: 12,
+        editing: false,
+        tableRows: rows,
+        tableCols: cols,
+        tableCells: Array.from({ length: rows * cols }, () => ""),
       },
     ]);
     setSelectedNoteId(noteId);
@@ -5227,17 +5588,22 @@ function PdfReaderEditor({
     if (!extraPageCount) return;
     const lastExtraPageNumber = originalPageCount + extraPageCount;
     const notesOnLastPage = notes.filter((note) => note.pageNumber === lastExtraPageNumber && note.text.trim());
-    if (notesOnLastPage.length && !window.confirm("最后一页新增页上有文本内容，删除后这些内容也会删除。是否继续？")) {
+    const removePage = () => {
+      setNotes((current) => current.filter((note) => note.pageNumber !== lastExtraPageNumber));
+      setPageNumbers((current) => current.filter((pageNumber) => pageNumber !== lastExtraPageNumber));
+      setExtraPageCount((current) => Math.max(0, current - 1));
+      setSelectedNoteId("");
+      setActiveNoteId("");
+      setCurrentPage(Math.min(lastExtraPageNumber - 1, Math.max(1, pageNumbers.length - 1)));
+      markDirty();
+    };
+
+    if (notesOnLastPage.length) {
+      requestConfirm("最后一页新增页上有文本内容，删除后这些内容也会删除。是否继续？", removePage);
       return;
     }
 
-    setNotes((current) => current.filter((note) => note.pageNumber !== lastExtraPageNumber));
-    setPageNumbers((current) => current.filter((pageNumber) => pageNumber !== lastExtraPageNumber));
-    setExtraPageCount((current) => Math.max(0, current - 1));
-    setSelectedNoteId("");
-    setActiveNoteId("");
-    setCurrentPage(Math.min(lastExtraPageNumber - 1, Math.max(1, pageNumbers.length - 1)));
-    markDirty();
+    removePage();
   };
 
   const beginNoteEditing = (noteId: string) => {
@@ -5250,6 +5616,7 @@ function PdfReaderEditor({
     setNotes((current) =>
       current.flatMap((note) => {
         if (note.id !== noteId) return [note];
+        if (note.type !== "text") return [{ ...note, editing: false }];
         const text = note.text.trim();
         if (!text) return [];
         return [{ ...note, text, editing: false }];
@@ -5261,15 +5628,32 @@ function PdfReaderEditor({
   };
 
   const changeSelectedFontSize = (delta: number) => {
-    if (!selectedNoteId) return;
+    const targetNoteId = selectedNoteId || activeNoteId;
+    if (!targetNoteId) return;
     setNotes((current) =>
       current.map((note) =>
-        note.id === selectedNoteId
+        note.id === targetNoteId
           ? { ...note, fontSize: Math.min(36, Math.max(8, note.fontSize + delta)) }
           : note,
       ),
     );
-    setActiveNoteId(selectedNoteId);
+    setSelectedNoteId(targetNoteId);
+    setActiveNoteId(targetNoteId);
+    markDirty();
+  };
+
+  const changeSelectedLineHeight = (delta: number) => {
+    const targetNoteId = selectedNoteId || activeNoteId;
+    if (!targetNoteId) return;
+    setNotes((current) =>
+      current.map((note) => {
+        if (note.id !== targetNoteId) return note;
+        const currentLineHeight = note.lineHeight ?? Math.max(12, note.fontSize + 4);
+        return { ...note, lineHeight: Math.min(64, Math.max(10, currentLineHeight + delta)) };
+      }),
+    );
+    setSelectedNoteId(targetNoteId);
+    setActiveNoteId(targetNoteId);
     markDirty();
   };
 
@@ -5282,7 +5666,7 @@ function PdfReaderEditor({
   };
 
   const handleSave = async () => {
-    if (!pdfId) return;
+    if (!pdfId) return false;
     setSaving(true);
     setSaveStatus("");
     try {
@@ -5293,12 +5677,22 @@ function PdfReaderEditor({
       setDirty(false);
       onDirtyChange?.(false);
       setSaveStatus("编辑结果已保存");
+      return true;
     } catch (err: any) {
       setSaveStatus(err?.response?.data?.error || "保存编辑结果失败");
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  saveHandlerRef.current = handleSave;
+
+  useEffect(() => {
+    if (!onSaveHandlerChange) return;
+    onSaveHandlerChange(() => saveHandlerRef.current?.() ?? Promise.resolve(false));
+    return () => onSaveHandlerChange(null);
+  }, [onSaveHandlerChange]);
 
   const handleDownload = async () => {
     if (!pdfBytes) return;
@@ -5316,12 +5710,21 @@ function PdfReaderEditor({
 
       for (const note of notes) {
         const page = pages[note.pageNumber - 1];
-        if (!page || !note.text.trim()) continue;
+        if (!page) continue;
         const { width, height } = page.getSize();
         const boxWidth = width * note.width;
         const boxHeight = height * note.height;
-        const pngDataUrl = renderTextNoteToPng(note.text, boxWidth, boxHeight, note.fontSize);
-        const pngImage = await pdfDoc.embedPng(pngDataUrl);
+        let pngImage;
+        if (note.type === "image" && note.imageDataUrl) {
+          pngImage = note.imageDataUrl.startsWith("data:image/jpeg") || note.imageDataUrl.startsWith("data:image/jpg")
+            ? await pdfDoc.embedJpg(note.imageDataUrl)
+            : await pdfDoc.embedPng(note.imageDataUrl);
+        } else if (note.type === "table") {
+          pngImage = await pdfDoc.embedPng(renderTableNoteToPng(note, boxWidth, boxHeight));
+        } else {
+          if (!note.text.trim()) continue;
+          pngImage = await pdfDoc.embedPng(renderTextNoteToPng(note.text, boxWidth, boxHeight, note.fontSize, note.lineHeight));
+        }
         page.drawImage(pngImage, {
           x: note.x * width,
           y: height - note.y * height - boxHeight,
@@ -5361,8 +5764,9 @@ function PdfReaderEditor({
   }
 
   return (
-    <div className="overflow-hidden border border-gray-200 bg-slate-100">
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 text-sm">
+    <div className="flex h-[calc(100vh-150px)] min-h-[560px] flex-col overflow-hidden border border-gray-200 bg-slate-100">
+      {confirmDialog}
+      <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 text-sm">
         <span className="bg-slate-100 px-3 py-2 font-bold text-gray-700">第 {currentPage} / {pageNumbers.length} 页</span>
         <button onClick={() => scrollToPage(Math.max(1, currentPage - 1))} className="border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50">上一页</button>
         <button onClick={() => scrollToPage(Math.min(pageNumbers.length, currentPage + 1))} className="border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50">下一页</button>
@@ -5392,6 +5796,13 @@ function PdfReaderEditor({
         <button onClick={createTextNote} className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50">
           <Type className="h-4 w-4" />文本编辑
         </button>
+        <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={createImageNote} />
+        <button onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50">
+          <Upload className="h-4 w-4" />上传图片
+        </button>
+        <button onClick={createTableNote} className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50">
+          <Plus className="h-4 w-4" />插入表格
+        </button>
         <button onClick={() => changeSelectedFontSize(-1)} disabled={!selectedNoteId} className="border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
           字号-
         </button>
@@ -5409,8 +5820,8 @@ function PdfReaderEditor({
         </button>
         {saveStatus && <span className="text-xs text-gray-500">{saveStatus}</span>}
       </div>
-      {error && <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
-      <div ref={scrollRef} className="space-y-5 overflow-auto p-4 custom-scrollbar">
+      {error && <div className="shrink-0 border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-5 overflow-auto p-4 custom-scrollbar">
         {pageNumbers.map((pageNumber) => (
           <div
             key={pageNumber}
@@ -5418,6 +5829,7 @@ function PdfReaderEditor({
               if (node) pageRefs.current.set(pageNumber, node);
               else pageRefs.current.delete(pageNumber);
             }}
+            onClick={() => setCurrentPage(pageNumber)}
             className="w-fit min-w-full border border-gray-200 bg-white p-4 shadow-sm"
           >
             <div className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Page {pageNumber}{pageNumber > originalPageCount ? " / 新增页" : ""}</div>
@@ -5479,9 +5891,41 @@ function PdfReaderEditor({
                       <textarea
                         autoFocus
                         value={note.text}
-                        onClick={(event) => event.stopPropagation()}
-                        onMouseDown={(event) => event.stopPropagation()}
+                        onFocus={() => {
+                          setSelectedNoteId(note.id);
+                          setActiveNoteId(note.id);
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedNoteId(note.id);
+                          setActiveNoteId(note.id);
+                        }}
+                        onMouseDown={(event) => {
+                          event.stopPropagation();
+                          setSelectedNoteId(note.id);
+                          setActiveNoteId(note.id);
+                        }}
                         onKeyDown={(event) => {
+                          if ((event.ctrlKey || event.metaKey) && event.altKey && event.key === "ArrowUp") {
+                            event.preventDefault();
+                            changeSelectedLineHeight(-1);
+                            return;
+                          }
+                          if ((event.ctrlKey || event.metaKey) && event.altKey && event.key === "ArrowDown") {
+                            event.preventDefault();
+                            changeSelectedLineHeight(1);
+                            return;
+                          }
+                          if ((event.ctrlKey || event.metaKey) && event.shiftKey && [">", "."].includes(event.key)) {
+                            event.preventDefault();
+                            changeSelectedFontSize(1);
+                            return;
+                          }
+                          if ((event.ctrlKey || event.metaKey) && event.shiftKey && ["<", ","].includes(event.key)) {
+                            event.preventDefault();
+                            changeSelectedFontSize(-1);
+                            return;
+                          }
                           if (event.key === "Enter" && !event.shiftKey) {
                             event.preventDefault();
                             finishNoteEditing(note.id);
@@ -5491,11 +5935,99 @@ function PdfReaderEditor({
                           setNotes((current) => current.map((item) => (item.id === note.id ? { ...item, text: event.target.value } : item)));
                           markDirty();
                         }}
-                        className="h-full min-h-[42px] w-full resize-none bg-white/60 p-1 leading-snug text-black outline-none"
-                        style={{ fontSize: `${note.fontSize}px` }}
+                        className="h-full min-h-[42px] w-full resize-none bg-white/60 p-1 text-black outline-none"
+                        style={{ fontSize: `${note.fontSize}px`, lineHeight: `${note.lineHeight ?? Math.max(12, note.fontSize + 4)}px` }}
                       />
+                    ) : note.type === "image" ? (
+                      <img src={note.imageDataUrl} alt="" className="h-full w-full object-contain" draggable={false} />
+                    ) : note.type === "table" ? (
+                      <div
+                        className="grid h-full w-full border border-gray-700 bg-white text-black"
+                        style={{ gridTemplateColumns: `repeat(${note.tableCols || 3}, minmax(0, 1fr))`, fontSize: `${note.fontSize}px` }}
+                      >
+                        {Array.from({ length: (note.tableRows || 3) * (note.tableCols || 3) }, (_, cellIndex) => (
+                          <textarea
+                            key={`${note.id}-cell-${cellIndex}`}
+                            value={note.tableCells?.[cellIndex] ?? ""}
+                            onClick={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setNotes((current) =>
+                                current.map((item) =>
+                                  item.id === note.id
+                                    ? {
+                                        ...item,
+                                        tableCells: Array.from({ length: (note.tableRows || 3) * (note.tableCols || 3) }, (_, index) =>
+                                          index === cellIndex ? value : item.tableCells?.[index] ?? "",
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              );
+                              setSelectedNoteId(note.id);
+                              markDirty();
+                            }}
+                            className="min-h-0 resize-none border-b border-r border-gray-700 bg-transparent p-1 text-[inherit] leading-snug outline-none focus:bg-red-50"
+                          />
+                        ))}
+                      </div>
                     ) : (
-                      <div className="h-full w-full p-1" title="双击编辑，拖动移动">{note.text}</div>
+                      <div className="h-full w-full p-1" style={{ lineHeight: `${note.lineHeight ?? Math.max(12, note.fontSize + 4)}px` }} title="双击编辑，拖动移动">{note.text}</div>
+                    )}
+                    {note.type === "text" && (selectedNoteId === note.id || activeNoteId === note.id || note.editing) && (
+                      <div className="absolute -top-5 left-12 z-10 inline-flex overflow-hidden border border-cnpc-red bg-white text-[11px] font-bold leading-none text-cnpc-red shadow-sm">
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedNoteId(note.id);
+                            changeSelectedFontSize(-1);
+                          }}
+                          className="px-2 py-0.5 hover:bg-red-50"
+                        >
+                          A-
+                        </button>
+                        <span className="border-x border-cnpc-red px-2 py-0.5 text-slate-700">{note.fontSize}</span>
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedNoteId(note.id);
+                            changeSelectedFontSize(1);
+                          }}
+                          className="px-2 py-0.5 hover:bg-red-50"
+                        >
+                          A+
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedNoteId(note.id);
+                            changeSelectedLineHeight(-1);
+                          }}
+                          className="border-l border-cnpc-red px-2 py-0.5 hover:bg-red-50"
+                        >
+                          行距-
+                        </button>
+                        <span className="border-x border-cnpc-red px-2 py-0.5 text-slate-700">{note.lineHeight ?? Math.max(12, note.fontSize + 4)}</span>
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedNoteId(note.id);
+                            changeSelectedLineHeight(1);
+                          }}
+                          className="px-2 py-0.5 hover:bg-red-50"
+                        >
+                          行距+
+                        </button>
+                      </div>
                     )}
                     {(selectedNoteId === note.id || activeNoteId === note.id || note.editing) && (
                       <div
@@ -5529,7 +6061,13 @@ function PdfReaderEditor({
   );
 }
 
-function WellHistoryPage() {
+function WellHistoryPage({
+  onDirtyChange,
+  onSaveHandlerChange,
+}: {
+  onDirtyChange?: (dirty: boolean) => void;
+  onSaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
+}) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [unit, setUnit] = useState(UNIT_OPTIONS[0]);
   const [block, setBlock] = useState("");
@@ -5548,11 +6086,11 @@ function WellHistoryPage() {
   const [importSuccess, setImportSuccess] = useState(0);
   const [importFailure, setImportFailure] = useState(0);
   const [importResults, setImportResults] = useState<WellHistoryBatchImportItem[]>([]);
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  const confirmDiscardPdfEdits = () => {
-    if (!pdfDirty) return true;
-    return window.confirm("当前 PDF 有未保存的文本编辑，切换后未保存内容会丢失。是否继续切换？");
-  };
+  useEffect(() => {
+    onDirtyChange?.(pdfDirty);
+  }, [onDirtyChange, pdfDirty]);
 
   const loadArchives = async () => {
     setListLoading(true);
@@ -5598,9 +6136,15 @@ function WellHistoryPage() {
     };
   }, []);
 
-  const openWell = async (wellNo: string) => {
+  const openWell = async (wellNo: string, force = false) => {
     if (!wellNo) return false;
-    if (wellNo !== detail?.wellNo && !confirmDiscardPdfEdits()) return false;
+    if (!force && wellNo !== detail?.wellNo && pdfDirty) {
+      requestConfirm("当前 PDF 有未保存的编辑内容，切换井史后这些内容会消失。是否继续切换？", () => {
+        setPdfDirty(false);
+        void openWell(wellNo, true);
+      });
+      return false;
+    }
     setLoading(true);
     setError("");
     try {
@@ -5623,11 +6167,8 @@ function WellHistoryPage() {
     }
   };
 
-  const handleQuery = async () => {
-    const normalized = keyword.trim();
-    if (!normalized) return;
-
-    const exactMatched = await openWell(normalized);
+  const queryWell = async (normalized: string, force = false) => {
+    const exactMatched = await openWell(normalized, force);
     if (exactMatched) return;
 
     try {
@@ -5635,13 +6176,28 @@ function WellHistoryPage() {
         params: { keyword: normalized },
       });
       if (data?.length) {
-        await openWell(data[0].wellNo);
+        await openWell(data[0].wellNo, force);
       } else {
         setError("未找到对应井号的井史资料");
       }
     } catch (err: any) {
       setError(err?.response?.data?.error || "井号搜索失败");
     }
+  };
+
+  const handleQuery = async () => {
+    const normalized = keyword.trim();
+    if (!normalized) return;
+
+    if (normalized !== detail?.wellNo && pdfDirty) {
+      requestConfirm("当前 PDF 有未保存的编辑内容，切换井史后这些内容会消失。是否继续切换？", () => {
+        setPdfDirty(false);
+        void queryWell(normalized, true);
+      });
+      return;
+    }
+
+    await queryWell(normalized);
   };
 
   const handleBatchImport = async (files: FileList | null) => {
@@ -5704,8 +6260,28 @@ function WellHistoryPage() {
   const previewUrl = detail?.currentPdf?.fileUrl || "";
   const completedCount = importSuccess + importFailure;
 
+  const handleDeleteArchive = (item: WellHistoryArchiveSummary) => {
+    requestConfirm(`确认删除 ${item.wellNo} 的井史资料？`, async () => {
+      setDeletingWellNo(item.wellNo);
+      try {
+        await axios.delete(`/api/well-history-archives/${encodeURIComponent(item.wellNo)}`);
+        if (selectedWellNo === item.wellNo) {
+          setSelectedWellNo("");
+          setDetail(null);
+          setPdfDirty(false);
+        }
+        await loadArchives();
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "删除井史失败");
+      } finally {
+        setDeletingWellNo("");
+      }
+    });
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      {confirmDialog}
       <div className="space-y-3">
         <div className="border border-shell-border bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-lg font-bold text-gray-900">井史查询</h2>
@@ -5792,21 +6368,7 @@ function WellHistoryPage() {
                   <p className="mt-1 text-[11px] text-gray-400">更新：{formatTime(item.updatedAt)}</p>
                 </button>
                 <button
-                  onClick={async () => {
-                    setDeletingWellNo(item.wellNo);
-                    try {
-                      await axios.delete(`/api/well-history-archives/${encodeURIComponent(item.wellNo)}`);
-                      if (selectedWellNo === item.wellNo) {
-                        setSelectedWellNo("");
-                        setDetail(null);
-                      }
-                      await loadArchives();
-                    } catch (err: any) {
-                      setError(err?.response?.data?.error || "删除井史失败");
-                    } finally {
-                      setDeletingWellNo("");
-                    }
-                  }}
+                  onClick={() => handleDeleteArchive(item)}
                   className="shrink-0 text-xs font-bold text-red-600 hover:underline"
                 >
                   <Trash2 className="mr-1 inline h-3.5 w-3.5" />{deletingWellNo === item.wellNo ? "删除中..." : "删除"}
@@ -5861,6 +6423,7 @@ function WellHistoryPage() {
                   fileUrl={previewUrl}
                   pdfId={detail.currentPdf?.id}
                   onDirtyChange={setPdfDirty}
+                  onSaveHandlerChange={onSaveHandlerChange}
                 />
               ) : (
                 <div className="border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">该井暂无 PDF 原件。</div>
@@ -5923,6 +6486,7 @@ function DynamicAdjustmentPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const headClass = "whitespace-nowrap border border-[#9fc4e8] bg-[#dcecf9] px-2 py-2 text-center text-sm font-bold leading-tight text-[#001a33]";
   const cellClass = "h-8 whitespace-nowrap border border-[#9fc4e8] bg-white px-2 py-1 text-center text-sm leading-tight text-[#001a33]";
@@ -6010,15 +6574,16 @@ function DynamicAdjustmentPage() {
   };
 
   const handleDelete = async (record: DynamicAdjustmentRecord) => {
-    if (!window.confirm(`确认删除 ${record.adjustmentWaterWell} / ${record.trackedOilWell} 的动态调配记录？`)) return;
-    setError("");
-    try {
-      await axios.delete(`/api/dynamic-adjustments/${record.id}`);
-      setSelectedId(null);
-      await loadRecords();
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "动态调配记录删除失败");
-    }
+    requestConfirm(`确认删除 ${record.adjustmentWaterWell} / ${record.trackedOilWell} 的动态调配记录？`, async () => {
+      setError("");
+      try {
+        await axios.delete(`/api/dynamic-adjustments/${record.id}`);
+        setSelectedId(null);
+        await loadRecords();
+      } catch (err: any) {
+        setError(err?.response?.data?.error || "动态调配记录删除失败");
+      }
+    });
   };
 
   const visibleRows = records;
@@ -6030,6 +6595,7 @@ function DynamicAdjustmentPage() {
 
   return (
     <>
+      {confirmDialog}
       <div className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
           <div className="flex flex-wrap items-center gap-2">
@@ -6191,12 +6757,20 @@ function DynamicAdjustmentPage() {
   );
 }
 
-function AppContent({ activePage }: { activePage: PageType }) {
+function AppContent({
+  activePage,
+  onWellHistoryDirtyChange,
+  onWellHistorySaveHandlerChange,
+}: {
+  activePage: PageType;
+  onWellHistoryDirtyChange?: (dirty: boolean) => void;
+  onWellHistorySaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
+}) {
   switch (activePage) {
     case "home":
       return <HomePage />;
     case "well-history":
-      return <WellHistoryPage />;
+      return <WellHistoryPage onDirtyChange={onWellHistoryDirtyChange} onSaveHandlerChange={onWellHistorySaveHandlerChange} />;
     case "dynamic-analysis":
       return <DynamicAnalysisPage />;
     case "water-cut":
@@ -6238,10 +6812,38 @@ function AppContent({ activePage }: { activePage: PageType }) {
 
 export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
+  const [wellHistoryDirty, setWellHistoryDirty] = useState(false);
+  const [pendingPage, setPendingPage] = useState<PageType | null>(null);
+  const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
+  const requestPageChange = (page: PageType) => {
+    if (page === activePage) return;
+    if (activePage === "well-history" && wellHistoryDirty) {
+      setPendingPage(page);
+      return;
+    }
+    setActivePage(page);
+  };
+  const confirmPageChange = async () => {
+    const nextPage = pendingPage;
+    if (!nextPage) return;
+    const saved = await wellHistorySaveHandlerRef.current?.();
+    if (!saved) return;
+    setWellHistoryDirty(false);
+    setActivePage(nextPage);
+    setPendingPage(null);
+  };
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-gray-900">
+      {pendingPage && (
+        <StyledConfirmDialog
+          message="当前 PDF 有未保存的编辑内容，离开页面后这些内容会消失。是否保存？"
+          confirmText="保存"
+          onConfirm={() => void confirmPageChange()}
+          onCancel={() => setPendingPage(null)}
+        />
+      )}
       <header className="sticky top-0 z-50 bg-white shadow-sm">
         <div className="flex h-[86px] items-center justify-between px-12">
           <div className="flex items-center gap-4">
@@ -6269,7 +6871,7 @@ export default function App() {
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setActivePage(item.id === "zonal-injection" ? "concentric-test-history" : item.id)}
+                onClick={() => requestPageChange(item.id === "zonal-injection" ? "concentric-test-history" : item.id)}
                 className={cn(
                   "relative shrink-0 px-6 text-base font-bold text-white transition-colors hover:bg-[#8f1016] hover:text-cnpc-yellow",
                   (activePage === item.id || (item.id === "zonal-injection" && showZonalSubNav)) &&
@@ -6287,7 +6889,7 @@ export default function App() {
               {ZONAL_INJECTION_SUB_ITEMS.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setActivePage(item.id)}
+                  onClick={() => requestPageChange(item.id)}
                   className={cn(
                     "min-w-[116px] rounded-lg px-5 py-3 text-sm font-bold text-cnpc-red transition-colors hover:bg-white",
                     activePage === item.id && "bg-white shadow-sm",
@@ -6301,7 +6903,13 @@ export default function App() {
         )}
       </header>
       <main className="px-6 py-6">
-        <AppContent activePage={activePage} />
+        <AppContent
+          activePage={activePage}
+          onWellHistoryDirtyChange={setWellHistoryDirty}
+          onWellHistorySaveHandlerChange={(handler) => {
+            wellHistorySaveHandlerRef.current = handler;
+          }}
+        />
       </main>
     </div>
   );
