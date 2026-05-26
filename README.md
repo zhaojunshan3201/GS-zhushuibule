@@ -45,6 +45,18 @@
 
 同一个 PPT 文件内的多页会保留为多页 PDF。同一批次内如果上传同一井号的多个 PPT，例如 `GS-101-1.pptx`、`GS-101-2.pptx`，系统会按序号或上传顺序合并为一个多页 PDF，并以一条当前档案记录保存到数据库。PDF 文件本体保存在 `uploads/well-history/`，数据库保存目录、PDF 路径、提取文本和编辑覆盖层数据。
 
+批量导入入口只展示导入进度条，不再显示总文件数、已完成、成功、失败等汇总卡片，也不显示逐条导入结果列表。导入完成后，系统会弹出结果确认窗口，显示本次导入总数、成功数和失败数。
+
+上传的 PPT/PPTX 原文件会自动保存到 `uploads/well-history-source/`，转换后的 PDF 保存到 `uploads/well-history/`。数据库保存井号、PDF 路径、原始文件信息、提取文本和编辑覆盖层等元数据，不直接保存 PPT/PPTX 二进制内容。
+
+井史查看区顶部提供单位、区块、井号筛选，以及查询、保存编辑结果、下载 PDF 操作。单页 PDF 会自动展开页面高度完整显示；多页 PDF 从第二页开始使用查看区内侧滚动条浏览。
+
+## 新增记录排序规则
+
+主要业务表的新增记录统一按最新创建时间优先显示。新增成功后，页面会回到第一页，后端列表接口按 `createdAt` 倒序返回数据，保证新增数据优先出现在列表前面。
+
+`注水工艺` 页面在新增成功后还会立即将新记录固定显示到当前表格第一页第一条，便于用户马上确认刚添加的数据。
+
 ## 数据库与迁移
 
 Prisma schema 位于：
@@ -133,6 +145,20 @@ DELETE /api/zonal-indicator-summaries/:id
 GET    /api/dynamic-analysis-records
 POST   /api/dynamic-analysis-records
 DELETE /api/dynamic-analysis-records/:id
+```
+
+单井井史接口：
+
+```text
+POST   /api/uploads/well-history-ppt-batch
+GET    /api/well-history-archives
+GET    /api/well-history-archives/search
+GET    /api/well-history-archives-latest
+GET    /api/well-history-archives/:wellNo
+GET    /api/well-history-archives/:wellNo/pdf-content
+GET    /api/well-history-archives/:wellNo/pdf-overlay
+POST   /api/well-history-archives/:wellNo/pdf-overlay
+DELETE /api/well-history-archives/:wellNo
 ```
 
 分页类列表统一返回：
@@ -254,6 +280,6 @@ uploads/             本地上传文件
 
 ## 注意事项
 
-- 当前目录不是 git 仓库，代码变更不会自动形成提交记录。
+- 当前目录是 Git 仓库，远端为 GitHub `origin`。提交前建议先运行 `npm run lint` 和 `npm run build`。
 - Windows 下如果 `npx prisma generate` 报 DLL rename 权限错误，通常是本地 `npm run dev` 正在占用 Prisma Client，先停止 dev server 后重试。
 - 如果终端显示中文乱码，优先确认文件是否为 UTF-8 保存，以及当前终端代码页设置。

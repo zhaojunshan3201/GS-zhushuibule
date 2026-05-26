@@ -26,7 +26,6 @@ import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import {
   CartesianGrid,
   LabelList,
-  Legend,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -2450,7 +2449,15 @@ function IndicatorCurvePage() {
 
       <div className="sticky top-0 z-20 border-t border-[#99c7f3] bg-white shadow-sm">
         <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">指示曲线概览列表</h1>
-        <div className="h-[360px] border border-[#99c7f3] bg-white">
+        <div className="relative h-[360px] border border-[#99c7f3] bg-white">
+          <div className="pointer-events-none absolute right-10 top-4 z-10 grid max-w-[520px] grid-cols-2 gap-x-4 gap-y-1 bg-white/85 px-2 py-1 text-[12px] leading-5">
+            {chartSeries.map((series, index) => (
+              <div key={`indicator-legend-${series.id}`} className="flex min-w-0 items-center gap-1.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                <span className="truncate" style={{ color: chartColors[index % chartColors.length] }}>{series.name}</span>
+              </div>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 24, right: 32, bottom: 42, left: 28 }}>
               <CartesianGrid stroke="#d7e8f8" />
@@ -2469,7 +2476,6 @@ function IndicatorCurvePage() {
                 label={{ value: "压力", angle: -90, position: "insideLeft", fill: "#001a33", fontSize: 13 }}
               />
               <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value, name) => [value, name === "pressure" ? "压力" : "日注"]} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
               {chartSeries.map((series, index) => (
                 <Scatter
                   key={series.id}
