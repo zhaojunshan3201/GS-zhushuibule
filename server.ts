@@ -3409,7 +3409,7 @@ app.get("/api/water-cuts", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildWaterCutWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.waterCutRecord.findMany({ where, orderBy: [{ sampleDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.waterCutRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { sampleDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.waterCutRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3481,7 +3481,7 @@ app.get("/api/injection-tech-records", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildInjectionTechWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.injectionTechRecord.findMany({ where, orderBy: [{ runningDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.injectionTechRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { runningDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.injectionTechRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3541,7 +3541,7 @@ app.get("/api/well-flushing-records", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildWellFlushingWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.wellFlushingRecord.findMany({ where, orderBy: [{ washDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.wellFlushingRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { washDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.wellFlushingRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3623,7 +3623,7 @@ app.get("/api/abnormal-well-records", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildAbnormalWellWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.abnormalWellRecord.findMany({ where, orderBy: [{ updatedAt: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.abnormalWellRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.abnormalWellRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3664,7 +3664,7 @@ app.get("/api/concentric-test-records", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildConcentricTestWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.concentricTestRecord.findMany({ where, orderBy: [{ testDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.concentricTestRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { testDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.concentricTestRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3701,7 +3701,7 @@ app.get("/api/smart-test-records", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildConcentricTestWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.smartTestRecord.findMany({ where, orderBy: [{ testDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.smartTestRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { testDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.smartTestRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3738,7 +3738,7 @@ app.get("/api/single-well-injection-evaluations", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildSingleWellEvaluationWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.singleWellInjectionEvaluationRecord.findMany({ where, orderBy: [{ evaluationDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.singleWellInjectionEvaluationRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { evaluationDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.singleWellInjectionEvaluationRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3775,7 +3775,7 @@ app.get("/api/single-well-seal-evaluations", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildSingleWellEvaluationWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.singleWellSealEvaluationRecord.findMany({ where, orderBy: [{ evaluationDate: "desc" }, { wellNo: "asc" }], skip, take }),
+      prisma.singleWellSealEvaluationRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { evaluationDate: "desc" }, { wellNo: "asc" }], skip, take }),
       prisma.singleWellSealEvaluationRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3810,7 +3810,7 @@ app.delete("/api/single-well-seal-evaluations/:id", async (req, res) => {
 app.get("/api/zonal-indicator-summaries", async (req, res) => {
   try {
     const where = buildZonalIndicatorSummaryWhere(req.query as Record<string, unknown>);
-    const rows = await prisma.zonalIndicatorSummaryRecord.findMany({ where, orderBy: [{ sortOrder: "asc" }] });
+    const rows = await prisma.zonalIndicatorSummaryRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { sortOrder: "asc" }] });
     res.json({ rows, total: rows.length });
   } catch (error) {
     res.status(500).json({ error: "Zonal indicator summaries query failed", details: serializeError(error) });
@@ -3856,7 +3856,7 @@ app.get("/api/indicator-curve-records", async (req, res) => {
     const { page, pageSize, skip, take } = normalizePagination(req.query);
     const where = buildIndicatorCurveWhere(req.query as Record<string, unknown>);
     const [rows, total] = await Promise.all([
-      prisma.indicatorCurveRecord.findMany({ where, orderBy: [{ wellNo: "asc" }, { testDate: "desc" }], skip, take }),
+      prisma.indicatorCurveRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { wellNo: "asc" }, { testDate: "desc" }], skip, take }),
       prisma.indicatorCurveRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -3973,13 +3973,13 @@ app.get("/api/dynamic-analysis-records", async (req, res) => {
     const where = buildDynamicAnalysisWhere(req.query as Record<string, unknown>);
     const hasDiffThresholds = ["liquidDiffMin", "oilDiffMin", "waterDiffMin", "injectionDiffMin"].some((key) => trimText(req.query[key]).length > 0);
     if (hasDiffThresholds) {
-      const allRows = await prisma.dynamicAnalysisRecord.findMany({ where, orderBy: [{ updatedAt: "desc" }, { block: "asc" }, { wellNo: "asc" }] });
+      const allRows = await prisma.dynamicAnalysisRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }, { block: "asc" }, { wellNo: "asc" }] });
       const filteredRows = filterDynamicAnalysisRowsByDiffThresholds(allRows, req.query as Record<string, unknown>);
       res.json(paginatedResponse(filteredRows.slice(skip, skip + take), filteredRows.length, page, pageSize));
       return;
     }
     const [rows, total] = await Promise.all([
-      prisma.dynamicAnalysisRecord.findMany({ where, orderBy: [{ updatedAt: "desc" }, { block: "asc" }, { wellNo: "asc" }], skip, take }),
+      prisma.dynamicAnalysisRecord.findMany({ where, orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }, { block: "asc" }, { wellNo: "asc" }], skip, take }),
       prisma.dynamicAnalysisRecord.count({ where }),
     ]);
     res.json(paginatedResponse(rows, total, page, pageSize));
@@ -4054,7 +4054,7 @@ app.get("/api/dynamic-adjustments", async (req, res) => {
 
     const records = await snapshotPrisma.dynamicAdjustmentRecord.findMany({
       where,
-      orderBy: [{ adjustmentDate: "desc" }, { updatedAt: "desc" }],
+      orderBy: [{ createdAt: "desc" }, { adjustmentDate: "desc" }, { updatedAt: "desc" }],
     });
     res.json(records);
   } catch (error) {

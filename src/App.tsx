@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import {
@@ -3098,6 +3098,7 @@ function InjectionTechPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("1");
   const [totalRows, setTotalRows] = useState(0);
+  const [pinnedRecord, setPinnedRecord] = useState<InjectionTechRecord | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(() => createEmptyInjectionTechForm());
   const [loading, setLoading] = useState(false);
@@ -3109,6 +3110,19 @@ function InjectionTechPage() {
   const cellClass = "h-10 border border-[#99c7f3] bg-white px-2 py-1 text-center text-[13px] leading-tight text-black";
 
   const totalPages = Math.max(1, Math.ceil(totalRows / INJECTION_TECH_PAGE_SIZE));
+  const recordMatchesFilters = (record: InjectionTechRecord, nextFilters = appliedFilters) => {
+    if (nextFilters.workArea && record.workArea !== nextFilters.workArea) return false;
+    if (nextFilters.block && !record.block.includes(nextFilters.block)) return false;
+    if (nextFilters.process && !record.process.includes(nextFilters.process)) return false;
+    if (nextFilters.packerCount && String(record.packerCount) !== nextFilters.packerCount) return false;
+    if (nextFilters.bottomStructure && !record.bottomStructure.includes(nextFilters.bottomStructure)) return false;
+    if (nextFilters.wellNo && !record.wellNo.includes(nextFilters.wellNo)) return false;
+    return true;
+  };
+  const visibleRecords =
+    currentPage === 1 && pinnedRecord && recordMatchesFilters(pinnedRecord)
+      ? [pinnedRecord, ...records.filter((row) => row.id !== pinnedRecord.id)].slice(0, INJECTION_TECH_PAGE_SIZE)
+      : records;
 
   const loadRecords = async (page = currentPage, nextFilters = appliedFilters) => {
     setLoading(true);
@@ -3147,6 +3161,7 @@ function InjectionTechPage() {
   };
   const applyCurrentFilters = () => {
     setAppliedFilters(filters);
+    setPinnedRecord(null);
     setCurrentPage(1);
     setJumpPage("1");
   };
@@ -3161,14 +3176,17 @@ function InjectionTechPage() {
     setSaving(true);
     setError("");
     try {
-      await axios.post("/api/injection-tech-records", {
+      const { data: createdRecord } = await axios.post<InjectionTechRecord>("/api/injection-tech-records", {
         ...form,
         packerModels: form.packerModels.split(",").map((item) => item.trim()).filter(Boolean),
       });
       setForm(createEmptyInjectionTechForm());
       setShowCreate(false);
       setCurrentPage(1);
-      await loadRecords(1, appliedFilters);
+      setJumpPage("1");
+      setPinnedRecord(createdRecord);
+      setRecords((current) => [createdRecord, ...current.filter((row) => row.id !== createdRecord.id)].slice(0, INJECTION_TECH_PAGE_SIZE));
+      setTotalRows((current) => current + 1);
     } catch (err: any) {
       setError(err?.response?.data?.error || "注水工艺记录新增失败");
     } finally {
@@ -3328,7 +3346,7 @@ function InjectionTechPage() {
             </tr>
           </thead>
           <tbody>
-            {records.map((row, index) => (
+            {visibleRecords.map((row, index) => (
               <tr key={row.id}>
                 <td className={cellClass}>{(currentPage - 1) * INJECTION_TECH_PAGE_SIZE + index + 1}</td>
                 <td className={cellClass}>{row.wellNo}</td>
@@ -3350,7 +3368,7 @@ function InjectionTechPage() {
                 </td>
               </tr>
             ))}
-            {!records.length && (
+            {!visibleRecords.length && (
               <tr>
                 <td className={cellClass} colSpan={20}>{loading ? "加载中..." : "暂无符合条件的数据"}</td>
               </tr>
@@ -4948,6 +4966,7 @@ type PdfTextNote = {
 };
 
 type PdfSaveHandler = () => Promise<boolean>;
+type PdfDownloadHandler = () => Promise<void>;
 
 type PdfOverlayResponse = {
   pdfId: string;
@@ -5062,6 +5081,7 @@ function PdfReaderEditor({
   pdfId,
   onDirtyChange,
   onSaveHandlerChange,
+  onDownloadHandlerChange,
 }: {
   wellNo: string;
   fileUrl?: string;
@@ -5069,6 +5089,7 @@ function PdfReaderEditor({
   key?: React.Key;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
+  onDownloadHandlerChange?: (handler: PdfDownloadHandler | null) => void;
 }) {
   const [pageNumbers, setPageNumbers] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
@@ -5097,6 +5118,7 @@ function PdfReaderEditor({
   const resizeRef = useRef<{ id: string; pageNumber: number; startWidth: number; startHeight: number; startClientX: number; startClientY: number } | null>(null);
   const copiedNoteRef = useRef<PdfTextNote | null>(null);
   const saveHandlerRef = useRef<PdfSaveHandler | null>(null);
+  const downloadHandlerRef = useRef<PdfDownloadHandler | null>(null);
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const serializeNotes = (source: PdfTextNote[]) => ({
@@ -5742,6 +5764,14 @@ function PdfReaderEditor({
     }
   };
 
+  downloadHandlerRef.current = handleDownload;
+
+  useEffect(() => {
+    if (!onDownloadHandlerChange) return;
+    onDownloadHandlerChange(() => downloadHandlerRef.current?.() ?? Promise.resolve());
+    return () => onDownloadHandlerChange(null);
+  }, [onDownloadHandlerChange]);
+
   if (loading) {
     return <div className="border border-gray-200 bg-gray-50 p-10 text-center text-sm text-gray-500">正在加载 PDF 页面...</div>;
   }
@@ -5763,8 +5793,10 @@ function PdfReaderEditor({
     return <div className="border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">当前井暂无 PDF 原件。</div>;
   }
 
+  const isSinglePage = pageNumbers.length === 1;
+
   return (
-    <div className="flex h-[calc(100vh-150px)] min-h-[560px] flex-col overflow-hidden border border-gray-200 bg-slate-100">
+    <div className={cn("flex flex-col border border-gray-200 bg-slate-100", isSinglePage ? "overflow-visible" : "h-[calc(100vh-80px)] min-h-[760px] overflow-hidden")}>
       {confirmDialog}
       <div className="shrink-0 flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 text-sm">
         <span className="bg-slate-100 px-3 py-2 font-bold text-gray-700">第 {currentPage} / {pageNumbers.length} 页</span>
@@ -5812,16 +5844,10 @@ function PdfReaderEditor({
         <button onClick={deleteSelectedNote} disabled={!selectedNoteId} className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
           <Trash2 className="h-4 w-4" />删除文本框
         </button>
-        <button onClick={() => void handleSave()} disabled={saving || !pdfId} className="inline-flex items-center gap-1 bg-cnpc-red px-3 py-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
-          <Save className="h-4 w-4" />{saving ? "保存中..." : "保存编辑结果"}
-        </button>
-        <button onClick={() => void handleDownload()} disabled={downloading || !pdfBytes} className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-          <Download className="h-4 w-4" />{downloading ? "下载中..." : "下载 PDF"}
-        </button>
         {saveStatus && <span className="text-xs text-gray-500">{saveStatus}</span>}
       </div>
       {error && <div className="shrink-0 border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-5 overflow-auto p-4 custom-scrollbar">
+      <div ref={scrollRef} className={cn("space-y-5 p-4", isSinglePage ? "overflow-visible" : "min-h-0 flex-1 overflow-auto custom-scrollbar")}>
         {pageNumbers.map((pageNumber) => (
           <div
             key={pageNumber}
@@ -6082,11 +6108,19 @@ function WellHistoryPage({
   const [deletingWellNo, setDeletingWellNo] = useState("");
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("未开始");
-  const [importTotal, setImportTotal] = useState(0);
-  const [importSuccess, setImportSuccess] = useState(0);
-  const [importFailure, setImportFailure] = useState(0);
-  const [importResults, setImportResults] = useState<WellHistoryBatchImportItem[]>([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [pdfSaveHandler, setPdfSaveHandler] = useState<PdfSaveHandler | null>(null);
+  const [pdfDownloadHandler, setPdfDownloadHandler] = useState<PdfDownloadHandler | null>(null);
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
+
+  const handlePdfSaveHandlerChange = useCallback((handler: PdfSaveHandler | null) => {
+    setPdfSaveHandler(() => handler);
+    onSaveHandlerChange?.(handler);
+  }, [onSaveHandlerChange]);
+
+  const handlePdfDownloadHandlerChange = useCallback((handler: PdfDownloadHandler | null) => {
+    setPdfDownloadHandler(() => handler);
+  }, []);
 
   useEffect(() => {
     onDirtyChange?.(pdfDirty);
@@ -6211,10 +6245,7 @@ function WellHistoryPage({
     setError("");
     setImporting(true);
     setImportStatus("导入中...");
-    setImportTotal(pptFiles.length);
-    setImportSuccess(0);
-    setImportFailure(0);
-    setImportResults([]);
+    setImportProgress(0);
 
     const formData = new FormData();
     pptFiles.forEach((file) => formData.append("files", file));
@@ -6225,24 +6256,33 @@ function WellHistoryPage({
       const { data } = await axios.post<{ successCount: number; failureCount: number; items: WellHistoryBatchImportItem[] }>(
         "/api/uploads/well-history-ppt-batch",
         formData,
-        { headers: { "Content-Type": "multipart/form-data" } },
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (event) => {
+            if (!event.total) return;
+            setImportProgress(Math.min(90, Math.round((event.loaded / event.total) * 90)));
+          },
+        },
       );
 
       const items = data.items || [];
-      setImportSuccess(data.successCount || 0);
-      setImportFailure(data.failureCount || 0);
-      setImportResults(items);
       setImportStatus(data.failureCount ? "导入完成（部分失败）" : "导入完成");
+      setImportProgress(100);
       await loadArchives();
 
       const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
       if (firstSuccess?.wellNo) {
         await openWell(firstSuccess.wellNo);
       }
+      requestConfirm(
+        `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${data.successCount || 0} 个，失败 ${data.failureCount || 0} 个。`,
+        () => {},
+      );
     } catch (err: any) {
       setImportStatus("导入失败");
-      setImportFailure(pptFiles.length);
+      setImportProgress(100);
       setError(err?.response?.data?.error || "PPT 批量导入失败");
+      requestConfirm(`PPT 导入失败：共 ${pptFiles.length} 个文件，成功 0 个，失败 ${pptFiles.length} 个。`, () => {});
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -6258,7 +6298,6 @@ function WellHistoryPage({
   }, [archives, unit]);
 
   const previewUrl = detail?.currentPdf?.fileUrl || "";
-  const completedCount = importSuccess + importFailure;
 
   const handleDeleteArchive = (item: WellHistoryArchiveSummary) => {
     requestConfirm(`确认删除 ${item.wellNo} 的井史资料？`, async () => {
@@ -6283,36 +6322,7 @@ function WellHistoryPage({
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
       {confirmDialog}
       <div className="space-y-3">
-        <div className="border border-shell-border bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-lg font-bold text-gray-900">井史查询</h2>
-          <div className="space-y-4">
-            <label className="block text-sm font-bold text-gray-700">
-              单位
-              <select value={unit} onChange={(event) => setUnit(event.target.value)} className="mt-2 w-full border border-gray-200 px-4 py-3 text-sm outline-none focus:border-cnpc-red">
-                {UNIT_OPTIONS.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-bold text-gray-700">
-              区块
-              <select value={block} onChange={(event) => setBlock(event.target.value)} className="mt-2 w-full border border-gray-200 px-4 py-3 text-sm outline-none focus:border-cnpc-red">
-                <option value="">请选择或留空</option>
-                {blockOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-bold text-gray-700">
-              井号
-              <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入井号快速查询" className="mt-2 w-full border border-gray-200 px-4 py-3 text-sm outline-none focus:border-cnpc-red" />
-            </label>
-            <input ref={fileInputRef} type="file" accept=".ppt,.pptx" multiple className="hidden" onChange={(event) => void handleBatchImport(event.target.files)} />
-            <button onClick={() => void handleQuery()} className="w-full bg-cnpc-red px-4 py-3 text-sm font-bold text-white hover:bg-red-700">
-              <Search className="mr-2 inline h-4 w-4" />查询井史
-            </button>
-          </div>
-        </div>
+        <input ref={fileInputRef} type="file" accept=".ppt,.pptx" multiple className="hidden" onChange={(event) => void handleBatchImport(event.target.files)} />
 
         <div className="border border-shell-border bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
@@ -6329,30 +6339,9 @@ function WellHistoryPage({
             {importing ? "正在导入 PPT..." : "批量导入 PPT/PPTX"}
           </button>
           <p className="mb-4 text-xs leading-5 text-gray-500">一个 PPT/PPTX 对应一口井，以文件名作为井号归档。可一次选择多个文件导入。</p>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-slate-50 p-3"><p className="text-xs text-gray-500">总文件数</p><p className="mt-1 text-lg font-bold text-gray-900">{importTotal}</p></div>
-            <div className="bg-slate-50 p-3"><p className="text-xs text-gray-500">已完成</p><p className="mt-1 text-lg font-bold text-gray-900">{completedCount}</p></div>
-            <div className="bg-emerald-50 p-3"><p className="text-xs text-emerald-700">成功</p><p className="mt-1 text-lg font-bold text-emerald-700">{importSuccess}</p></div>
-            <div className="bg-red-50 p-3"><p className="text-xs text-red-600">失败</p><p className="mt-1 text-lg font-bold text-red-600">{importFailure}</p></div>
+          <div className="h-3 overflow-hidden bg-gray-100">
+            <div className="h-full bg-orange-500 transition-all duration-300" style={{ width: `${importProgress}%` }} />
           </div>
-          {!!importTotal && (
-            <div className="mt-4 h-3 overflow-hidden bg-gray-100">
-              <div className="h-full bg-orange-500 transition-all" style={{ width: `${Math.min(100, Math.round((completedCount / importTotal) * 100))}%` }} />
-            </div>
-          )}
-          {!!importResults.length && (
-            <div className="mt-4 max-h-56 overflow-y-auto border border-gray-200">
-              {importResults.map((item) => (
-                <div key={`${item.fileName}-${item.wellNo}`} className="border-b border-gray-100 px-4 py-3 text-sm last:border-b-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-bold text-gray-900">{item.wellNo || item.fileName}</span>
-                    <span className={item.status === "success" ? "text-emerald-600" : "text-red-600"}>{item.status}</span>
-                  </div>
-                  {item.message && <p className="mt-1 break-all text-xs text-gray-500">{item.message}</p>}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="border border-shell-border bg-white p-5 shadow-sm">
@@ -6401,19 +6390,51 @@ function WellHistoryPage({
             <div className="py-20 text-center text-sm text-gray-400">正在加载井史...</div>
           ) : detail ? (
             <div className="space-y-2">
-              <div className="flex flex-wrap gap-4 border-b border-gray-100 pb-2 text-sm text-gray-600">
+              <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 pb-2 text-sm text-gray-600">
                 <span><strong>井号：</strong>{detail.wellNo}</span>
                 <span><strong>单位：</strong>{detail.unit || "--"}</span>
                 <span><strong>区块：</strong>{detail.block || "--"}</span>
                 <span><strong>更新时间：</strong>{formatTime(detail.updatedAt)}</span>
+                <span className="mx-1 h-5 w-px bg-gray-200" />
+                <label className="inline-flex items-center gap-1">
+                  单位
+                  <select value={unit} onChange={(event) => setUnit(event.target.value)} className="h-7 border border-gray-200 bg-white px-2 text-xs outline-none focus:border-cnpc-red">
+                    {UNIT_OPTIONS.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  区块
+                  <select value={block} onChange={(event) => setBlock(event.target.value)} className="h-7 border border-gray-200 bg-white px-2 text-xs outline-none focus:border-cnpc-red">
+                    <option value="">请选择或留空</option>
+                    {blockOptions.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  井号
+                  <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入井号" className="h-7 w-28 border border-gray-200 px-2 text-xs outline-none focus:border-cnpc-red" />
+                </label>
+                <button onClick={() => void handleQuery()} className="inline-flex h-7 items-center gap-1 bg-cnpc-red px-3 text-xs font-bold text-white hover:bg-red-700">
+                  <Search className="h-3.5 w-3.5" />查询
+                </button>
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="inline-flex items-center gap-1 border border-gray-200 bg-white px-3 py-1 font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void pdfSaveHandler?.()}
+                  disabled={!pdfSaveHandler}
+                  className="inline-flex h-7 items-center gap-1 bg-cnpc-red px-3 text-xs font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Upload className="h-4 w-4" />
-                  {importing ? "导入中..." : "批量导入 PPT"}
+                  <Save className="h-3.5 w-3.5" />保存编辑结果
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void pdfDownloadHandler?.()}
+                  disabled={!pdfDownloadHandler}
+                  className="inline-flex h-7 items-center gap-1 border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />下载 PDF
                 </button>
               </div>
               {previewUrl ? (
@@ -6423,7 +6444,8 @@ function WellHistoryPage({
                   fileUrl={previewUrl}
                   pdfId={detail.currentPdf?.id}
                   onDirtyChange={setPdfDirty}
-                  onSaveHandlerChange={onSaveHandlerChange}
+                  onSaveHandlerChange={handlePdfSaveHandlerChange}
+                  onDownloadHandlerChange={handlePdfDownloadHandlerChange}
                 />
               ) : (
                 <div className="border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">该井暂无 PDF 原件。</div>
@@ -6557,6 +6579,7 @@ function DynamicAdjustmentPage() {
     setSaving(true);
     setError("");
     try {
+      const isCreate = !editingId;
       if (editingId) {
         await axios.put(`/api/dynamic-adjustments/${editingId}`, form);
       } else {
@@ -6565,6 +6588,9 @@ function DynamicAdjustmentPage() {
       setShowForm(false);
       setEditingId(null);
       setForm(createEmptyDynamicAdjustmentForm());
+      if (isCreate) {
+        setCurrentPage(1);
+      }
       await loadRecords();
     } catch (err: any) {
       setError(err?.response?.data?.error || "动态调配记录保存失败");
