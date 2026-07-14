@@ -18,6 +18,8 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(appSource, /firstNavItemRef/);
   assert.match(appSource, /firstNavItemRef\.current\?\.focus\(\)/);
   assert.match(appSource, /mobileMenuTriggerRef\.current\?\.focus\(\)/);
+  assert.match(appSource, /const closeMobileNav = \(\) =>/);
+  assert.match(appSource, /aria-label="关闭导航菜单"/);
   assert.match(cssSource, /--color-shell-primary: #1a5276/);
   assert.match(cssSource, /\.shell-welcome-overlay/);
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);

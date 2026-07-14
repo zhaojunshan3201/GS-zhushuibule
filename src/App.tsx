@@ -8254,6 +8254,12 @@ export default function App() {
       setShowLoginDialog(true);
     }
   };
+  const closeMobileNav = () => {
+    setMobileNavOpen(false);
+    if (isMobileViewport) {
+      requestAnimationFrame(() => mobileMenuTriggerRef.current?.focus());
+    }
+  };
   useEffect(() => {
     const interceptorId = axios.interceptors.request.use((config) => {
       const method = String(config.method || "get").toLowerCase();
@@ -8296,15 +8302,14 @@ export default function App() {
     if (isMobileViewport && mobileNavOpen) firstNavItemRef.current?.focus();
   }, [isMobileViewport, mobileNavOpen]);
   useEffect(() => {
-    const closeMobileNav = (event: KeyboardEvent) => {
+    const handleMobileNavKeydown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isMobileViewport && mobileNavOpen) {
-        setMobileNavOpen(false);
-        mobileMenuTriggerRef.current?.focus();
+        closeMobileNav();
       }
     };
-    window.addEventListener("keydown", closeMobileNav);
-    return () => window.removeEventListener("keydown", closeMobileNav);
-  }, [isMobileViewport, mobileNavOpen]);
+    window.addEventListener("keydown", handleMobileNavKeydown);
+    return () => window.removeEventListener("keydown", handleMobileNavKeydown);
+  }, [isMobileViewport, mobileNavOpen, closeMobileNav]);
   const requestPageChange = (page: PageType) => {
     if (page === activePage) return;
     if (isManagementPage(page) && !canManageSystem) {
@@ -8379,6 +8384,14 @@ export default function App() {
         inert={isMobileViewport && !mobileNavOpen ? "" : undefined}
         aria-hidden={isMobileViewport && !mobileNavOpen ? true : undefined}
       >
+        <button
+          type="button"
+          className="shell-mobile-trigger m-3 self-end"
+          aria-label="关闭导航菜单"
+          onClick={closeMobileNav}
+        >
+          关闭
+        </button>
         <div className="flex items-center gap-3 px-5 py-6">
           <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />
           <div>
@@ -8393,7 +8406,7 @@ export default function App() {
                 ref={item === visibleNavItems[0] ? firstNavItemRef : undefined}
                 onClick={() => {
                   requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id);
-                  setMobileNavOpen(false);
+                  closeMobileNav();
                 }}
                 className={cn(
                   "shell-nav-link w-full text-left",
@@ -8411,7 +8424,7 @@ export default function App() {
                       key={subItem.id}
                       onClick={() => {
                         requestPageChange(subItem.id);
-                        setMobileNavOpen(false);
+                        closeMobileNav();
                       }}
                       className={cn(
                         "shell-nav-link w-full py-2 text-left text-xs",
@@ -8435,8 +8448,11 @@ export default function App() {
                 ref={mobileMenuTriggerRef}
                 className="shell-mobile-trigger"
                 onClick={() => {
-                  if (isMobileViewport && mobileNavOpen) mobileMenuTriggerRef.current?.focus();
-                  setMobileNavOpen((open) => !open);
+                  if (isMobileViewport && mobileNavOpen) {
+                    closeMobileNav();
+                  } else {
+                    setMobileNavOpen(true);
+                  }
                 }}
                 aria-label="切换导航菜单"
                 aria-expanded={mobileNavOpen}
