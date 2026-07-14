@@ -14,3 +14,4 @@ tmp-ppt-batch/
 water_injection_db_dump.sql
 backfill.json
 tmp_*.py
+.worktrees/
