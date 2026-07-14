@@ -8219,7 +8219,10 @@ export default function App() {
   const [pendingPage, setPendingPage] = useState<PageType | null>(null);
   const [showWelcome, setShowWelcome] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
+  const welcomeOverlayRef = useRef<HTMLDivElement | null>(null);
+  const welcomeEnterButtonRef = useRef<HTMLButtonElement | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
   const canManageSystem = hasManagementPermission(currentUser);
   const visibleNavItems = useMemo(
@@ -8275,6 +8278,26 @@ export default function App() {
       setActivePage("home");
     }
   }, [activePage, canManageSystem]);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    const updateViewport = () => {
+      setIsMobileViewport(mediaQuery.matches);
+      if (!mediaQuery.matches) setMobileNavOpen(false);
+    };
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+  useEffect(() => {
+    if (showWelcome) welcomeEnterButtonRef.current?.focus();
+  }, [showWelcome]);
+  useEffect(() => {
+    const closeMobileNav = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isMobileViewport) setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", closeMobileNav);
+    return () => window.removeEventListener("keydown", closeMobileNav);
+  }, [isMobileViewport]);
   const requestPageChange = (page: PageType) => {
     if (page === activePage) return;
     if (isManagementPage(page) && !canManageSystem) {
@@ -8326,16 +8349,30 @@ export default function App() {
         />
       )}
       {showWelcome && (
-        <div className="shell-welcome-overlay">
+        <div
+          ref={welcomeOverlayRef}
+          className="shell-welcome-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="welcome-dialog-title"
+          onKeyDown={(event) => {
+            if (event.key === "Tab") event.preventDefault();
+          }}
+        >
           <div className="shell-welcome-card text-center">
             <Droplet className="mx-auto h-12 w-12 text-shell-primary" strokeWidth={2.4} />
-            <h1 className="mt-4 text-2xl font-black">注水管理平台</h1>
+            <h1 id="welcome-dialog-title" className="mt-4 text-2xl font-black">注水管理平台</h1>
             <p className="mt-3 text-sm leading-6 text-shell-muted">集中管理注水业务数据，支持动态分析、单井井史与分注管理。</p>
-            <button className="shell-primary-btn mt-6" onClick={() => setShowWelcome(false)}>进入系统</button>
+            <button ref={welcomeEnterButtonRef} className="shell-primary-btn mt-6" onClick={() => setShowWelcome(false)}>进入系统</button>
           </div>
         </div>
       )}
-      <aside className={cn("shell-sidebar", mobileNavOpen && "is-open")}>
+      <aside
+        id="app-sidebar"
+        className={cn("shell-sidebar", mobileNavOpen && "is-open")}
+        inert={isMobileViewport && !mobileNavOpen ? "" : undefined}
+        aria-hidden={isMobileViewport && !mobileNavOpen ? true : undefined}
+      >
         <div className="flex items-center gap-3 px-5 py-6">
           <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />
           <div>
@@ -8391,6 +8428,8 @@ export default function App() {
                 className="shell-mobile-trigger"
                 onClick={() => setMobileNavOpen((open) => !open)}
                 aria-label="切换导航菜单"
+                aria-expanded={mobileNavOpen}
+                aria-controls="app-sidebar"
               >
                 菜单
               </button>
