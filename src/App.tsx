@@ -3,8 +3,6 @@ import axios, { AxiosHeaders } from "axios";
 import * as XLSX from "xlsx";
 import {
   Activity,
-  Bell,
-  Building2,
   Download,
   Droplet,
   FileText,
@@ -8219,6 +8217,8 @@ export default function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [wellHistoryDirty, setWellHistoryDirty] = useState(false);
   const [pendingPage, setPendingPage] = useState<PageType | null>(null);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
   const canManageSystem = hasManagementPermission(currentUser);
@@ -8297,9 +8297,11 @@ export default function App() {
     setPendingPage(null);
   };
 
+  const pageLabel = [...NAV_ITEMS, ...ZONAL_INJECTION_SUB_ITEMS].find((item) => item.id === activePage)?.label ?? "首页";
+
   return (
     <div
-      className="min-h-screen bg-[#f4f7fb] text-gray-900"
+      className="shell-app"
       onClickCapture={guardGuestWriteClick}
       onSubmitCapture={(event) => {
         if ((event.target as HTMLElement).closest('[data-auth-form="true"]')) return;
@@ -8323,85 +8325,110 @@ export default function App() {
           onCancel={() => setPendingPage(null)}
         />
       )}
-      <header className="sticky top-0 z-50 bg-white shadow-sm">
-        <div className="flex h-[86px] items-center justify-between px-12">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-cnpc-red">
-              <Droplet className="h-9 w-9" strokeWidth={2.8} />
-            </div>
-            <div className="text-[30px] font-black tracking-wide text-cnpc-red">注水管理平台</div>
-          </div>
-          <div className="flex items-center gap-5 text-sm text-gray-700">
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-slate-50 px-4 font-medium text-gray-700 shadow-sm">
-              <Building2 className="h-4 w-4 text-cnpc-red" />
-              全厂汇总视图
-              <span className="text-gray-500">⌄</span>
-            </button>
-            <Bell className="h-5 w-5 text-gray-500" />
-            {currentUser ? (
-              <>
-                <span>您好，{currentUser.name}（{currentUser.role}）</span>
-                <button onClick={logout} className="rounded bg-cnpc-red px-4 py-2 text-sm font-bold text-white hover:bg-cnpc-red-dark">
-                  <LogOut className="mr-1 inline h-4 w-4" />
-                  退出
-                </button>
-              </>
-            ) : (
-              <>
-                <span>游客浏览</span>
-                <button onClick={() => setShowLoginDialog(true)} className="rounded bg-cnpc-red px-4 py-2 text-sm font-bold text-white hover:bg-cnpc-red-dark">
-                  登录
-                </button>
-              </>
-            )}
+      {showWelcome && (
+        <div className="shell-welcome-overlay">
+          <div className="shell-welcome-card text-center">
+            <Droplet className="mx-auto h-12 w-12 text-shell-primary" strokeWidth={2.4} />
+            <h1 className="mt-4 text-2xl font-black">注水管理平台</h1>
+            <p className="mt-3 text-sm leading-6 text-shell-muted">集中管理注水业务数据，支持动态分析、单井井史与分注管理。</p>
+            <button className="shell-primary-btn mt-6" onClick={() => setShowWelcome(false)}>进入系统</button>
           </div>
         </div>
-        <nav className="border-t-4 border-cnpc-yellow bg-cnpc-red">
-          <div className="flex h-[60px] items-stretch overflow-x-auto px-16 no-scrollbar">
-            {visibleNavItems.map((item) => (
+      )}
+      <aside className={cn("shell-sidebar", mobileNavOpen && "is-open")}>
+        <div className="flex items-center gap-3 px-5 py-6">
+          <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />
+          <div>
+            <div className="font-black tracking-wide">注水管理平台</div>
+            <div className="mt-0.5 text-xs text-white/65">生产运行管理系统</div>
+          </div>
+        </div>
+        <nav className="shell-sidebar-nav">
+          {visibleNavItems.map((item) => (
+            <React.Fragment key={item.id}>
               <button
-                key={item.id}
-                onClick={() => requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id)}
+                onClick={() => {
+                  requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id);
+                  setMobileNavOpen(false);
+                }}
                 className={cn(
-                  "relative shrink-0 px-6 text-base font-bold text-white transition-colors hover:bg-[#8f1016] hover:text-cnpc-yellow",
-                  (activePage === item.id || (item.id === "zonal-injection" && showZonalSubNav)) &&
-                    "bg-[#8f1016] text-cnpc-yellow after:absolute after:bottom-0 after:left-0 after:h-1 after:w-full after:bg-cnpc-yellow",
+                  "shell-nav-link w-full text-left",
+                  (activePage === item.id || (item.id === "zonal-injection" && showZonalSubNav))
+                    ? "shell-nav-link-active"
+                    : "shell-nav-link-idle",
                 )}
               >
                 {item.label}
               </button>
-            ))}
-          </div>
+              {item.id === "zonal-injection" && showZonalSubNav && (
+                <div className="shell-subnav">
+                  {ZONAL_INJECTION_SUB_ITEMS.map((subItem) => (
+                    <button
+                      key={subItem.id}
+                      onClick={() => {
+                        requestPageChange(subItem.id);
+                        setMobileNavOpen(false);
+                      }}
+                      className={cn(
+                        "shell-nav-link w-full py-2 text-left text-xs",
+                        activePage === subItem.id ? "shell-nav-link-active" : "shell-nav-link-idle",
+                      )}
+                    >
+                      {subItem.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </React.Fragment>
+          ))}
         </nav>
-        {showZonalSubNav && (
-          <div className="border-b border-gray-200 bg-[#edf2f7] px-16 py-2">
-            <div className="inline-flex overflow-hidden rounded-xl border border-gray-200 bg-gray-100 p-1 shadow-sm">
-              {ZONAL_INJECTION_SUB_ITEMS.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => requestPageChange(item.id)}
-                  className={cn(
-                    "min-w-[116px] rounded-lg px-5 py-3 text-sm font-bold text-cnpc-red transition-colors hover:bg-white",
-                    activePage === item.id && "bg-white shadow-sm",
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
+      </aside>
+      <div className="shell-main">
+        <header className="shell-topbar">
+          <div className="shell-topbar-inner">
+            <div className="flex items-center gap-3">
+              <button
+                className="shell-mobile-trigger"
+                onClick={() => setMobileNavOpen((open) => !open)}
+                aria-label="切换导航菜单"
+              >
+                菜单
+              </button>
+              <div>
+                <div className="text-xs text-shell-muted">当前位置</div>
+                <div className="font-bold text-shell-text">{pageLabel}</div>
+              </div>
+              <span className="hidden rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 sm:inline">系统运行正常</span>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-shell-muted">
+              {currentUser ? (
+                <>
+                  <span>您好，{currentUser.name}（{currentUser.role}）</span>
+                  <button onClick={logout} className="shell-primary-btn">
+                    <LogOut className="mr-1 inline h-4 w-4" />
+                    退出
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span>游客浏览</span>
+                  <button onClick={() => setShowLoginDialog(true)} className="shell-primary-btn">登录</button>
+                </>
+              )}
             </div>
           </div>
-        )}
-      </header>
-      <main className="px-6 py-6">
-        <AppContent
-          activePage={activePage}
-          currentUser={currentUser}
-          onWellHistoryDirtyChange={setWellHistoryDirty}
-          onWellHistorySaveHandlerChange={(handler) => {
-            wellHistorySaveHandlerRef.current = handler;
-          }}
-        />
-      </main>
+        </header>
+        <main className="shell-content">
+          <AppContent
+            activePage={activePage}
+            currentUser={currentUser}
+            onWellHistoryDirtyChange={setWellHistoryDirty}
+            onWellHistorySaveHandlerChange={(handler) => {
+              wellHistorySaveHandlerRef.current = handler;
+            }}
+          />
+        </main>
+      </div>
     </div>
   );
 }
