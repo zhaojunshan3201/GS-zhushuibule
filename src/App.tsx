@@ -8222,6 +8222,8 @@ export default function App() {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
   const welcomeEnterButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const firstNavItemRef = useRef<HTMLButtonElement | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
   const canManageSystem = hasManagementPermission(currentUser);
   const visibleNavItems = useMemo(
@@ -8291,12 +8293,18 @@ export default function App() {
     if (showWelcome) welcomeEnterButtonRef.current?.focus();
   }, [showWelcome]);
   useEffect(() => {
+    if (isMobileViewport && mobileNavOpen) firstNavItemRef.current?.focus();
+  }, [isMobileViewport, mobileNavOpen]);
+  useEffect(() => {
     const closeMobileNav = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isMobileViewport) setMobileNavOpen(false);
+      if (event.key === "Escape" && isMobileViewport && mobileNavOpen) {
+        setMobileNavOpen(false);
+        mobileMenuTriggerRef.current?.focus();
+      }
     };
     window.addEventListener("keydown", closeMobileNav);
     return () => window.removeEventListener("keydown", closeMobileNav);
-  }, [isMobileViewport]);
+  }, [isMobileViewport, mobileNavOpen]);
   const requestPageChange = (page: PageType) => {
     if (page === activePage) return;
     if (isManagementPage(page) && !canManageSystem) {
@@ -8382,6 +8390,7 @@ export default function App() {
           {visibleNavItems.map((item) => (
             <React.Fragment key={item.id}>
               <button
+                ref={item === visibleNavItems[0] ? firstNavItemRef : undefined}
                 onClick={() => {
                   requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id);
                   setMobileNavOpen(false);
@@ -8423,8 +8432,12 @@ export default function App() {
           <div className="shell-topbar-inner">
             <div className="flex items-center gap-3">
               <button
+                ref={mobileMenuTriggerRef}
                 className="shell-mobile-trigger"
-                onClick={() => setMobileNavOpen((open) => !open)}
+                onClick={() => {
+                  if (isMobileViewport && mobileNavOpen) mobileMenuTriggerRef.current?.focus();
+                  setMobileNavOpen((open) => !open);
+                }}
                 aria-label="切换导航菜单"
                 aria-expanded={mobileNavOpen}
                 aria-controls="app-sidebar"

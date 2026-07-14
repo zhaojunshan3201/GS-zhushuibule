@@ -14,6 +14,11 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(appSource, /aria-expanded=\{mobileNavOpen\}/);
   assert.match(appSource, /aria-controls="app-sidebar"/);
   assert.match(appSource, /isMobileViewport && !mobileNavOpen/);
+  assert.match(appSource, /mobileMenuTriggerRef/);
+  assert.match(appSource, /firstNavItemRef/);
+  assert.match(appSource, /firstNavItemRef\.current\?\.focus\(\)/);
+  assert.match(appSource, /mobileMenuTriggerRef\.current\?\.focus\(\)/);
   assert.match(cssSource, /--color-shell-primary: #1a5276/);
   assert.match(cssSource, /\.shell-welcome-overlay/);
+  assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);
 });
