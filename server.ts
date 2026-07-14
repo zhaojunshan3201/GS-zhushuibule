@@ -7,6 +7,8 @@ import { randomUUID } from "crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import oracledb from "oracledb";
 import { PDFDocument } from "pdf-lib";
+import { parsePptxWellHistory, writePptxWellHistory, type PptxWellHistoryDocument } from "./src/shared/pptxWellHistory";
+import { buildPptSlideHtml, sanitizeWellHistoryHtml } from "./src/shared/wellHistoryRichText";
 import dotenv from "dotenv";
 import { promisify } from "util";
 import { z } from "zod";
@@ -71,6 +73,8 @@ const snapshotPrisma = prisma as PrismaClient & {
   wellHistoryArchive?: any;
   wellHistoryExtract?: any;
   wellHistoryPdfOverlay?: any;
+  wellHistoryPptx?: any;
+  wellHistoryPptxVersion?: any;
   dynamicAdjustmentRecord?: any;
   homeReserveOverviewRecord?: any;
 };
@@ -155,6 +159,8 @@ const WELL_HISTORY_UPLOAD_DIR = path.join(UPLOAD_ROOT, "well-history");
 const WELL_HISTORY_SOURCE_UPLOAD_DIR = path.join(UPLOAD_ROOT, "well-history-source");
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_WELL_HISTORY_PDF_BYTES = 50 * 1024 * 1024;
+const MAX_WELL_HISTORY_PPTX_FILES = 20;
+const MAX_WELL_HISTORY_PPTX_TOTAL_BYTES = MAX_WELL_HISTORY_PDF_BYTES;
 const WELL_HISTORY_TEXT_PYTHON = process.env.WELL_HISTORY_TEXT_PYTHON ?? "python";
 const WELL_HISTORY_TEXT_TIMEOUT_MS = Number(process.env.WELL_HISTORY_TEXT_TIMEOUT_MS ?? 20_000);
 const PPT_CONVERT_TIMEOUT_MS = Number(process.env.WELL_HISTORY_PPT_TIMEOUT_MS ?? 120_000);
@@ -328,6 +334,68 @@ function getFileExtension(fileName: string) {
   return path.extname(fileName).toLowerCase();
 }
 
+export function validatePptxRequestContentLength(value: string | string[] | undefined) {
+  if (value === undefined || Array.isArray(value) || !/^\d+$/.test(value)) {
+    return { ok: false as const, code: "pptx-content-length-required" as const };
+  }
+  if (Number(value) > MAX_WELL_HISTORY_PPTX_TOTAL_BYTES) {
+    return { ok: false as const, code: "pptx-total-too-large" as const };
+  }
+  return { ok: true as const };
+}
+
+export function validatePptxUploadLimits(
+  files: Array<{ size: number }>,
+  limits = { maxFiles: MAX_WELL_HISTORY_PPTX_FILES, maxFileBytes: MAX_WELL_HISTORY_PDF_BYTES, maxTotalBytes: MAX_WELL_HISTORY_PPTX_TOTAL_BYTES },
+) {
+  if (files.length > limits.maxFiles) return { ok: false as const, code: "pptx-file-count-exceeded" as const };
+  if (files.some(file => file.size > limits.maxFileBytes)) return { ok: false as const, code: "pptx-file-too-large" as const };
+  if (files.reduce((total, file) => total + file.size, 0) > limits.maxTotalBytes) return { ok: false as const, code: "pptx-total-too-large" as const };
+  return { ok: true as const };
+}
+
+export function validatePptxBaseVersion(currentVersionNo: number, baseVersionNo: unknown) {
+  return Number.isInteger(baseVersionNo) && Number(baseVersionNo) === currentVersionNo
+    ? { ok: true as const }
+    : { ok: false as const, code: "pptx-version-conflict" as const };
+}
+
+export function collectWellHistoryPptxFileUrls(current: { fileUrl?: string | null } | null | undefined, versions: Array<{ fileUrl?: string | null }>) {
+  return [...new Set([current?.fileUrl, ...versions.map(version => version.fileUrl)].filter((url): url is string => Boolean(url)))];
+}
+
+export function validatePptxUploadFileName(fileName: string) {
+  const extension = getFileExtension(fileName);
+  if (extension === ".pptx") return { ok: true as const };
+  if (extension === ".ppt") return { ok: false as const, code: "ppt-converter-unavailable" as const };
+  return { ok: false as const, code: "invalid-pptx-file" as const };
+}
+
+export function isPptxConverterUnavailable(error: unknown) {
+  return (error as { code?: string })?.code === "ENOENT";
+}
+
+export function validatePptxEditorDocument(value: unknown) {
+  const document = value as Partial<PptxWellHistoryDocument> | null;
+  if (!document || !Array.isArray(document.slides) || !document.slides.length || !Array.isArray(document.source)) {
+    return { ok: false as const, code: "invalid-pptx-document" as const };
+  }
+  if (!document.slides.every(slide => slide && typeof slide.id === "string" && typeof slide.path === "string" && typeof slide.xml === "string" && Array.isArray(slide.elements))) {
+    return { ok: false as const, code: "invalid-pptx-document" as const };
+  }
+  return { ok: true as const };
+}
+
+export function validatePptxVersionInput(value: unknown) {
+  const input = value as { document?: unknown; versionNo?: unknown } | null;
+  const document = validatePptxEditorDocument(input?.document);
+  if (!document.ok) return document;
+  if (input?.versionNo !== undefined && (!Number.isInteger(input.versionNo) || Number(input.versionNo) < 1)) {
+    return { ok: false as const, code: "invalid-version-no" as const };
+  }
+  return { ok: true as const };
+}
+
 function isPresentationFile(fileName: string, mimeType?: string) {
   const extension = getFileExtension(fileName);
   return extension === ".ppt" || extension === ".pptx" || (mimeType ? PPT_MIME_TYPES.has(mimeType) && (extension === ".ppt" || extension === ".pptx") : false);
@@ -459,6 +527,7 @@ async function deleteWellHistoryArchiveByWellNo(wellNo: string) {
     where: { wellNo: exactWellNo },
     include: {
       currentPdf: true,
+      currentPptx: true,
       extract: true,
     },
   });
@@ -468,6 +537,7 @@ async function deleteWellHistoryArchiveByWellNo(wellNo: string) {
       where: { wellNo: normalizedWellNo },
       include: {
         currentPdf: true,
+        currentPptx: true,
         extract: true,
       },
     });
@@ -479,6 +549,10 @@ async function deleteWellHistoryArchiveByWellNo(wellNo: string) {
 
   const currentPdfId = archive.currentPdf?.id ?? null;
   const currentPdfUrl = archive.currentPdf?.fileUrl ?? null;
+  const pptxVersions = snapshotPrisma.wellHistoryPptxVersion
+    ? await snapshotPrisma.wellHistoryPptxVersion.findMany({ where: { archiveId: archive.id }, select: { fileUrl: true } })
+    : [];
+  const pptxUrls = collectWellHistoryPptxFileUrls(archive.currentPptx, pptxVersions);
   const archiveWellNo = archive.wellNo;
 
   if (snapshotPrisma.wellHistoryPdfOverlay && currentPdfId) {
@@ -509,6 +583,7 @@ async function deleteWellHistoryArchiveByWellNo(wellNo: string) {
   if (currentPdfUrl) {
     await removeWellHistoryUploadFile(currentPdfUrl);
   }
+  await Promise.all(pptxUrls.map(removeWellHistoryUploadFile));
   await removeWellHistorySourceFilesForWell(archiveWellNo);
 }
 
@@ -643,7 +718,7 @@ async function convertPresentationToPdf(sourcePath: string, targetPath: string) 
     "  [System.GC]::Collect()",
     "  [System.GC]::WaitForPendingFinalizers()",
     "}",
-  ].join("; ");
+  ].join("\n");
 
   await execFileAsync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
     timeout: PPT_CONVERT_TIMEOUT_MS,
@@ -670,6 +745,137 @@ async function mergePdfBuffers(pdfBuffers: Buffer[]) {
   }
 
   return Buffer.from(await mergedPdf.save());
+}
+
+function serializablePptxDocument(document: PptxWellHistoryDocument) {
+  return { ...document, source: Array.from(document.source) };
+}
+
+function toPptxDocument(value: unknown): PptxWellHistoryDocument {
+  const document = value as Omit<PptxWellHistoryDocument, "source"> & { source: number[] };
+  return { ...document, source: new Uint8Array(document.source) };
+}
+
+type PptxConverterDependencies = {
+  execFileAsync?: (file: string, args: string[], options: { timeout: number; maxBuffer: number }) => Promise<unknown>;
+  stat?: typeof fs.stat;
+};
+
+export async function convertPptToPptx(sourcePath: string, outputDir: string, dependencies: PptxConverterDependencies = {}) {
+  try {
+    await (dependencies.execFileAsync ?? execFileAsync)("soffice", ["--headless", "--convert-to", "pptx", "--outdir", outputDir, sourcePath], {
+      timeout: PPT_CONVERT_TIMEOUT_MS,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  } catch (error) {
+    const unavailable = isPptxConverterUnavailable(error);
+    const wrapped = new Error(unavailable ? "ppt-converter-unavailable" : "ppt-converter-failed");
+    (wrapped as Error & { code?: string }).code = unavailable ? "ppt-converter-unavailable" : "ppt-converter-failed";
+    throw wrapped;
+  }
+  const targetPath = path.join(outputDir, `${path.parse(sourcePath).name}.pptx`);
+  const stat = await (dependencies.stat ?? fs.stat)(targetPath).catch(() => null);
+  if (!stat?.size) {
+    const error = new Error("ppt-converter-failed");
+    (error as Error & { code?: string }).code = "ppt-converter-failed";
+    throw error;
+  }
+  return targetPath;
+}
+
+export async function preparePptxImportFile(
+  sourcePath: string,
+  sourceExtension: string,
+  outputDir: string,
+  convert = convertPptToPptx,
+) {
+  return sourceExtension === ".ppt" ? convert(sourcePath, outputDir) : sourcePath;
+}
+
+export async function exportPresentationSlides(
+  sourcePath: string,
+  outputDir: string,
+  dependencies: {
+    mkdir?: (path: string, options: { recursive: true }) => Promise<unknown>;
+    execFileAsync?: (file: string, args: string[], options: { timeout: number; maxBuffer: number }) => Promise<unknown>;
+    readdir?: (path: string) => Promise<string[]>;
+  } = {},
+) {
+  await (dependencies.mkdir ?? fs.mkdir)(outputDir, { recursive: true });
+  const converter = dependencies.execFileAsync ?? execFileAsync;
+  const sourceDirectory = path.dirname(sourcePath);
+  const pdfPath = path.join(sourceDirectory, `${path.parse(sourcePath).name}.pdf`);
+  try {
+    await converter("soffice", ["--headless", "--convert-to", "pdf", "--outdir", sourceDirectory, sourcePath], { timeout: PPT_CONVERT_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 });
+  } catch (error) {
+    if (isPptxConverterUnavailable(error)) throw new Error("libreoffice-not-found: install LibreOffice and add soffice to PATH");
+    throw error;
+  }
+  const pythonScript = [
+    "import fitz, os, sys",
+    "pdf = fitz.open(sys.argv[1])",
+    "out = sys.argv[2]",
+    "for index, page in enumerate(pdf):",
+    "    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)",
+    "    pix.save(os.path.join(out, f'page-{index + 1}.png'))",
+  ].join("\n");
+  await converter(WELL_HISTORY_TEXT_PYTHON, ["-c", pythonScript, pdfPath, outputDir], { timeout: PPT_CONVERT_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 });
+  await fs.unlink(pdfPath).catch(() => undefined);
+  const entries = await (dependencies.readdir ?? fs.readdir)(outputDir);
+  return entries
+    .filter((entry) => /\.png$/i.test(entry))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+    .map((entry) => path.join(outputDir, entry));
+}
+
+async function saveWellHistoryPptxRecord(input: {
+  pptxBuffer: Buffer;
+  document: PptxWellHistoryDocument;
+  wellNo: string;
+  unit: string;
+  block?: string | null;
+  remark?: string | null;
+  savedBy?: string | null;
+  originalName: string;
+  sourceFormat: string;
+  initialHtml: string;
+}) {
+  if (!snapshotPrisma.wellHistoryPptx || !snapshotPrisma.wellHistoryPptxVersion || !snapshotPrisma.wellHistoryArchive || !snapshotPrisma.wellHistoryRichTextDocument || !snapshotPrisma.wellHistoryRichTextVersion) {
+    throw new Error("Well history PPTX tables not available. Run prisma generate/db push first.");
+  }
+  const wellNo = normalizeWellHistoryWellNo(input.wellNo);
+  if (!wellNo) throw new Error("wellNo is required");
+  await ensureUploadDirectories();
+  const storedFileName = `${sanitizeFileSegment(wellNo, "well")}-${Date.now()}-${randomUUID()}.pptx`;
+  const fileUrl = `/uploads/well-history/${storedFileName}`;
+  await fs.writeFile(path.join(WELL_HISTORY_UPLOAD_DIR, storedFileName), input.pptxBuffer);
+  try {
+    const saved = await prisma.$transaction(async (tx) => {
+      const archive = await tx.wellHistoryArchive.upsert({
+        where: { wellNo },
+        create: { wellNo, displayName: inferWellHistoryDisplayName(wellNo), unit: input.unit, block: input.block || null, remark: input.remark || null },
+        update: { displayName: inferWellHistoryDisplayName(wellNo), unit: input.unit, block: input.block || null, remark: input.remark || null },
+      });
+      const existing = await tx.wellHistoryPptx.findUnique({ where: { wellNo } });
+      const data = { archiveId: archive.id, wellNo, fileUrl, storedFileName, originalName: input.originalName, sourceFormat: input.sourceFormat, editorModelJson: serializablePptxDocument(input.document), savedBy: input.savedBy || null, remark: input.remark || null };
+      const pptx = existing
+        ? await tx.wellHistoryPptx.update({ where: { id: existing.id }, data: { ...data, versionNo: existing.versionNo + 1 } })
+        : await tx.wellHistoryPptx.create({ data: { ...data, versionNo: 1 } });
+      await tx.wellHistoryPptxVersion.create({ data: { ...data, pptxId: pptx.id, versionNo: pptx.versionNo } });
+      const existingDocument = await tx.wellHistoryRichTextDocument.findUnique({ where: { archiveId: archive.id } });
+      const html = sanitizeWellHistoryHtml(input.initialHtml);
+      const richTextDocument = existingDocument
+        ? await tx.wellHistoryRichTextDocument.update({ where: { id: existingDocument.id }, data: { wellNo, html, versionNo: existingDocument.versionNo + 1, savedBy: input.savedBy || null } })
+        : await tx.wellHistoryRichTextDocument.create({ data: { archiveId: archive.id, wellNo, html, savedBy: input.savedBy || null } });
+      await tx.wellHistoryRichTextVersion.create({ data: { documentId: richTextDocument.id, archiveId: archive.id, wellNo, html, versionNo: richTextDocument.versionNo, savedBy: input.savedBy || null } });
+      await tx.wellHistoryArchive.update({ where: { id: archive.id }, data: { currentPptxId: pptx.id } });
+      return pptx;
+    }, { timeout: 30_000 });
+    return saved;
+  } catch (error) {
+    await removeWellHistoryUploadFile(fileUrl);
+    throw error;
+  }
 }
 
 async function saveWellHistoryPdfRecord(input: {
@@ -2894,145 +3100,188 @@ app.get("/api/well-history-pdf", async (req, res) => {
 
 app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
   try {
+    const contentLength = validatePptxRequestContentLength(req.headers["content-length"]);
+    if (!contentLength.ok) {
+      return res.status(contentLength.code === "pptx-total-too-large" ? 413 : 411).json({ error: contentLength.code });
+    }
     const formData = await parseMultipartForm(req);
     const files = formData.getAll("files");
-    const unitValue = formData.get("unit");
-    const blockValue = formData.get("block");
-    const remarkValue = formData.get("remark");
-
-    const unit = typeof unitValue === "string" ? unitValue.trim() : "";
-    const block = typeof blockValue === "string" ? blockValue.trim() : "";
-    const remark = typeof remarkValue === "string" ? remarkValue.trim() : "";
-
-    if (!unit) {
-      return res.status(400).json({ error: "unit is required" });
-    }
-
-    if (!files.length) {
-      return res.status(400).json({ error: "No PPT/PPTX files uploaded" });
-    }
+    const unit = typeof formData.get("unit") === "string" ? String(formData.get("unit")).trim() : "";
+    const block = typeof formData.get("block") === "string" ? String(formData.get("block")).trim() : "";
+    const remark = typeof formData.get("remark") === "string" ? String(formData.get("remark")).trim() : "";
+    if (!unit) return res.status(400).json({ error: "unit is required" });
+    if (!files.length) return res.status(400).json({ error: "No PPT/PPTX files uploaded" });
+    const uploadLimit = validatePptxUploadLimits(files.filter((file): file is File => file instanceof File));
+    if (!uploadLimit.ok) return res.status(413).json({ error: uploadLimit.code });
 
     await ensureUploadDirectories();
-
+    const pending = new Map<string, Array<{ entry: File; sourceOrder: number; sourceOriginalName: string; partOrder: number | null }>>();
     const items: Array<Record<string, unknown>> = [];
-    const groupedParts = new Map<string, {
-      wellNo: string;
-      parts: Array<{
-        sourceOriginalName: string;
-        sourceOrder: number;
-        partOrder: number | null;
-        pdfBuffer: Buffer;
-      }>;
-    }>();
-
     for (const [sourceOrder, entry] of files.entries()) {
-      if (!(entry instanceof File)) {
-        items.push({ fileName: "unknown", wellNo: "", status: "invalid-file", message: "Invalid file payload" });
-        continue;
-      }
-
-      const extension = getFileExtension(entry.name);
-      const sourceOriginalName = entry.name;
-      const parsedName = parseWellHistoryImportFileName(sourceOriginalName);
-      const wellNo = normalizeWellHistoryWellNo(parsedName.wellNo);
-
-      if (!isPresentationFile(sourceOriginalName, entry.type)) {
-        items.push({ fileName: sourceOriginalName, wellNo, status: "invalid-type", message: "Only PPT/PPTX files are supported" });
-        continue;
-      }
-
-      if (!wellNo) {
-        items.push({ fileName: sourceOriginalName, wellNo: "", status: "invalid-name", message: "File name must match well number" });
-        continue;
-      }
-
-      const sourceExtension = extension || ".pptx";
-      const partLabel = parsedName.order === null ? sourceOrder + 1 : parsedName.order;
-      const sourceFileName = `${sanitizeFileSegment(wellNo, "well")}-part-${partLabel}-${Date.now()}-${randomUUID()}${sourceExtension}`;
-      const sourcePath = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceFileName);
-      const targetPdfPath = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, `${path.parse(sourceFileName).name}.pdf`);
-
-      try {
-        const sourceBuffer = Buffer.from(await entry.arrayBuffer());
-        await fs.writeFile(sourcePath, sourceBuffer);
-        await convertPresentationToPdf(sourcePath, targetPdfPath);
-
-        const pdfBuffer = await fs.readFile(targetPdfPath);
-        const group = groupedParts.get(wellNo) ?? { wellNo, parts: [] };
-        group.parts.push({
-          sourceOriginalName,
-          sourceOrder,
-          partOrder: parsedName.order,
-          pdfBuffer,
-        });
-        groupedParts.set(wellNo, group);
-      } catch (error) {
-        items.push({
-          fileName: sourceOriginalName,
-          wellNo,
-          status: "convert-failed",
-          message: serializeError(error),
-        });
-      }
+      if (!(entry instanceof File)) { items.push({ fileName: "unknown", status: "invalid-file" }); continue; }
+      const parsed = parseWellHistoryImportFileName(entry.name);
+      const wellNo = normalizeWellHistoryWellNo(parsed.wellNo);
+      const validation = validatePptxUploadFileName(entry.name);
+      if (!wellNo) { items.push({ fileName: entry.name, wellNo: "", status: "invalid-name", message: "File name must match well number" }); continue; }
+      if (!validation.ok && getFileExtension(entry.name) !== ".ppt") { items.push({ fileName: entry.name, wellNo, status: validation.code, message: "Only PPT/PPTX files are supported" }); continue; }
+      const group = pending.get(wellNo) ?? [];
+      group.push({ entry, sourceOrder, sourceOriginalName: entry.name, partOrder: parsed.order });
+      pending.set(wellNo, group);
     }
 
-    for (const group of groupedParts.values()) {
-      const sortedParts = sortWellHistoryImportParts(group.parts);
-      if (sortedParts.length > 1 && sortedParts.some(part => part.partOrder === null)) {
-        const message = getWellHistoryRenameHint(group.wellNo);
-        sortedParts.forEach((part) => {
-          items.push({
-            fileName: part.sourceOriginalName,
-            wellNo: group.wellNo,
-            status: "rename-required",
-            message,
-          });
-        });
+    for (const [wellNo, parts] of pending) {
+      if (parts.length !== 1) {
+        await Promise.all(parts.map(async (part) => {
+          const sourceName = `${sanitizeFileSegment(wellNo, "well")}-part-${part.partOrder ?? part.sourceOrder + 1}-${Date.now()}-${randomUUID()}${getFileExtension(part.sourceOriginalName)}`;
+          await fs.writeFile(path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceName), Buffer.from(await part.entry.arrayBuffer()));
+          items.push({ fileName: part.sourceOriginalName, wellNo, status: "merge-not-supported", message: "Multiple PPTX parts are retained as originals; PPTX merging is not supported." });
+        }));
         continue;
       }
-
+      const part = parts[0];
+      const extension = getFileExtension(part.sourceOriginalName);
+      const sourceName = `${sanitizeFileSegment(wellNo, "well")}-part-${part.partOrder ?? part.sourceOrder + 1}-${Date.now()}-${randomUUID()}${extension}`;
+      const sourcePath = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceName);
       try {
-        const mergedPdfBuffer = await mergePdfBuffers(sortedParts.map(part => part.pdfBuffer));
-        const originalName = sortedParts.length === 1
-          ? sortedParts[0].sourceOriginalName
-          : `${group.wellNo} 合并导入（${sortedParts.length}个PPT）`;
-        const savedRecord = await saveWellHistoryPdfRecord({
-          pdfBuffer: mergedPdfBuffer,
-          wellNo: group.wellNo,
+        await fs.writeFile(sourcePath, Buffer.from(await part.entry.arrayBuffer()));
+        const pptxPath = await preparePptxImportFile(sourcePath, extension, WELL_HISTORY_SOURCE_UPLOAD_DIR);
+        const pptxBuffer = await fs.readFile(pptxPath);
+        const document = await parsePptxWellHistory(pptxBuffer);
+        const pageDir = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, `${sanitizeFileSegment(wellNo, "well")}-pages-${randomUUID()}`);
+        const exportedPages = await exportPresentationSlides(pptxPath, pageDir);
+        if (!exportedPages.length) throw new Error("ppt-page-export-failed");
+        const pageUrls: string[] = [];
+        for (const [index, pagePath] of exportedPages.entries()) {
+          const pageName = `${sanitizeFileSegment(wellNo, "well")}-page-${index + 1}-${randomUUID()}.png`;
+          await fs.rename(pagePath, path.join(WELL_HISTORY_UPLOAD_DIR, pageName));
+          pageUrls.push(`/uploads/well-history/${pageName}`);
+        }
+        await fs.rm(pageDir, { recursive: true, force: true });
+        const saved = await saveWellHistoryPptxRecord({
+          pptxBuffer,
+          document,
+          wellNo,
           unit,
           block: block || null,
           remark: remark || null,
-          originalName,
+          originalName: part.sourceOriginalName,
+          sourceFormat: extension.slice(1),
+          initialHtml: buildPptSlideHtml(pageUrls),
         });
-
-        sortedParts.forEach((part, index) => {
-          items.push({
-            fileName: part.sourceOriginalName,
-            wellNo: group.wellNo,
-            status: "success",
-            message: sortedParts.length === 1 ? "Imported successfully" : `Merged into page sequence ${index + 1}`,
-            pdfUrl: savedRecord.fileUrl,
-            updatedAt: savedRecord.updatedAt,
-          });
-        });
-      } catch (error) {
-        sortedParts.forEach((part) => {
-          items.push({
-            fileName: part.sourceOriginalName,
-            wellNo: group.wellNo,
-            status: "merge-failed",
-            message: serializeError(error),
-          });
-        });
+        items.push({ fileName: part.sourceOriginalName, wellNo, status: "success", pptxUrl: saved.fileUrl, versionNo: saved.versionNo, updatedAt: saved.updatedAt });
+      } catch (error: any) {
+        items.push({ fileName: part.sourceOriginalName, wellNo, status: error?.code || "pptx-import-failed", message: error?.message || serializeError(error) });
       }
     }
-
     const successCount = items.filter(item => item.status === "success").length;
-    const failureCount = items.length - successCount;
-    res.json({ successCount, failureCount, items });
+    res.json({ successCount, failureCount: items.length - successCount, items });
   } catch (error) {
     res.status(500).json({ error: "Well history PPT batch import failed", details: serializeError(error) });
   }
+});
+
+app.get("/api/well-history-archives/:wellNo/pptx", async (req, res) => {
+  try {
+    const wellNo = normalizeWellHistoryWellNo(req.params.wellNo ?? "");
+    const archive = wellNo && await snapshotPrisma.wellHistoryArchive?.findUnique({ where: { wellNo }, include: { currentPptx: true } });
+    if (!archive?.currentPptx) return res.status(404).json({ error: "Well history PPTX not found" });
+    res.json(archive.currentPptx);
+  } catch (error: any) { res.status(500).json({ error: error?.message || "Fetch well history PPTX failed" }); }
+});
+
+app.get("/api/well-history-archives/:wellNo/document", async (req, res) => {
+  try {
+    const wellNo = normalizeWellHistoryWellNo(req.params.wellNo ?? "");
+    const document = wellNo && await snapshotPrisma.wellHistoryRichTextDocument?.findUnique({ where: { wellNo } });
+    if (!document) return res.status(404).json({ error: "Well history rich text document not found" });
+    res.json(document);
+  } catch (error: any) { res.status(500).json({ error: error?.message || "Fetch well history document failed" }); }
+});
+
+app.put("/api/well-history-archives/:wellNo/document", async (req, res) => {
+  try {
+    const wellNo = normalizeWellHistoryWellNo(req.params.wellNo ?? "");
+    const html = typeof req.body?.html === "string" ? sanitizeWellHistoryHtml(req.body.html) : "";
+    if (!wellNo || !html) return res.status(400).json({ error: "wellNo and html are required" });
+    const savedBy = typeof req.body?.savedBy === "string" ? req.body.savedBy.trim() || null : null;
+    const saved = await prisma.$transaction(async (tx) => {
+      const current = await tx.wellHistoryRichTextDocument.findUnique({ where: { wellNo } });
+      if (!current) throw Object.assign(new Error("rich-text-not-found"), { code: "rich-text-not-found" });
+      if (!Number.isInteger(req.body?.baseVersionNo) || req.body.baseVersionNo !== current.versionNo) throw Object.assign(new Error("rich-text-version-conflict"), { code: "rich-text-version-conflict" });
+      const next = await tx.wellHistoryRichTextDocument.update({ where: { id: current.id }, data: { html, savedBy, versionNo: current.versionNo + 1 } });
+      await tx.wellHistoryRichTextVersion.create({ data: { documentId: next.id, archiveId: next.archiveId, wellNo, html, versionNo: next.versionNo, savedBy } });
+      return next;
+    });
+    res.json(saved);
+  } catch (error: any) {
+    if (error?.code === "rich-text-version-conflict") return res.status(409).json({ error: error.code });
+    if (error?.code === "rich-text-not-found") return res.status(404).json({ error: error.code });
+    res.status(500).json({ error: error?.message || "Save well history document failed" });
+  }
+});
+
+app.get("/api/well-history-archives/:wellNo/pptx/versions", async (req, res) => {
+  try {
+    const wellNo = normalizeWellHistoryWellNo(req.params.wellNo ?? "");
+    const archive = wellNo && await snapshotPrisma.wellHistoryArchive?.findUnique({ where: { wellNo }, select: { id: true } });
+    if (!archive) return res.status(404).json({ error: "Well history archive not found" });
+    const versions = await snapshotPrisma.wellHistoryPptxVersion?.findMany({ where: { archiveId: archive.id }, orderBy: { versionNo: "desc" } });
+    res.json(versions ?? []);
+  } catch (error: any) { res.status(500).json({ error: error?.message || "Fetch PPTX versions failed" }); }
+});
+
+app.post("/api/well-history-archives/:wellNo/pptx/versions", async (req, res) => {
+  try {
+    const wellNo = normalizeWellHistoryWellNo(req.params.wellNo ?? "");
+    const validation = validatePptxVersionInput(req.body);
+    if (!validation.ok) return res.status(400).json({ error: validation.code });
+    if (!wellNo) return res.status(400).json({ error: "wellNo is required" });
+    const document = toPptxDocument(req.body.document);
+    const pptxBuffer = Buffer.from(await writePptxWellHistory(document));
+    const storedFileName = `${sanitizeFileSegment(wellNo, "well")}-${Date.now()}-${randomUUID()}.pptx`;
+    const fileUrl = `/uploads/well-history/${storedFileName}`;
+    await fs.writeFile(path.join(WELL_HISTORY_UPLOAD_DIR, storedFileName), pptxBuffer);
+    const savedBy = typeof req.body.savedBy === "string" ? req.body.savedBy.trim() || null : null;
+    try {
+      const saved = await prisma.$transaction(async (tx) => {
+        const current = await tx.wellHistoryPptx.findUnique({ where: { wellNo } });
+        if (!current) {
+          const error = new Error("Well history PPTX not found");
+          (error as Error & { code?: string }).code = "pptx-not-found";
+          throw error;
+        }
+        const baseVersion = validatePptxBaseVersion(current.versionNo, req.body.baseVersionNo);
+        if (!baseVersion.ok) {
+          const error = new Error(baseVersion.code);
+          (error as Error & { code?: string }).code = baseVersion.code;
+          throw error;
+        }
+        const versionNo = current.versionNo + 1;
+        const remark = typeof req.body.remark === "string" ? req.body.remark.trim() || null : current.remark;
+        const data = { fileUrl, storedFileName, originalName: current.originalName, sourceFormat: "pptx", editorModelJson: serializablePptxDocument(document), versionNo, savedBy, remark };
+        const pptx = await tx.wellHistoryPptx.update({ where: { id: current.id }, data });
+        await tx.wellHistoryPptxVersion.create({ data: { ...data, pptxId: pptx.id, archiveId: pptx.archiveId, wellNo: pptx.wellNo } });
+        await tx.wellHistoryArchive.update({ where: { id: pptx.archiveId }, data: { currentPptxId: pptx.id } });
+        return pptx;
+      });
+      res.json(saved);
+    } catch (error) { await removeWellHistoryUploadFile(fileUrl); throw error; }
+  } catch (error: any) {
+    if (error?.code === "pptx-version-conflict" || error?.code === "P2002") return res.status(409).json({ error: "pptx-version-conflict" });
+    if (error?.code === "pptx-not-found") return res.status(404).json({ error: error.message });
+    res.status(500).json({ error: error?.message || "Save PPTX version failed" });
+  }
+});
+
+app.get("/api/well-history-archives/:wellNo/pptx/download", async (req, res) => {
+  try {
+    const wellNo = normalizeWellHistoryWellNo(req.params.wellNo ?? "");
+    const current = wellNo && await snapshotPrisma.wellHistoryPptx?.findUnique({ where: { wellNo } });
+    if (!current) return res.status(404).json({ error: "Well history PPTX not found" });
+    const filePath = getWellHistoryUploadPath(current.fileUrl);
+    if (!filePath) return res.status(404).json({ error: "Well history PPTX path is invalid" });
+    res.download(filePath, current.originalName.endsWith(".pptx") ? current.originalName : `${current.originalName}.pptx`);
+  } catch (error: any) { res.status(500).json({ error: error?.message || "Download PPTX failed" }); }
 });
 
 app.get("/api/well-history-archives", async (req, res) => {
@@ -3063,6 +3312,7 @@ app.get("/api/well-history-archives", async (req, res) => {
       where,
       include: {
         currentPdf: true,
+        currentPptx: true,
       },
       orderBy: [
         { updatedAt: "desc" },
@@ -3156,6 +3406,7 @@ app.get("/api/well-history-archives/:wellNo", async (req, res) => {
       where: { wellNo: requestedWellNo },
       include: {
         currentPdf: true,
+        currentPptx: true,
         extract: true,
       },
     });
@@ -3165,6 +3416,7 @@ app.get("/api/well-history-archives/:wellNo", async (req, res) => {
         where: { wellNo: normalizedWellNo },
         include: {
           currentPdf: true,
+          currentPptx: true,
           extract: true,
         },
       });
@@ -3196,6 +3448,7 @@ app.get("/api/well-history-archives/:wellNo", async (req, res) => {
         where: { wellNo: archive.wellNo },
         include: {
           currentPdf: true,
+          currentPptx: true,
           extract: true,
         },
       });
@@ -3209,50 +3462,15 @@ app.get("/api/well-history-archives/:wellNo", async (req, res) => {
 
 app.get("/api/well-history-archives-latest", async (req, res) => {
   try {
-    if (!snapshotPrisma.wellHistoryPdf || !snapshotPrisma.wellHistoryArchive) {
-      return res.status(503).json({ error: "Well history tables not available. Run prisma generate/db push first." });
+    if (!snapshotPrisma.wellHistoryArchive) {
+      return res.status(503).json({ error: "Well history archive table not available. Run prisma generate/db push first." });
     }
-
-    const latestPdf = await snapshotPrisma.wellHistoryPdf.findFirst({
+    const archive = await snapshotPrisma.wellHistoryArchive.findFirst({
+      where: { OR: [{ currentPdfId: { not: null } }, { currentPptxId: { not: null } }] },
       orderBy: { updatedAt: "desc" },
+      include: { currentPdf: true, currentPptx: true, extract: true },
     });
-
-    if (!latestPdf) {
-      return res.status(404).json({ error: "Latest well history upload not found" });
-    }
-
-    let archive = await snapshotPrisma.wellHistoryArchive.findUnique({
-      where: { wellNo: latestPdf.wellNo },
-      include: {
-        currentPdf: true,
-        extract: true,
-      },
-    });
-
-    if (!archive || archive.currentPdf?.id !== latestPdf.id) {
-      await syncWellHistoryArchive({
-        id: latestPdf.id,
-        wellNo: latestPdf.wellNo,
-        unit: latestPdf.unit,
-        block: latestPdf.block,
-        originalName: latestPdf.originalName,
-        remark: latestPdf.remark,
-        fileUrl: latestPdf.fileUrl,
-      });
-
-      archive = await snapshotPrisma.wellHistoryArchive.findUnique({
-        where: { wellNo: latestPdf.wellNo },
-        include: {
-          currentPdf: true,
-          extract: true,
-        },
-      });
-    }
-
-    if (!archive) {
-      return res.status(404).json({ error: "Latest well history archive not found" });
-    }
-
+    if (!archive) return res.status(404).json({ error: "Latest well history upload not found" });
     res.json(archive);
   } catch (error: any) {
     res.status(500).json({ error: error?.message || "Fetch latest well history archive failed" });
@@ -4594,4 +4812,7 @@ async function startServer() {
   });
 }
 
-startServer();
+const isTestRuntime = process.env.NODE_ENV === "test" || process.argv.some(arg => arg === "--test" || arg.includes("node:test"));
+if (!isTestRuntime) {
+  void startServer();
+}

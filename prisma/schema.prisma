@@ -93,6 +93,7 @@ model InjectionTechRecord {
 model WellFlushingRecord {
   id                String   @id @default(uuid())
   unit              String
+  block             String   @default("")
   wellNo            String
   washDate          DateTime @db.Date
   daysSinceLastWash Int
@@ -108,6 +109,7 @@ model WellFlushingRecord {
   updatedAt         DateTime @updatedAt
 
   @@index([unit])
+  @@index([block])
   @@index([wellNo])
   @@index([washDate])
 }
@@ -191,6 +193,8 @@ model DynamicAdjustmentRecord {
 
 model ConcentricTestRecord {
   id             String   @id @default(uuid())
+  unit           String   @default("高采采油作业一区")
+  block          String   @default("雷11")
   wellNo         String
   testDate       DateTime @db.Date
   allocatorCount Int
@@ -204,11 +208,15 @@ model ConcentricTestRecord {
   updatedAt      DateTime @updatedAt
 
   @@index([wellNo])
+  @@index([unit])
+  @@index([block])
   @@index([testDate])
 }
 
 model SmartTestRecord {
   id               String   @id @default(uuid())
+  unit             String   @default("高采采油作业一区")
+  block            String   @default("雷11")
   wellNo           String
   testDate         DateTime @db.Date
   allocatorCount   Int
@@ -224,6 +232,8 @@ model SmartTestRecord {
   updatedAt        DateTime @updatedAt
 
   @@index([wellNo])
+  @@index([unit])
+  @@index([block])
   @@index([testDate])
 }
 
@@ -232,6 +242,7 @@ model SingleWellInjectionEvaluationRecord {
   wellNo         String
   process        String
   unit           String
+  block          String   @default("雷11")
   evaluationDate DateTime @db.Date
   intervalCount  Int
   actualCount    Int
@@ -244,11 +255,14 @@ model SingleWellInjectionEvaluationRecord {
   @@index([wellNo])
   @@index([process])
   @@index([unit])
+  @@index([block])
   @@index([evaluationDate])
 }
 
 model SingleWellSealEvaluationRecord {
   id                 String   @id @default(uuid())
+  unit               String   @default("高采采油作业一区")
+  block              String   @default("雷11")
   wellNo             String
   process            String
   evaluationDate     DateTime @db.Date
@@ -261,6 +275,8 @@ model SingleWellSealEvaluationRecord {
   updatedAt          DateTime @updatedAt
 
   @@index([wellNo])
+  @@index([unit])
+  @@index([block])
   @@index([process])
   @@index([evaluationDate])
 }
@@ -581,21 +597,103 @@ model WellHistoryPdf {
 }
 
 model WellHistoryArchive {
-  id           String              @id @default(uuid())
-  wellNo       String              @unique
-  displayName  String
-  unit         String
-  block        String?
-  remark       String?
-  currentPdfId String?             @unique
-  currentPdf   WellHistoryPdf?     @relation(fields: [currentPdfId], references: [id])
-  extract      WellHistoryExtract?
-  uploadedAt   DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id            String                   @id @default(uuid())
+  wellNo        String                   @unique
+  displayName   String
+  unit          String
+  block         String?
+  remark        String?
+  currentPdfId  String?                  @unique
+  currentPdf    WellHistoryPdf?          @relation(fields: [currentPdfId], references: [id])
+  currentPptxId String?                  @unique
+  currentPptx   WellHistoryPptx?         @relation("CurrentWellHistoryPptx", fields: [currentPptxId], references: [id])
+  pptx          WellHistoryPptx?         @relation("WellHistoryArchivePptx")
+  pptxVersions  WellHistoryPptxVersion[] @relation("WellHistoryArchivePptxVersion")
+  richTextDocument WellHistoryRichTextDocument?
+  richTextVersions WellHistoryRichTextVersion[]
+  extract       WellHistoryExtract?
+  uploadedAt    DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 
   @@index([unit])
   @@index([block])
   @@index([displayName])
+}
+
+model WellHistoryPptx {
+  id              String                    @id @default(uuid())
+  archiveId       String                    @unique
+  archive         WellHistoryArchive        @relation("WellHistoryArchivePptx", fields: [archiveId], references: [id], onDelete: Cascade)
+  wellNo          String                    @unique
+  fileUrl         String
+  storedFileName  String
+  originalName    String
+  sourceFormat    String
+  editorModelJson Json
+  versionNo       Int                       @default(1)
+  savedBy         String?
+  remark          String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  versions        WellHistoryPptxVersion[]
+  currentFor      WellHistoryArchive?       @relation("CurrentWellHistoryPptx")
+
+  @@index([archiveId])
+  @@index([wellNo])
+}
+
+model WellHistoryPptxVersion {
+  id              String             @id @default(uuid())
+  pptxId          String
+  pptx            WellHistoryPptx    @relation(fields: [pptxId], references: [id], onDelete: Cascade)
+  archiveId       String
+  archive         WellHistoryArchive @relation("WellHistoryArchivePptxVersion", fields: [archiveId], references: [id], onDelete: Cascade)
+  wellNo          String
+  fileUrl         String
+  storedFileName  String
+  originalName    String
+  sourceFormat    String
+  editorModelJson Json
+  versionNo       Int
+  savedBy         String?
+  remark          String?
+  createdAt       DateTime           @default(now())
+
+  @@unique([pptxId, versionNo])
+  @@index([archiveId, versionNo])
+  @@index([wellNo])
+}
+
+model WellHistoryRichTextDocument {
+  id        String             @id @default(uuid())
+  archiveId String             @unique
+  archive   WellHistoryArchive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  wellNo    String             @unique
+  html      String
+  versionNo Int                @default(1)
+  savedBy   String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  versions  WellHistoryRichTextVersion[]
+
+  @@index([wellNo])
+}
+
+model WellHistoryRichTextVersion {
+  id         String                      @id @default(uuid())
+  documentId String
+  document   WellHistoryRichTextDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  archiveId  String
+  archive    WellHistoryArchive          @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  wellNo     String
+  html       String
+  versionNo  Int
+  savedBy    String?
+  createdAt  DateTime                    @default(now())
+
+  @@unique([documentId, versionNo])
+  @@index([archiveId, versionNo])
+  @@index([wellNo])
 }
 
 model WellHistoryExtract {

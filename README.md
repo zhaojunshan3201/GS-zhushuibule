@@ -39,6 +39,12 @@
 
 页面提供单条新增、删除、Excel 导入和模板下载。Excel 导入会先由前端读取工作表内容，再提交到 `/api/well-flushing-records/import` 批量写入 PostgreSQL，便于后续统计、查询和其它业务页面复用数据。
 
+## 指示曲线页面
+
+`指示曲线概览列表` 使用后端 `IndicatorCurveRecord` 表作为数据源，支持按单位、区块、井号和测试日期筛选，页面提供单条新增、删除、Excel 导入和模板下载。
+
+指示曲线图以日注为横坐标、压力为纵坐标展示多条井曲线。井号、日期和测试井段组成的图例显示在图表右上角空白区域，避免占用横坐标下方空间，也不会挤压纵坐标和曲线绘图区。
+
 ## 单井井史页面
 
 `单井井史` 支持 PPT/PPTX 批量导入。导入时后端会先按文件名识别井号，将 PPT 转为 PDF，再保存为该井号当前井史档案。
@@ -145,6 +151,15 @@ DELETE /api/zonal-indicator-summaries/:id
 GET    /api/dynamic-analysis-records
 POST   /api/dynamic-analysis-records
 DELETE /api/dynamic-analysis-records/:id
+```
+
+指示曲线接口：
+
+```text
+GET    /api/indicator-curve-records
+POST   /api/indicator-curve-records
+POST   /api/indicator-curve-records/import
+DELETE /api/indicator-curve-records/:id
 ```
 
 单井井史接口：
@@ -283,3 +298,29 @@ uploads/             本地上传文件
 - 当前目录是 Git 仓库，远端为 GitHub `origin`。提交前建议先运行 `npm run lint` 和 `npm run build`。
 - Windows 下如果 `npx prisma generate` 报 DLL rename 权限错误，通常是本地 `npm run dev` 正在占用 Prisma Client，先停止 dev server 后重试。
 - 如果终端显示中文乱码，优先确认文件是否为 UTF-8 保存，以及当前终端代码页设置。
+
+## 近期更新（2026-07-13）
+
+### 单井井史
+
+- 上传 PPT/PPTX 后，服务端按页导出 PNG，并按原顺序插入该井的富文本 HTML 正文；原始 PPTX 作为附件保留。
+- 井史正文使用 Word/邮件式富文本编辑器，支持标题、加粗、斜体、下划线、项目列表、表格、图片和字体颜色。
+- 编辑器会在首次打开时定位到最后一段可编辑文字；只有图片时会在末尾补充空段落。输入、换行和光标移动不会再被状态同步重置。
+- 编辑操作使用 HTML 正文版本号进行乐观锁保护；查看者可直接只读浏览同一份排版内容。
+- “下载 PDF”会将当前富文本正文（图片、文字、表格与颜色）渲染为多页 PDF 下载。
+
+### 筛选与系统设置
+
+- 业务筛选栏中的“单位”统一显示为“作业区”。
+- 系统设置页对异常的储量记录接口响应作数组校验，避免 `reserveRecords.map` 造成整页空白。
+
+### 本地运行
+
+```powershell
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+```
+
+访问地址：`http://localhost:5000`。

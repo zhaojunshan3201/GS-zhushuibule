@@ -1,0 +1,10 @@
+import psycopg2
+conn = psycopg2.connect('postgresql://postgres:123456@localhost:5432/water_injection_db')
+cur = conn.cursor()
+cur.execute('SELECT count(*) FROM "WaterBlockDailySnapshot"')
+print('WaterBlockDailySnapshot:', cur.fetchone()[0])
+cur.execute('SELECT count(*) FROM "ProductionWellSnapshot"')
+print('ProductionWellSnapshot:', cur.fetchone()[0])
+cur.execute('SELECT count(*) FROM "OracleRefreshBatch"')
+print('OracleRefreshBatch:', cur.fetchone()[0])
+conn.close()

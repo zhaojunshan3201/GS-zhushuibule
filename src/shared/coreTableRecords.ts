@@ -1,4 +1,6 @@
 import { DYNAMIC_ADJUSTMENT_PURPOSES } from "./dynamicAdjustment";
+import { getAllRawBlocksForConsolidated } from "./oilProductionBlocks";
+import { getAllWaterRawBlocksForConsolidated } from "./waterInjectionBlocks";
 
 export type PaginationInput = { page?: unknown; pageSize?: unknown };
 
@@ -29,6 +31,7 @@ export type InjectionTechSeedRow = {
 
 export type WellFlushingSeedRow = {
   unit: string;
+  block: string;
   wellNo: string;
   washDate: string;
   daysSinceLastWash: number;
@@ -44,6 +47,7 @@ export type WellFlushingSeedRow = {
 
 export type WellFlushingForm = {
   unit: string;
+  block: string;
   wellNo: string;
   washDate: string;
   daysSinceLastWash: string;
@@ -195,7 +199,8 @@ export function normalizeWaterCutPayload(input: Record<string, unknown>) {
 
 export function createEmptyWellFlushingForm(defaultDate = new Date().toISOString().slice(0, 10)): WellFlushingForm {
   return {
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
+    block: "",
     wellNo: "",
     washDate: defaultDate,
     daysSinceLastWash: "0",
@@ -213,6 +218,7 @@ export function createEmptyWellFlushingForm(defaultDate = new Date().toISOString
 export function normalizeWellFlushingPayload(input: Record<string, unknown>): WellFlushingSeedRow {
   return {
     unit: trim(input.unit),
+    block: trim(input.block),
     wellNo: trim(input.wellNo),
     washDate: trim(input.washDate),
     daysSinceLastWash: toIntegerOrNull(input.daysSinceLastWash) ?? 0,
@@ -232,7 +238,7 @@ export function createEmptyAbnormalWellForm(): AbnormalWellForm {
     category: "欠注",
     wellNo: "",
     block: "",
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
     process: "分注",
     normalDaily: "",
     normalOilPressure: "",
@@ -268,7 +274,10 @@ export function normalizeAbnormalWellPayload(input: Record<string, unknown>): Ab
 export function buildWaterCutWhere(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
   if (trim(query.unit)) where.unit = trim(query.unit);
-  if (trim(query.block)) where.block = trim(query.block);
+  if (trim(query.block)) {
+    const rawBlocks = getAllRawBlocksForConsolidated(trim(query.block));
+    where.block = rawBlocks.length > 0 ? { in: rawBlocks } : trim(query.block);
+  }
   if (trim(query.wellNo)) where.wellNo = { contains: trim(query.wellNo), mode: "insensitive" };
   if (trim(query.waterCutRange) === "90-") where.waterCut = { lt: 90 };
   if (trim(query.waterCutRange) === "90-92") where.waterCut = { gte: 90, lt: 92 };
@@ -282,7 +291,10 @@ export function buildWaterCutWhere(query: Record<string, unknown>) {
 export function buildAbnormalWellWhere(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
   if (trim(query.unit)) where.unit = trim(query.unit);
-  if (trim(query.block)) where.block = trim(query.block);
+  if (trim(query.block)) {
+    const rawBlocks = getAllWaterRawBlocksForConsolidated(trim(query.block));
+    where.block = rawBlocks.length > 0 ? { in: rawBlocks } : trim(query.block);
+  }
   if (trim(query.category)) where.category = trim(query.category);
   if (trim(query.process)) where.process = trim(query.process);
   if (trim(query.wellNo)) where.wellNo = { contains: trim(query.wellNo), mode: "insensitive" };
@@ -310,7 +322,7 @@ const INJECTION_TECH_BASE_ROWS: InjectionTechSeedRow[] = [
   {
     wellNo: "雷19-10",
     block: "雷家L",
-    workArea: "采油作业一区",
+    workArea: "高采采油作业一区",
     process: "分层注水",
     packerCount: 3,
     packerModels: ["Y341-114", "Y341-114", "Y341-114", "", "", ""],
@@ -324,7 +336,7 @@ const INJECTION_TECH_BASE_ROWS: InjectionTechSeedRow[] = [
   {
     wellNo: "雷20-12侧",
     block: "雷家L",
-    workArea: "采油作业一区",
+    workArea: "高采采油作业一区",
     process: "偏心分注",
     packerCount: 2,
     packerModels: ["Y341-115", "Y341-115", "", "", "", ""],
@@ -338,7 +350,7 @@ const INJECTION_TECH_BASE_ROWS: InjectionTechSeedRow[] = [
   {
     wellNo: "雷21-10",
     block: "雷家L",
-    workArea: "采油作业一区",
+    workArea: "高采采油作业一区",
     process: "同心分注",
     packerCount: 4,
     packerModels: ["K344-114", "K344-114", "Y341-114", "Y341-114", "", ""],
@@ -352,7 +364,7 @@ const INJECTION_TECH_BASE_ROWS: InjectionTechSeedRow[] = [
   {
     wellNo: "高2-06-2",
     block: "雷家L",
-    workArea: "采油作业一区",
+    workArea: "高采采油作业一区",
     process: "笼统注水",
     packerCount: 1,
     packerModels: ["Y221-114", "", "", "", "", ""],
@@ -366,7 +378,7 @@ const INJECTION_TECH_BASE_ROWS: InjectionTechSeedRow[] = [
   {
     wellNo: "高603",
     block: "高18(南)",
-    workArea: "采油作业一区",
+    workArea: "高采采油作业一区",
     process: "桥式偏心",
     packerCount: 5,
     packerModels: ["Y341-114", "Y341-114", "Y341-115", "Y341-115", "Y211-114", ""],
@@ -380,7 +392,7 @@ const INJECTION_TECH_BASE_ROWS: InjectionTechSeedRow[] = [
   {
     wellNo: "雷25-21",
     block: "雷家L",
-    workArea: "采油作业一区",
+    workArea: "高采采油作业一区",
     process: "分层配注",
     packerCount: 2,
     packerModels: ["K344-114", "Y341-114", "", "", "", ""],
@@ -411,7 +423,8 @@ const buildInjectionTechSeedRows = (): InjectionTechSeedRow[] =>
 
 const WELL_FLUSHING_BASE_ROWS: WellFlushingBaseRow[] = [
   {
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
+    block: "?11",
     wellNo: "GS-101",
     washDate: "2026-05-20",
     daysSinceLastWash: 128,
@@ -425,7 +438,8 @@ const WELL_FLUSHING_BASE_ROWS: WellFlushingBaseRow[] = [
     remark: "洗井正常",
   },
   {
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
+    block: "?11",
     wellNo: "GS-102",
     washDate: "2026-05-18",
     daysSinceLastWash: 96,
@@ -439,7 +453,8 @@ const WELL_FLUSHING_BASE_ROWS: WellFlushingBaseRow[] = [
     remark: "返水清澈",
   },
   {
-    unit: "采油作业二区",
+    unit: "高采采油作业二区",
+    block: "?????",
     wellNo: "GS-103",
     washDate: "2026-05-15",
     daysSinceLastWash: 154,
@@ -462,7 +477,7 @@ const buildWellFlushingSeedRows = (): WellFlushingSeedRow[] =>
 
     return {
       ...base,
-      unit: index % 2 === 0 ? "采油作业一区" : "采油作业二区",
+      unit: index % 2 === 0 ? "高采采油作业一区" : "高采采油作业二区",
       wellNo: `GS-${String(index + 101).padStart(3, "0")}`,
       washDate: `2026-05-${String(day).padStart(2, "0")}`,
       daysSinceLastWash: 80 + index * 3,

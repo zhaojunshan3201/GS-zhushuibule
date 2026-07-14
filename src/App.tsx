@@ -1,5 +1,5 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios, { AxiosHeaders } from "axios";
 import * as XLSX from "xlsx";
 import {
   Activity,
@@ -34,6 +34,8 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "./lib/utils";
+import { PptxWellHistoryEditor } from "./components/PptxWellHistoryEditor";
+import { WellHistoryRichTextEditor } from "./components/WellHistoryRichTextEditor";
 import {
   DYNAMIC_ADJUSTMENT_PURPOSES,
   calculateDynamicAdjustmentDiffs,
@@ -58,6 +60,8 @@ import {
   type SingleWellSealEvaluationForm,
   type SmartTestForm,
 } from "./shared/secondBatchRecords";
+import { OIL_PRODUCTION_BLOCK_UNIT_MAP, getOilProductionBlocks, normalizeOilProductionBlock } from "./shared/oilProductionBlocks";
+
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -92,6 +96,15 @@ type WellHistoryPdfRecord = {
   updatedAt?: string | null;
 };
 
+type WellHistoryPptxRecord = {
+  id?: string;
+  fileUrl?: string | null;
+  originalName?: string | null;
+  versionNo?: number | null;
+  editorModelJson?: Record<string, unknown> | null;
+};
+type WellHistoryRichTextDocument = { html: string; versionNo: number };
+
 type WellHistoryArchiveSummary = {
   id?: string;
   wellNo: string;
@@ -100,10 +113,12 @@ type WellHistoryArchiveSummary = {
   block?: string | null;
   updatedAt?: string | null;
   currentPdf?: WellHistoryPdfRecord | null;
+  currentPptx?: WellHistoryPptxRecord | null;
 };
 
 type WellHistoryArchiveDetail = WellHistoryArchiveSummary & {
   currentPdf?: WellHistoryPdfRecord | null;
+  currentPptx?: WellHistoryPptxRecord | null;
   extract?: Record<string, unknown> | null;
 };
 
@@ -157,6 +172,12 @@ type WaterCutRecord = {
   remark?: string | null;
 };
 
+type WaterCutOpinion = {
+  time: string;
+  content: string;
+  author: string;
+};
+
 type InjectionTechRecord = {
   id: string;
   wellNo: string;
@@ -176,6 +197,7 @@ type InjectionTechRecord = {
 type WellFlushingRecord = {
   id: string;
   unit: string;
+  block?: string | null;
   wellNo: string;
   washDate: string;
   daysSinceLastWash: number;
@@ -209,6 +231,8 @@ type AbnormalWellRecord = {
 
 type ConcentricTestRecord = {
   id: string;
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: number;
@@ -222,6 +246,8 @@ type ConcentricTestRecord = {
 
 type SmartTestRecord = {
   id: string;
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: number;
@@ -237,9 +263,10 @@ type SmartTestRecord = {
 
 type SingleWellInjectionEvaluationRecord = {
   id: string;
+  unit: string;
+  block: string;
   wellNo: string;
   process: string;
-  unit: string;
   evaluationDate: string;
   intervalCount: number;
   actualCount: number;
@@ -250,6 +277,8 @@ type SingleWellInjectionEvaluationRecord = {
 
 type SingleWellSealEvaluationRecord = {
   id: string;
+  unit: string;
+  block: string;
   wellNo: string;
   process: string;
   evaluationDate: string;
@@ -357,32 +386,35 @@ const NAV_ITEMS: Array<{ id: PageType; label: string }> = [
   { id: "abnormal-wells", label: "异常水井" },
   { id: "dynamic-adjustment", label: "动态调配" },
   { id: "indicator-curve", label: "指示曲线" },
-  { id: "key-matters", label: "重点事项中心" },
   { id: "user-management", label: "用户管理" },
   { id: "settings", label: "系统设置" },
-  { id: "audit-log", label: "审计日志" },
 ];
 
 const ZONAL_INJECTION_SUB_ITEMS: Array<{ id: PageType; label: string }> = [
+  { id: "zonal-indicator-summary", label: "分注指标汇总" },
   { id: "concentric-test-history", label: "同心测调井史" },
   { id: "smart-test-history", label: "智能测调井史" },
   { id: "single-well-injection-evaluation", label: "单井注入评价" },
   { id: "single-well-seal-evaluation", label: "单井密封评价" },
-  { id: "zonal-indicator-summary", label: "分注指标汇总" },
 ];
 
 const isZonalInjectionPage = (page: PageType) =>
   page === "zonal-injection" || ZONAL_INJECTION_SUB_ITEMS.some((item) => item.id === page);
 
 const UNIT_OPTIONS = [
-  "采油作业一区",
-  "采油作业二区",
-  "采油作业三区",
+  "高采采油作业一区",
+  "高采采油作业二区",
+  "高采采油作业三区",
   "地质研究所",
   "工艺研究所",
   "采油管理部",
   "厂领导",
 ];
+
+const FILTER_UNIT_OPTIONS = ["高采采油作业一区", "高采采油作业二区", "高采采油作业三区"];
+const getFilterBlockOptions = (unit: string) => getOilProductionBlocks(unit || undefined);
+const MANAGEMENT_UNIT = "采油管理部";
+const MANAGEMENT_PAGES: PageType[] = ["user-management"];
 
 function decodeBase64ToUint8Array(base64: string) {
   const binary = atob(base64);
@@ -577,6 +609,489 @@ function PlaceholderPage({ title }: { title: string }) {
   );
 }
 
+
+type UserRecord = {
+  id: string;
+  name: string;
+  empId: string;
+  email?: string | null;
+  password?: string | null;
+  role: string;
+  unit: string;
+  status: string;
+  phone?: string | null;
+  gender?: string | null;
+};
+
+type UserFormState = {
+  name: string;
+  empId: string;
+  email: string;
+  password: string;
+  role: string;
+  unit: string;
+  status: string;
+  phone: string;
+  gender: string;
+};
+
+const USER_TEXT = {
+  "male": "男",
+  "female": "女",
+  "loadFailed": "用户列表加载失败",
+  "required": "请填写工号、姓名和单位",
+  "updated": "用户信息已更新",
+  "created": "用户已新增",
+  "updateFailed": "用户更新失败",
+  "createFailed": "用户新增失败",
+  "deleteConfirmPrefix": "确定删除用户 ",
+  "deleteConfirmSuffix": " 吗？",
+  "deleted": "用户已删除",
+  "deleteFailed": "用户删除失败",
+  "title": "用户管理",
+  "subtitle": "维护系统登录用户、角色、单位和账号状态。",
+  "keyword": "关键字",
+  "keywordPlaceholder": "工号/姓名/单位",
+  "role": "角色",
+  "status": "状态",
+  "all": "全部",
+  "active": "启用",
+  "inactive": "停用",
+  "query": "查询",
+  "new": "新增",
+  "empId": "工号",
+  "name": "姓名",
+  "password": "密码",
+  "unit": "单位",
+  "phone": "电话",
+  "gender": "性别",
+  "email": "邮箱",
+  "save": "保存",
+  "cancel": "取消",
+  "empty": "暂无用户数据",
+  "edit": "编辑",
+  "delete": "删除",
+  "headers": [
+    "序号",
+    "工号",
+    "姓名",
+    "角色",
+    "单位",
+    "电话",
+    "性别",
+    "状态",
+    "邮箱",
+    "操作"
+  ]
+} as const;
+
+const createEmptyUserForm = (): UserFormState => ({
+  name: "",
+  empId: "",
+  email: "",
+  password: "123456",
+  role: "OPERATOR",
+  unit: UNIT_OPTIONS[0] ?? "",
+  status: "Active",
+  phone: "",
+  gender: USER_TEXT.male,
+});
+
+function UserManagementPage() {
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [keyword, setKeyword] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [form, setForm] = useState<UserFormState>(() => createEmptyUserForm());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await axios.get<UserRecord[]>("/api/users");
+      setUsers(data || []);
+    } catch (err) {
+      setError(USER_TEXT.loadFailed);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadUsers(); }, [loadUsers]);
+
+  const filteredUsers = useMemo(() => {
+    const normalized = keyword.trim().toLowerCase();
+    return users.filter((user) => {
+      const matchesKeyword = !normalized || [user.empId, user.name, user.unit, user.phone].some((value) => String(value || "").toLowerCase().includes(normalized));
+      return matchesKeyword && (!roleFilter || user.role === roleFilter) && (!statusFilter || user.status === statusFilter);
+    });
+  }, [keyword, roleFilter, statusFilter, users]);
+
+  const openCreateForm = () => {
+    setEditingId(null);
+    setForm(createEmptyUserForm());
+    setShowForm(true);
+    setMessage("");
+    setError("");
+  };
+
+  const openEditForm = (user: UserRecord) => {
+    setEditingId(user.id);
+    setForm({
+      name: user.name || "",
+      empId: user.empId || "",
+      email: user.email || "",
+      password: user.password || "",
+      role: user.role || "OPERATOR",
+      unit: user.unit || UNIT_OPTIONS[0] || "",
+      status: user.status || "Active",
+      phone: user.phone || "",
+      gender: user.gender || USER_TEXT.male,
+    });
+    setShowForm(true);
+    setMessage("");
+    setError("");
+  };
+
+  const saveUser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form.empId.trim() || !form.name.trim() || !form.unit.trim()) {
+      setError(USER_TEXT.required);
+      return;
+    }
+    const payload = { ...form, empId: form.empId.trim(), name: form.name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, password: form.password.trim() || "123456" };
+    try {
+      if (editingId) {
+        await axios.patch(`/api/users/${editingId}`, payload);
+        setMessage(USER_TEXT.updated);
+      } else {
+        await axios.post("/api/users/register", payload);
+        setMessage(USER_TEXT.created);
+      }
+      setShowForm(false);
+      await loadUsers();
+    } catch (err) {
+      setError(editingId ? USER_TEXT.updateFailed : USER_TEXT.createFailed);
+    }
+  };
+
+  const deleteUser = async (user: UserRecord) => {
+    if (!window.confirm(`${USER_TEXT.deleteConfirmPrefix}${user.name || user.empId}${USER_TEXT.deleteConfirmSuffix}`)) return;
+    try {
+      await axios.delete(`/api/users/${user.id}`);
+      setMessage(USER_TEXT.deleted);
+      await loadUsers();
+    } catch (err) {
+      setError(USER_TEXT.deleteFailed);
+    }
+  };
+
+  return (
+    <PageShell title={USER_TEXT.title} subtitle={USER_TEXT.subtitle}>
+      <div className="border border-[#8fb7df] bg-[#f7fbff] p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-1">{USER_TEXT.keyword}<input value={keyword} onChange={(event) => setKeyword(event.target.value)} className="h-7 w-40 border border-[#9fc4e8] bg-white px-2" placeholder={USER_TEXT.keywordPlaceholder} /></label>
+          <label className="flex items-center gap-1">{USER_TEXT.role}<select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="h-7 w-28 border border-[#9fc4e8] bg-white px-2"><option value="">{USER_TEXT.all}</option><option value="ADMIN">ADMIN</option><option value="ANALYST">ANALYST</option><option value="OPERATOR">OPERATOR</option></select></label>
+          <label className="flex items-center gap-1">{USER_TEXT.status}<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-7 w-28 border border-[#9fc4e8] bg-white px-2"><option value="">{USER_TEXT.all}</option><option value="Active">{USER_TEXT.active}</option><option value="Inactive">{USER_TEXT.inactive}</option></select></label>
+          <button type="button" onClick={() => void loadUsers()} className="inline-flex h-7 items-center gap-1 rounded border border-[#8fb7df] bg-white px-3 text-xs font-bold text-slate-800 hover:bg-[#eaf4ff]"><Search className="h-3.5 w-3.5" />{USER_TEXT.query}</button>
+          <button type="button" onClick={openCreateForm} className="inline-flex h-7 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-3 text-xs font-bold text-white hover:bg-[#1f6ed4]"><Plus className="h-3.5 w-3.5" />{USER_TEXT.new}</button>
+        </div>
+        {message && <p className="mt-2 text-xs font-bold text-emerald-600">{message}</p>}
+        {error && <p className="mt-2 text-xs font-bold text-red-600">{error}</p>}
+      </div>
+      {showForm && (
+        <form onSubmit={saveUser} className="border border-[#8fb7df] bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[
+              ["empId", USER_TEXT.empId], ["name", USER_TEXT.name], ["password", USER_TEXT.password], ["phone", USER_TEXT.phone], ["email", USER_TEXT.email],
+            ].map(([key, label]) => <label key={key} className="text-xs font-bold text-slate-700">{label}<input value={form[key as keyof UserFormState]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal" /></label>)}
+            <label className="text-xs font-bold text-slate-700">{USER_TEXT.role}<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal"><option value="ADMIN">ADMIN</option><option value="ANALYST">ANALYST</option><option value="OPERATOR">OPERATOR</option></select></label>
+            <label className="text-xs font-bold text-slate-700">{USER_TEXT.unit}<select value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal">{UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+            <label className="text-xs font-bold text-slate-700">{USER_TEXT.status}<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal"><option value="Active">{USER_TEXT.active}</option><option value="Inactive">{USER_TEXT.inactive}</option></select></label>
+            <label className="text-xs font-bold text-slate-700">{USER_TEXT.gender}<select value={form.gender} onChange={(event) => setForm({ ...form, gender: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal"><option value={USER_TEXT.male}>{USER_TEXT.male}</option><option value={USER_TEXT.female}>{USER_TEXT.female}</option></select></label>
+          </div>
+          <div className="mt-4 flex gap-2"><button type="submit" className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{USER_TEXT.save}</button><button type="button" onClick={() => setShowForm(false)} className="h-8 rounded border border-[#9eb8d4] bg-white px-4 text-xs font-bold text-slate-800">{USER_TEXT.cancel}</button></div>
+        </form>
+      )}
+      <div className="overflow-x-auto border border-[#8fb7df] bg-white shadow-sm">
+        <table className="w-full min-w-[980px] border-collapse text-center text-sm">
+          <thead className="bg-[#dcebf8] text-slate-900"><tr>{USER_TEXT.headers.map((title) => <th key={title} className="border border-[#9fc4e8] px-2 py-2">{title}</th>)}</tr></thead>
+          <tbody>
+            {filteredUsers.map((user, index) => (
+              <tr key={user.id} className="hover:bg-[#f7fbff]"><td className="border border-[#9fc4e8] px-2 py-2">{index + 1}</td><td className="border border-[#9fc4e8] px-2 py-2 font-bold">{user.empId}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.name}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.role}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.unit}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.phone || "-"}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.gender || "-"}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.status === "Active" ? USER_TEXT.active : USER_TEXT.inactive}</td><td className="border border-[#9fc4e8] px-2 py-2">{user.email || "-"}</td><td className="border border-[#9fc4e8] px-2 py-2"><button type="button" onClick={() => openEditForm(user)} className="mr-3 font-bold text-[#0057b8]">{USER_TEXT.edit}</button><button type="button" onClick={() => void deleteUser(user)} className="font-bold text-red-600">{USER_TEXT.delete}</button></td></tr>
+            ))}
+            {!loading && filteredUsers.length === 0 && <tr><td colSpan={10} className="border border-[#9fc4e8] px-2 py-8 text-slate-500">{USER_TEXT.empty}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </PageShell>
+  );
+}
+
+
+const SETTINGS_TEXT = {
+  loadFailed: "\u7cfb\u7edf\u8bbe\u7f6e\u52a0\u8f7d\u5931\u8d25",
+  configSaved: "\u7cfb\u7edf\u914d\u7f6e\u5df2\u4fdd\u5b58",
+  configSaveFailed: "\u7cfb\u7edf\u914d\u7f6e\u4fdd\u5b58\u5931\u8d25",
+  responsibilitySaved: "\u5355\u4f4d\u804c\u8d23\u5df2\u4fdd\u5b58",
+  responsibilitySaveFailed: "\u5355\u4f4d\u804c\u8d23\u4fdd\u5b58\u5931\u8d25",
+  reserveSaved: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u5df2\u4fdd\u5b58",
+  reserveDeleted: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u5df2\u5220\u9664",
+  reserveSaveFailed: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u4fdd\u5b58\u5931\u8d25",
+  reserveDeleteFailed: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u5220\u9664\u5931\u8d25",
+  title: "\u7cfb\u7edf\u8bbe\u7f6e",
+  subtitle: "\u7ef4\u62a4\u7cfb\u7edf\u57fa\u7840\u914d\u7f6e\u3001\u5355\u4f4d\u804c\u8d23\u548c\u4e3b\u9875\u50a8\u91cf\u6982\u89c8\u6570\u636e\u3002",
+  baseConfig: "\u57fa\u7840\u914d\u7f6e",
+  saveBase: "\u4fdd\u5b58\u57fa\u7840\u914d\u7f6e",
+  unitResponsibility: "\u5355\u4f4d\u804c\u8d23\u914d\u7f6e",
+  unit: "\u5355\u4f4d",
+  responsibility: "\u804c\u8d23\u8bf4\u660e",
+  placeholder: "\u586b\u5199\u8be5\u5355\u4f4d\u5728\u7cfb\u7edf\u4e2d\u7684\u804c\u8d23\u8bf4\u660e",
+  saveResponsibility: "\u4fdd\u5b58\u5355\u4f4d\u804c\u8d23",
+  reserveTitle: "\u4e3b\u9875\u50a8\u91cf\u6982\u89c8\u6570\u636e\u7ef4\u62a4",
+  addReserve: "\u65b0\u589e\u8bb0\u5f55",
+  updateReserve: "\u4fdd\u5b58\u8bb0\u5f55",
+  cancel: "\u53d6\u6d88",
+  edit: "\u7f16\u8f91",
+  delete: "\u5220\u9664",
+  deleteConfirm: "\u786e\u5b9a\u5220\u9664\u8be5\u50a8\u91cf\u6982\u89c8\u8bb0\u5f55\u5417\uff1f",
+} as const;
+
+const SYSTEM_CONFIG_ITEMS = [
+  { key: "systemName", label: "\u7cfb\u7edf\u540d\u79f0", type: "input" },
+  { key: "loginBg", label: "\u767b\u5f55\u80cc\u666f\u56fe", type: "input" },
+  { key: "loginLogo", label: "\u767b\u5f55Logo", type: "input" },
+  { key: "dynamicOilSingleMonthLiquidDiffMin", label: "对比上月 日产液差值>=", type: "input" },
+  { key: "dynamicOilSingleMonthOilDiffMin", label: "对比上月 日产油差值>=", type: "input" },
+  { key: "dynamicOilSingleMonthWaterDiffMin", label: "对比上月 含水差值>=", type: "input" },
+  { key: "dynamicOilSingleYearLiquidDiffMin", label: "对比上年12月份 日产液差值>=", type: "input" },
+  { key: "dynamicOilSingleYearOilDiffMin", label: "对比上年12月份 日产油差值>=", type: "input" },
+  { key: "dynamicOilSingleYearWaterDiffMin", label: "对比上年12月份 含水差值>=", type: "input" },
+  { key: "dynamicWaterSingleMonthInjectionDiffMin", label: "水井对比上月 日注水差值>=", type: "input" },
+  { key: "dynamicWaterSingleYearInjectionDiffMin", label: "水井对比上年12月份 日注水差值>=", type: "input" },
+] as const;
+
+type HomeReserveOverviewAdminRecord = {
+  id: string;
+  unit: string;
+  block: string;
+  oilArea: number;
+  producingReserve: number;
+  recoverableReserve: number;
+  recoveryRate: number;
+  lastYearOil: number;
+  sortOrder: number;
+};
+
+type HomeReserveOverviewAdminForm = {
+  unit: string;
+  block: string;
+  oilArea: string;
+  producingReserve: string;
+  recoverableReserve: string;
+  recoveryRate: string;
+  lastYearOil: string;
+  sortOrder: string;
+};
+
+const createEmptyHomeReserveForm = (): HomeReserveOverviewAdminForm => ({
+  unit: "\u91c7\u4e00",
+  block: "",
+  oilArea: "0",
+  producingReserve: "0",
+  recoverableReserve: "0",
+  recoveryRate: "0",
+  lastYearOil: "0",
+  sortOrder: "0",
+});
+
+const toHomeReserveForm = (record: HomeReserveOverviewAdminRecord): HomeReserveOverviewAdminForm => ({
+  unit: record.unit,
+  block: record.block,
+  oilArea: String(record.oilArea ?? 0),
+  producingReserve: String(record.producingReserve ?? 0),
+  recoverableReserve: String(record.recoverableReserve ?? 0),
+  recoveryRate: String(record.recoveryRate ?? 0),
+  lastYearOil: String(record.lastYearOil ?? 0),
+  sortOrder: String(record.sortOrder ?? 0),
+});
+
+function SystemSettingsPage() {
+  const [config, setConfig] = useState<Record<string, string>>({});
+  const [responsibilities, setResponsibilities] = useState<Record<string, string>>({});
+  const [reserveRecords, setReserveRecords] = useState<HomeReserveOverviewAdminRecord[]>([]);
+  const [reserveForm, setReserveForm] = useState<HomeReserveOverviewAdminForm>(() => createEmptyHomeReserveForm());
+  const [editingReserveId, setEditingReserveId] = useState<string | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState(UNIT_OPTIONS[0] ?? "");
+  const [responsibilityText, setResponsibilityText] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const loadSettings = useCallback(async () => {
+    setError("");
+    try {
+      const [configResponse, responsibilityResponse, reserveResponse] = await Promise.all([
+        axios.get<Record<string, string>>("/api/config"),
+        axios.get<Record<string, string>>("/api/responsibilities"),
+        axios.get<HomeReserveOverviewAdminRecord[]>("/api/home-reserve-overview-records"),
+      ]);
+      setConfig(configResponse.data || {});
+      setResponsibilities(responsibilityResponse.data || {});
+      setReserveRecords(Array.isArray(reserveResponse.data) ? reserveResponse.data : []);
+      const nextUnit = selectedUnit || UNIT_OPTIONS[0] || "";
+      setResponsibilityText((responsibilityResponse.data || {})[nextUnit] || "");
+    } catch (err) {
+      setError(SETTINGS_TEXT.loadFailed);
+    }
+  }, [selectedUnit]);
+
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
+
+  const updateSelectedUnit = (unit: string) => {
+    setSelectedUnit(unit);
+    setResponsibilityText(responsibilities[unit] || "");
+  };
+
+  const saveConfig = async () => {
+    setError("");
+    try {
+      await Promise.all(SYSTEM_CONFIG_ITEMS.map((item) => axios.post("/api/config", { key: item.key, value: config[item.key] || "" })));
+      setMessage(SETTINGS_TEXT.configSaved);
+      await loadSettings();
+    } catch (err) {
+      setError(SETTINGS_TEXT.configSaveFailed);
+    }
+  };
+
+  const saveResponsibility = async () => {
+    if (!selectedUnit) return;
+    setError("");
+    try {
+      await axios.post("/api/responsibilities", { unit: selectedUnit, responsibility: responsibilityText });
+      setResponsibilities((current) => ({ ...current, [selectedUnit]: responsibilityText }));
+      setMessage(SETTINGS_TEXT.responsibilitySaved);
+    } catch (err) {
+      setError(SETTINGS_TEXT.responsibilitySaveFailed);
+    }
+  };
+
+  const saveReserveRecord = async () => {
+    if (!reserveForm.unit.trim() || !reserveForm.block.trim()) {
+      setError("\u8bf7\u586b\u5199\u5355\u4f4d\u548c\u533a\u5757");
+      return;
+    }
+    setError("");
+    try {
+      if (editingReserveId) {
+        await axios.put(`/api/home-reserve-overview-records/${editingReserveId}`, reserveForm);
+      } else {
+        await axios.post("/api/home-reserve-overview-records", reserveForm);
+      }
+      setReserveForm(createEmptyHomeReserveForm());
+      setEditingReserveId(null);
+      setMessage(SETTINGS_TEXT.reserveSaved);
+      await loadSettings();
+    } catch (err) {
+      setError(SETTINGS_TEXT.reserveSaveFailed);
+    }
+  };
+
+  const deleteReserveRecord = async (record: HomeReserveOverviewAdminRecord) => {
+    if (!window.confirm(SETTINGS_TEXT.deleteConfirm)) return;
+    setError("");
+    try {
+      await axios.delete(`/api/home-reserve-overview-records/${record.id}`);
+      setReserveForm(createEmptyHomeReserveForm());
+      setEditingReserveId(null);
+      setMessage(SETTINGS_TEXT.reserveDeleted);
+      await loadSettings();
+    } catch (err) {
+      setError(SETTINGS_TEXT.reserveDeleteFailed);
+    }
+  };
+
+  const reserveNumberFields: Array<[keyof HomeReserveOverviewAdminForm, string]> = [
+    ["oilArea", "\u542b\u6cb9\u9762\u79ef"],
+    ["producingReserve", "\u52a8\u7528\u50a8\u91cf"],
+    ["recoverableReserve", "\u53ef\u91c7\u50a8\u91cf"],
+    ["recoveryRate", "\u6807\u5b9a\u91c7\u6536\u7387"],
+    ["lastYearOil", "\u4e0a\u5e74\u5ea6\u4ea7\u6cb9"],
+    ["sortOrder", "\u6392\u5e8f"],
+  ];
+
+  return (
+    <PageShell title={SETTINGS_TEXT.title} subtitle={SETTINGS_TEXT.subtitle}>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
+        <div className="border border-[#8fb7df] bg-white shadow-sm">
+          <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">{SETTINGS_TEXT.baseConfig}</div>
+          <div className="grid gap-3 p-4 md:grid-cols-3">
+            {SYSTEM_CONFIG_ITEMS.map((item) => (
+              <label key={item.key} className="text-xs font-bold text-slate-700">
+                {item.label}
+                <input value={config[item.key] || ""} onChange={(event) => setConfig({ ...config, [item.key]: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal" />
+              </label>
+            ))}
+          </div>
+          <div className="border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
+            <button type="button" onClick={() => void saveConfig()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{SETTINGS_TEXT.saveBase}</button>
+          </div>
+        </div>
+
+        <div className="border border-[#8fb7df] bg-white shadow-sm">
+          <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">{SETTINGS_TEXT.unitResponsibility}</div>
+          <div className="space-y-3 p-4 text-sm">
+            <label className="block text-xs font-bold text-slate-700">{SETTINGS_TEXT.unit}<select value={selectedUnit} onChange={(event) => updateSelectedUnit(event.target.value)} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal">{UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+            <label className="block text-xs font-bold text-slate-700">{SETTINGS_TEXT.responsibility}<textarea value={responsibilityText} onChange={(event) => setResponsibilityText(event.target.value)} className="mt-1 h-32 w-full resize-none border border-[#9fc4e8] px-2 py-1 font-normal" placeholder={SETTINGS_TEXT.placeholder} /></label>
+            <button type="button" onClick={() => void saveResponsibility()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{SETTINGS_TEXT.saveResponsibility}</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-[#8fb7df] bg-white shadow-sm">
+        <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">{SETTINGS_TEXT.reserveTitle}</div>
+        <div className="grid gap-3 border-b border-[#d6e8f8] bg-[#f7fbff] p-4 md:grid-cols-4 xl:grid-cols-8">
+          <label className="text-xs font-bold text-slate-700">{SETTINGS_TEXT.unit}<select value={reserveForm.unit} onChange={(event) => setReserveForm({ ...reserveForm, unit: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal"><option value={"\u91c7\u4e00"}>{"\u91c7\u4e00"}</option><option value={"\u91c7\u4e8c"}>{"\u91c7\u4e8c"}</option></select></label>
+          <label className="text-xs font-bold text-slate-700">{"\u533a\u5757"}<input value={reserveForm.block} onChange={(event) => setReserveForm({ ...reserveForm, block: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal" /></label>
+          {reserveNumberFields.map(([key, label]) => (
+            <label key={key} className="text-xs font-bold text-slate-700">{label}<input type="number" step="0.01" value={reserveForm[key]} onChange={(event) => setReserveForm({ ...reserveForm, [key]: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal" /></label>
+          ))}
+          <div className="flex items-end gap-2 xl:col-span-8">
+            <button type="button" onClick={() => void saveReserveRecord()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{editingReserveId ? SETTINGS_TEXT.updateReserve : SETTINGS_TEXT.addReserve}</button>
+            {editingReserveId && <button type="button" onClick={() => { setEditingReserveId(null); setReserveForm(createEmptyHomeReserveForm()); }} className="h-8 rounded border border-[#9eb8d4] bg-white px-4 text-xs font-bold text-slate-800">{SETTINGS_TEXT.cancel}</button>}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] border-collapse text-center text-sm">
+            <thead className="bg-[#dcebf8] text-slate-900"><tr>{["\u5e8f\u53f7", "\u5355\u4f4d", "\u533a\u5757", "\u542b\u6cb9\u9762\u79ef", "\u52a8\u7528\u50a8\u91cf", "\u53ef\u91c7\u50a8\u91cf", "\u6807\u5b9a\u91c7\u6536\u7387", "\u4e0a\u5e74\u5ea6\u4ea7\u6cb9", "\u6392\u5e8f", "\u64cd\u4f5c"].map((title) => <th key={title} className="border border-[#9fc4e8] px-2 py-2">{title}</th>)}</tr></thead>
+            <tbody>
+              {reserveRecords.map((record, index) => (
+                <tr key={record.id} className={editingReserveId === record.id ? "bg-red-50" : "hover:bg-[#f7fbff]"}>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{index + 1}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.unit}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2 font-bold">{record.block}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.oilArea}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.producingReserve}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.recoverableReserve}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.recoveryRate}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.lastYearOil}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2">{record.sortOrder}</td>
+                  <td className="border border-[#9fc4e8] px-2 py-2"><button type="button" onClick={() => { setEditingReserveId(record.id); setReserveForm(toHomeReserveForm(record)); }} className="mr-3 font-bold text-[#0057b8]">{SETTINGS_TEXT.edit}</button><button type="button" onClick={() => void deleteReserveRecord(record)} className="font-bold text-red-600">{SETTINGS_TEXT.delete}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {(message || error) && <div className="border border-[#8fb7df] bg-[#f7fbff] px-4 py-2 text-sm font-bold">{message && <span className="text-emerald-600">{message}</span>}{error && <span className="text-red-600">{error}</span>}</div>}
+    </PageShell>
+  );
+}
+
 function ZonalTableShell({
   title,
   filterMode = "default",
@@ -621,15 +1136,14 @@ function ZonalTableShell({
                 <>
                   <label className="flex items-center gap-1">
                     <span>采油厂</span>
-                    <select className={`${filterClass} w-24`} defaultValue="高齐采油厂">
-                      <option>高齐采油厂</option>
+                    <select className={`${filterClass} w-24`} defaultValue="高升采油厂">
+                      <option>高升采油厂</option>
                     </select>
                   </label>
                   <label className="flex items-center gap-1">
                     <span>作业区</span>
-                    <select className={`${filterClass} w-36`} defaultValue="高采石油作业二区">
-                      <option>高采石油作业二区</option>
-                      <option>采油作业一区</option>
+                    <select className={`${filterClass} w-36`} defaultValue="高采采油作业一区">
+                      {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </label>
                   <label className="flex items-center gap-1">
@@ -661,9 +1175,9 @@ function ZonalTableShell({
                 <>
                   <label className="flex items-center gap-1">
                     <span>评价单位</span>
-                    <select className={`${filterClass} w-28`} defaultValue="采油作业一区">
-                      <option>采油作业一区</option>
-                      <option>采油作业二区</option>
+                    <select className={`${filterClass} w-28`} defaultValue="高采采油作业一区">
+                      <option>高采采油作业一区</option>
+                      <option>高采采油作业二区</option>
                       <option>地质研究所</option>
                       <option>工艺研究所</option>
                     </select>
@@ -707,20 +1221,16 @@ function ZonalTableShell({
               {filterMode === "abnormal" && (
                 <>
                   <label className="flex items-center gap-1">
-                    <span>单位</span>
-                    <select className={`${filterClass} w-28`} defaultValue="采油作业一区">
-                      <option>采油作业一区</option>
-                      <option>采油作业二区</option>
-                      <option>采油作业三区</option>
+                    <span>作业区</span>
+                    <select className={`${filterClass} w-36`} defaultValue="高采采油作业一区">
+                      {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </label>
                   <label className="flex items-center gap-1">
                     <span>区块</span>
-                    <select className={`${filterClass} w-24`} defaultValue="请选择">
-                      <option>请选择</option>
-                      <option>区块1</option>
-                      <option>区块2</option>
-                      <option>区块3</option>
+                    <select className={`${filterClass} w-24`} defaultValue="">
+                      <option value="">请选择</option>
+                      {getFilterBlockOptions(FILTER_UNIT_OPTIONS[0]).map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </label>
                   <label className="flex items-center gap-1">
@@ -852,7 +1362,7 @@ function ConcentricTestHistoryPage() {
   const [records, setRecords] = useState<ConcentricTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState({ wellNo: "", fromDate: "", toDate: "" });
+  const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
   const [form, setForm] = useState<ConcentricTestForm>(() => createEmptyConcentricTestForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -890,14 +1400,14 @@ function ConcentricTestHistoryPage() {
   };
 
   const openCreateForm = () => {
-    setForm({ ...createEmptyConcentricTestForm(), wellNo: filters.wellNo, testDate: filters.fromDate || new Date().toISOString().slice(0, 10) });
+    setForm({ ...createEmptyConcentricTestForm(), unit: filters.unit || "\u9ad8\u91c7\u91c7\u6cb9\u4f5c\u4e1a\u4e00\u533a", block: filters.block, wellNo: filters.wellNo, testDate: filters.fromDate || new Date().toISOString().slice(0, 10) });
     setShowForm(true);
     setError("");
   };
 
   const handleSave = async () => {
-    if (!form.wellNo.trim() || !form.testDate || !Number.isFinite(Number(form.allocatorCount))) {
-      setError("请填写井号、测调日期和配水器总个数");
+    if (!form.unit.trim() || !form.block.trim() || !form.wellNo.trim() || !form.testDate || !Number.isFinite(Number(form.allocatorCount))) {
+      setError("请填写作业区、区块、井号、测调日期和配水器总个数");
       return;
     }
     setSaving(true);
@@ -931,7 +1441,8 @@ function ConcentricTestHistoryPage() {
 
   const toolbar = (
     <>
-      <span>井号</span><input className="h-6 w-24 border px-1" value={filters.wellNo} onChange={(event) => setFilters({ ...filters, wellNo: event.target.value })} />
+      <span>作业区</span><select className="h-6 w-36 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value, block: "" })}><option value="">请选择</option>{FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+      <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>日期</span><input type="date" className="h-6 border px-1" value={filters.fromDate} onChange={(event) => setFilters({ ...filters, fromDate: event.target.value })} />
       <span>至</span><input type="date" className="h-6 border px-1" value={filters.toDate} onChange={(event) => setFilters({ ...filters, toDate: event.target.value })} />
       <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
@@ -945,11 +1456,13 @@ function ConcentricTestHistoryPage() {
     <div>
       {confirmDialog}
       <ZonalTableShell title="同心测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
-        <table className="w-full min-w-[1180px] border-collapse bg-white">
+        <table className="w-full min-w-[1320px] border-collapse bg-white">
           <thead>
             <tr>
               <th rowSpan={2} className={headClass}>序号</th>
               <th rowSpan={2} className={headClass}>井号</th>
+              <th rowSpan={2} className={headClass}>作业区</th>
+              <th rowSpan={2} className={headClass}>区块</th>
               <th rowSpan={2} className={headClass}>测调日期</th>
               <th rowSpan={2} className={headClass}>配水器<br />总个数</th>
               <th colSpan={3} className={headClass}>测试自由度评价</th>
@@ -968,6 +1481,8 @@ function ConcentricTestHistoryPage() {
               <tr key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{(currentPage - 1) * pageSize + index + 1}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.wellNo}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.unit}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.block}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{apiDateOnly(row.testDate)}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.allocatorCount}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.freedom || "-"}</td>
@@ -982,7 +1497,7 @@ function ConcentricTestHistoryPage() {
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={16} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {!records.length && <tr><td colSpan={18} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
       </ZonalTableShell>
@@ -994,6 +1509,13 @@ function ConcentricTestHistoryPage() {
               <button type="button" onClick={() => setShowForm(false)} className="text-sm font-bold text-gray-500 hover:text-gray-900">关闭</button>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
+              <select className={inputClass} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select className={inputClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
               <input className={inputClass} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
               <input type="date" className={inputClass} value={form.testDate} onChange={(event) => updateForm("testDate", event.target.value)} />
               <input type="number" className={inputClass} placeholder="配水器总个数" value={form.allocatorCount} onChange={(event) => updateForm("allocatorCount", event.target.value)} />
@@ -1090,7 +1612,7 @@ function SmartTestHistoryPage() {
   const [records, setRecords] = useState<SmartTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState({ wellNo: "", fromDate: "", toDate: "" });
+  const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
   const [form, setForm] = useState<SmartTestForm>(() => createEmptySmartTestForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1132,14 +1654,14 @@ function SmartTestHistoryPage() {
   };
 
   const openCreateForm = () => {
-    setForm({ ...createEmptySmartTestForm(), wellNo: filters.wellNo, testDate: filters.fromDate || new Date().toISOString().slice(0, 10) });
+    setForm({ ...createEmptySmartTestForm(), unit: filters.unit || "\u9ad8\u91c7\u91c7\u6cb9\u4f5c\u4e1a\u4e00\u533a", block: filters.block, wellNo: filters.wellNo, testDate: filters.fromDate || new Date().toISOString().slice(0, 10) });
     setShowForm(true);
     setError("");
   };
 
   const handleSave = async () => {
-    if (!form.wellNo.trim() || !form.testDate || !Number.isFinite(Number(form.allocatorCount))) {
-      setError("请填写井号、测调日期和配水器总个数");
+    if (!form.unit.trim() || !form.block.trim() || !form.wellNo.trim() || !form.testDate || !Number.isFinite(Number(form.allocatorCount))) {
+      setError("请填写作业区、区块、井号、测调日期和配水器总个数");
       return;
     }
     setSaving(true);
@@ -1172,7 +1694,8 @@ function SmartTestHistoryPage() {
 
   const toolbar = (
     <>
-      <span>井号</span><input className="h-6 w-24 border px-1" value={filters.wellNo} onChange={(event) => setFilters({ ...filters, wellNo: event.target.value })} />
+      <span>作业区</span><select className="h-6 w-36 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value, block: "" })}><option value="">请选择</option>{FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+      <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>日期</span><input type="date" className="h-6 border px-1" value={filters.fromDate} onChange={(event) => setFilters({ ...filters, fromDate: event.target.value })} />
       <span>至</span><input type="date" className="h-6 border px-1" value={filters.toDate} onChange={(event) => setFilters({ ...filters, toDate: event.target.value })} />
       <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
@@ -1186,11 +1709,13 @@ function SmartTestHistoryPage() {
     <div>
       {confirmDialog}
       <ZonalTableShell title="智能测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
-        <table className="w-full min-w-[1680px] border-collapse bg-white">
+        <table className="w-full min-w-[1820px] border-collapse bg-white">
           <thead>
             <tr>
               <th rowSpan={2} className={headClass}>序号</th>
               <th rowSpan={2} className={headClass}>井号</th>
+              <th rowSpan={2} className={headClass}>作业区</th>
+              <th rowSpan={2} className={headClass}>区块</th>
               <th rowSpan={2} className={headClass}>测调<br />日期</th>
               <th rowSpan={2} className={headClass}>配水器<br />总个数</th>
               <th colSpan={5} className={headClass}>单层日配注量（自上而下）</th>
@@ -1215,6 +1740,8 @@ function SmartTestHistoryPage() {
               <tr key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{(currentPage - 1) * pageSize + index + 1}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.wellNo}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.unit}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.block}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{apiDateOnly(row.testDate)}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.allocatorCount}</td>
                 {[row.dailyAllocation, row.dailyInjection, row.allocationDiff, row.nozzleOpening].flatMap((values, groupIndex) =>
@@ -1231,7 +1758,7 @@ function SmartTestHistoryPage() {
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={35} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {!records.length && <tr><td colSpan={38} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
       </ZonalTableShell>
@@ -1243,6 +1770,13 @@ function SmartTestHistoryPage() {
               <button type="button" onClick={() => setShowForm(false)} className="text-sm font-bold text-gray-500 hover:text-gray-900">关闭</button>
             </div>
             <div className="grid gap-3 md:grid-cols-4">
+              <select className={inputClass} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select className={inputClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
               <input className={inputClass} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
               <input type="date" className={inputClass} value={form.testDate} onChange={(event) => updateForm("testDate", event.target.value)} />
               <input type="number" className={inputClass} placeholder="配水器总个数" value={form.allocatorCount} onChange={(event) => updateForm("allocatorCount", event.target.value)} />
@@ -1280,9 +1814,9 @@ function SmartTestHistoryPage() {
 }
 
 const SINGLE_WELL_INJECTION_EVALUATION_TEMPLATE_ROWS = [
-  { wellNo: "雷19-10", process: "同心分注", unit: "采油作业一区", date: "2026-05-10", intervalCount: 4, actualCount: 4, qualifiedCount: 3, unqualified: ["1", "0", "1", "0", "0", "0"], remark: "欠注1层" },
-  { wellNo: "雷20-12侧", process: "智能分注", unit: "采油作业一区", date: "2026-05-08", intervalCount: 4, actualCount: 4, qualifiedCount: 4, unqualified: ["0", "0", "0", "0", "0", "0"], remark: "合格" },
-  { wellNo: "雷21-8", process: "桥式同心", unit: "采油作业二区", date: "2026-05-06", intervalCount: 3, actualCount: 3, qualifiedCount: 2, unqualified: ["1", "1", "0", "0", "0", "0"], remark: "封隔器待复核" },
+  { wellNo: "雷19-10", process: "同心分注", unit: "", date: "2026-05-10", intervalCount: 4, actualCount: 4, qualifiedCount: 3, unqualified: ["1", "0", "1", "0", "0", "0"], remark: "欠注1层" },
+  { wellNo: "雷20-12侧", process: "智能分注", unit: "", date: "2026-05-08", intervalCount: 4, actualCount: 4, qualifiedCount: 4, unqualified: ["0", "0", "0", "0", "0", "0"], remark: "合格" },
+  { wellNo: "雷21-8", process: "桥式同心", unit: "高采采油作业二区", date: "2026-05-06", intervalCount: 3, actualCount: 3, qualifiedCount: 2, unqualified: ["1", "1", "0", "0", "0", "0"], remark: "封隔器待复核" },
 ];
 
 const SINGLE_WELL_INJECTION_EVALUATION_ROWS = Array.from({ length: 38 }, (_, index) => {
@@ -1304,7 +1838,7 @@ function SingleWellInjectionEvaluationPage() {
   const [records, setRecords] = useState<SingleWellInjectionEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState({ unit: "", process: "", wellNo: "" });
+  const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
   const [form, setForm] = useState<SingleWellInjectionEvaluationForm>(() => createEmptySingleWellInjectionEvaluationForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1342,14 +1876,14 @@ function SingleWellInjectionEvaluationPage() {
   };
 
   const openCreateForm = () => {
-    setForm({ ...createEmptySingleWellInjectionEvaluationForm(), wellNo: filters.wellNo, process: filters.process, unit: filters.unit });
+    setForm({ ...createEmptySingleWellInjectionEvaluationForm(), wellNo: filters.wellNo, process: filters.process, unit: filters.unit || "\u9ad8\u91c7\u91c7\u6cb9\u4f5c\u4e1a\u4e00\u533a", block: filters.block });
     setShowForm(true);
     setError("");
   };
 
   const handleSave = async () => {
-    if (!form.wellNo.trim() || !form.process.trim() || !form.unit.trim() || !form.evaluationDate) {
-      setError("请填写井号、分注工艺、评价单位和评价日期");
+    if (!form.unit.trim() || !form.block.trim() || !form.wellNo.trim() || !form.process.trim() || !form.evaluationDate) {
+      setError("请填写作业区、区块、井号、分注工艺、评价单位和评价日期");
       return;
     }
     setSaving(true);
@@ -1382,9 +1916,9 @@ function SingleWellInjectionEvaluationPage() {
 
   const toolbar = (
     <>
-      <span>单位</span><input className="h-6 w-28 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value })} />
+      <span>作业区</span><select className="h-6 w-36 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value, block: "" })}><option value="">请选择</option>{FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+      <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>工艺</span><input className="h-6 w-24 border px-1" value={filters.process} onChange={(event) => setFilters({ ...filters, process: event.target.value })} />
-      <span>井号</span><input className="h-6 w-24 border px-1" value={filters.wellNo} onChange={(event) => setFilters({ ...filters, wellNo: event.target.value })} />
       <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
       <button className={toolButtonClass} onClick={openCreateForm}>新增</button>
       <button className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`} disabled={!selectedId} onClick={handleDelete}>删除</button>
@@ -1396,19 +1930,26 @@ function SingleWellInjectionEvaluationPage() {
     <div>
       {confirmDialog}
       <ZonalTableShell title="单井注入评价" filterMode="single-injection" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
-        <table className="w-full min-w-[1180px] border-collapse bg-white">
+        <table className="w-full min-w-[1320px] border-collapse bg-white">
           <thead>
             <tr>
-              {["序号", "井号", "分注工艺", "评价单位", "评价日期", "分注层段数", "实注层段数", "合格层段数"].map((header) => (
-                <th key={header} rowSpan={2} className={headClass}>{header}</th>
+              {["序号", "井号", "作业区", "区块", "分注工艺", "评价单位", "评价日期", "分注层段数", "实注层段数", "合格层段数"].map((header) => (
+                <th key={header} rowSpan={3} className={headClass}>{header}</th>
               ))}
               <th colSpan={6} className={headClass}>分注不合格层段统计</th>
-              <th rowSpan={2} className={headClass}>备注</th>
+              <th rowSpan={3} className={headClass}>备注</th>
             </tr>
             <tr>
-              {["小计", "封隔器失效", "欠注", "测调不准", "窜槽", "其它"].map((header) => (
-                <th key={header} className={headClass}>{header}</th>
+              {["小计", "封隔器失效", "欠注"].map((header) => (
+                <th key={header} rowSpan={2} className={headClass}>{header}</th>
               ))}
+              <th className={headClass}>测调</th>
+              {["窜槽", "其它"].map((header) => (
+                <th key={header} rowSpan={2} className={headClass}>{header}</th>
+              ))}
+            </tr>
+            <tr>
+              <th className={headClass}>不准</th>
             </tr>
           </thead>
           <tbody>
@@ -1416,6 +1957,8 @@ function SingleWellInjectionEvaluationPage() {
               <tr key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{(currentPage - 1) * pageSize + index + 1}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.wellNo}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.unit}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.block}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.process}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.unit}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{apiDateOnly(row.evaluationDate)}</td>
@@ -1428,7 +1971,7 @@ function SingleWellInjectionEvaluationPage() {
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={15} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {!records.length && <tr><td colSpan={17} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
       </ZonalTableShell>
@@ -1441,8 +1984,15 @@ function SingleWellInjectionEvaluationPage() {
             </div>
             <div className="grid gap-3 md:grid-cols-4">
               <input className={inputClass} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
+              <select className={inputClass} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select className={inputClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
               <input className={inputClass} placeholder="分注工艺" value={form.process} onChange={(event) => updateForm("process", event.target.value)} />
-              <input className={inputClass} placeholder="评价单位" value={form.unit} onChange={(event) => updateForm("unit", event.target.value)} />
+              <input className={inputClass} placeholder="评价单位（默认同作业区）" value={form.unit} readOnly />
               <input type="date" className={inputClass} value={form.evaluationDate} onChange={(event) => updateForm("evaluationDate", event.target.value)} />
               <input type="number" className={inputClass} placeholder="分注层段数" value={form.intervalCount} onChange={(event) => updateForm("intervalCount", event.target.value)} />
               <input type="number" className={inputClass} placeholder="实注层段数" value={form.actualCount} onChange={(event) => updateForm("actualCount", event.target.value)} />
@@ -1531,7 +2081,7 @@ function AbnormalWellsPage() {
   const openCreateForm = () => {
     setForm({
       ...createEmptyAbnormalWellForm(),
-      unit: filters.unit || "采油作业一区",
+      unit: filters.unit || "高采采油作业一区",
       block: filters.block,
       wellNo: filters.wellNo,
       category: filters.category || "欠注",
@@ -1581,17 +2131,18 @@ function AbnormalWellsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1">
-            <span>单位</span>
-            <select className={`${filterClass} w-28`} value={filters.unit} onChange={(event) => updateFilter("unit", event.target.value)}>
+            <span>作业区</span>
+            <select className={`${filterClass} w-32`} value={filters.unit} onChange={(event) => setFilters((current) => ({ ...current, unit: event.target.value, block: "" }))}>
               <option value="">请选择</option>
-              <option>采油作业一区</option>
-              <option>采油作业二区</option>
-              <option>采油作业三区</option>
+              {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-1">
             <span>区块</span>
-            <input className={`${filterClass} w-24`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)} />
+            <select className={`${filterClass} w-28`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)}>
+              <option value="">请选择</option>
+              {getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
           </label>
           <label className="flex items-center gap-1">
             <span>井号</span>
@@ -1701,11 +2252,12 @@ function AbnormalWellsPage() {
                 <option>封隔器失效</option>
               </select>
               <input className={filterClass} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
-              <input className={filterClass} placeholder="区块" value={form.block} onChange={(event) => updateForm("block", event.target.value)} />
-              <select className={filterClass} value={form.unit} onChange={(event) => updateForm("unit", event.target.value)}>
-                <option>采油作业一区</option>
-                <option>采油作业二区</option>
-                <option>采油作业三区</option>
+              <select className={filterClass} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select className={filterClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
               <select className={filterClass} value={form.process} onChange={(event) => updateForm("process", event.target.value)}>
                 <option>分注</option>
@@ -1770,7 +2322,7 @@ function SingleWellSealEvaluationPage() {
   const [records, setRecords] = useState<SingleWellSealEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState({ process: "", wellNo: "" });
+  const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
   const [form, setForm] = useState<SingleWellSealEvaluationForm>(() => createEmptySingleWellSealEvaluationForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1808,14 +2360,14 @@ function SingleWellSealEvaluationPage() {
   };
 
   const openCreateForm = () => {
-    setForm({ ...createEmptySingleWellSealEvaluationForm(), wellNo: filters.wellNo, process: filters.process });
+    setForm({ ...createEmptySingleWellSealEvaluationForm(), wellNo: filters.wellNo, process: filters.process, unit: filters.unit || "\u9ad8\u91c7\u91c7\u6cb9\u4f5c\u4e1a\u4e00\u533a", block: filters.block });
     setShowForm(true);
     setError("");
   };
 
   const handleSave = async () => {
-    if (!form.wellNo.trim() || !form.process.trim() || !form.evaluationDate) {
-      setError("请填写井号、分注工艺和评价日期");
+    if (!form.unit.trim() || !form.block.trim() || !form.wellNo.trim() || !form.process.trim() || !form.evaluationDate) {
+      setError("请填写作业区、区块、井号、分注工艺和评价日期");
       return;
     }
     setSaving(true);
@@ -1848,8 +2400,9 @@ function SingleWellSealEvaluationPage() {
 
   const toolbar = (
     <>
+      <span>作业区</span><select className="h-6 w-36 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value, block: "" })}><option value="">请选择</option>{FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+      <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>工艺</span><input className="h-6 w-24 border px-1" value={filters.process} onChange={(event) => setFilters({ ...filters, process: event.target.value })} />
-      <span>井号</span><input className="h-6 w-24 border px-1" value={filters.wellNo} onChange={(event) => setFilters({ ...filters, wellNo: event.target.value })} />
       <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
       <button className={toolButtonClass} onClick={openCreateForm}>新增</button>
       <button className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`} disabled={!selectedId} onClick={handleDelete}>删除</button>
@@ -1861,16 +2414,16 @@ function SingleWellSealEvaluationPage() {
     <div>
       {confirmDialog}
       <ZonalTableShell title="单井密封评价" filterMode="single-seal" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
-        <table className="w-full min-w-[1020px] border-collapse bg-white">
+        <table className="w-full min-w-[1160px] border-collapse bg-white">
           <thead>
             <tr>
-              {["序号", "井号", "分注工艺", "分注层段数", "实注层段数", "评价日期", "需评价密封位置数", "密封合格位置数"].map((header) => (
+              {["\u5e8f\u53f7", "\u4e95\u53f7", "\u4f5c\u4e1a\u533a", "\u533a\u5757", "\u5206\u6ce8\u5de5\u827a", "\u5206\u6ce8\u5c42\u6bb5\u6570", "\u5b9e\u6ce8\u5c42\u6bb5\u6570", "\u8bc4\u4ef7\u65e5\u671f", "\u9700\u8bc4\u4ef7\u5bc6\u5c01\u4f4d\u7f6e\u6570", "\u5bc6\u5c01\u5408\u683c\u4f4d\u7f6e\u6570"].map((header) => (
                 <th key={header} rowSpan={2} className={headClass}>{header}</th>
               ))}
-              <th colSpan={5} className={headClass}>封隔器密封统计</th>
+              <th colSpan={4} className={headClass}>{"\u5c01\u9694\u5668\u5bc6\u5c01\u7edf\u8ba1"}</th>
             </tr>
             <tr>
-              {["一层与二层间", "二层与三层间", "三层与四层间", "四层与五层间", "五层与六层间"].map((header) => (
+              {["\u4e00\u5c42\u4e0e\u4e8c\u5c42\u95f4", "\u4e8c\u5c42\u4e0e\u4e09\u5c42\u95f4", "\u4e09\u5c42\u4e0e\u56db\u5c42\u95f4", "\u56db\u5c42\u4e0e\u4e94\u5c42\u95f4"].map((header) => (
                 <th key={header} className={headClass}>{header}</th>
               ))}
             </tr>
@@ -1880,18 +2433,20 @@ function SingleWellSealEvaluationPage() {
               <tr key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{(currentPage - 1) * pageSize + index + 1}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.wellNo}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.unit}</td>
+                <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.block}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.process}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.intervalCount}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.actualCount}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{apiDateOnly(row.evaluationDate)}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.needSealCount}</td>
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.qualifiedSealCount}</td>
-                {row.sealStats.map((value, valueIndex) => (
+                {row.sealStats.slice(0, 4).map((value, valueIndex) => (
                   <td key={valueIndex} className={selectedTableCellClass(cellClass, row.id === selectedId)}>{value}</td>
                 ))}
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={13} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {!records.length && <tr><td colSpan={14} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
       </ZonalTableShell>
@@ -1904,6 +2459,13 @@ function SingleWellSealEvaluationPage() {
             </div>
             <div className="grid gap-3 md:grid-cols-4">
               <input className={inputClass} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
+              <select className={inputClass} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select className={inputClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
               <input className={inputClass} placeholder="分注工艺" value={form.process} onChange={(event) => updateForm("process", event.target.value)} />
               <input type="date" className={inputClass} value={form.evaluationDate} onChange={(event) => updateForm("evaluationDate", event.target.value)} />
               <input type="number" className={inputClass} placeholder="分注层段数" value={form.intervalCount} onChange={(event) => updateForm("intervalCount", event.target.value)} />
@@ -1913,8 +2475,8 @@ function SingleWellSealEvaluationPage() {
             </div>
             <div className="mt-4 rounded border border-[#d7e5f3] p-3">
               <div className="mb-2 text-sm font-bold text-[#001a33]">封隔器密封统计</div>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-5">
-                {["一层与二层间", "二层与三层间", "三层与四层间", "四层与五层间", "五层与六层间"].map((label, index) => (
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
+                {["一层与二层间", "二层与三层间", "三层与四层间", "四层与五层间"].map((label, index) => (
                   <input key={label} className={inputClass} placeholder={label} value={form.sealStats[index]} onChange={(event) => updateSealStats(index, event.target.value)} />
                 ))}
               </div>
@@ -2058,8 +2620,8 @@ function IndicatorCurvePage() {
   const pageSize = 15;
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const createEmptyIndicatorCurveForm = (): IndicatorCurveForm => ({
-    unit: "采油作业一区",
-    block: "区块1",
+    unit: FILTER_UNIT_OPTIONS[0],
+    block: "",
     wellNo: "",
     testDate: new Date().toISOString().slice(0, 10),
     testInterval: "Ⅰ-Ⅱ",
@@ -2083,6 +2645,8 @@ function IndicatorCurvePage() {
   const [filters, setFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
   const [appliedFilters, setAppliedFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
   const [selectedCurveIds, setSelectedCurveIds] = useState<string[]>([]);
+  const [curveDialogPosition, setCurveDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const curveDragOffsetRef = useRef<{ x: number; y: number } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -2109,7 +2673,7 @@ function IndicatorCurvePage() {
       .filter((row): row is IndicatorCurveRecord => Boolean(row)),
     [chartRecords, records, selectedCurveIds],
   );
-  const displayedChartRecords = selectedCurveRecords.length ? selectedCurveRecords : hasAppliedFilters ? chartRecords : records.slice(0, 1);
+  const displayedChartRecords = selectedCurveRecords;
   const chartSeries = useMemo(() => displayedChartRecords.map((row) => ({
     id: row.id,
     name: `${row.wellNo} / ${String(row.testDate).slice(0, 10)} / ${row.testInterval}`,
@@ -2121,6 +2685,25 @@ function IndicatorCurvePage() {
       { injection: row.injection5, pressure: row.pressure5 },
     ].sort((a, b) => a.injection - b.injection),
   })), [displayedChartRecords]);
+  const chartDomains = useMemo(() => {
+    const points = chartSeries.flatMap((series) => series.points);
+    if (!points.length) {
+      return { x: [0, 100] as [number, number], y: [0, 20] as [number, number] };
+    }
+    const injections = points.map((point) => point.injection);
+    const pressures = points.map((point) => point.pressure);
+    const getDomain = (values: number[], minPadding: number): [number, number] => {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = Math.max(max - min, minPadding);
+      const padding = Math.max(span * 0.1, minPadding);
+      return [Math.max(0, Number((min - padding).toFixed(1))), Number((max + padding).toFixed(1))];
+    };
+    return {
+      x: getDomain(injections, 5),
+      y: getDomain(pressures, 1),
+    };
+  }, [chartSeries]);
   const chartColors = ["#d7000f", "#005bac", "#00a56a", "#8b5cf6", "#f97316", "#0f766e", "#7c2d12", "#1d4ed8"];
   const toVisibleRow = (row: IndicatorCurveRecord) => [
     row.unit,
@@ -2150,13 +2733,37 @@ function IndicatorCurvePage() {
     setCurrentPage(1);
     setJumpPage("1");
   };
-  const handleCurveRowClick = (recordId: string, event: React.MouseEvent<HTMLTableRowElement>) => {
-    if (event.ctrlKey || event.metaKey) {
-      setSelectedCurveIds((current) => (current.includes(recordId) ? current.filter((id) => id !== recordId) : [...current, recordId]));
-      return;
-    }
+  const handleCurveRowClick = (recordId: string) => {
+    setSelectedCurveIds((current) => (current.includes(recordId) ? current.filter((id) => id !== recordId) : [...current, recordId]));
+  };
+  const handleCurveDialogPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const dialog = event.currentTarget.closest('[data-indicator-curve-dialog="true"]') as HTMLDivElement | null;
+    if (!dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    curveDragOffsetRef.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    setCurveDialogPosition({ x: rect.left, y: rect.top });
 
-    setSelectedCurveIds([recordId]);
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const offset = curveDragOffsetRef.current;
+      if (!offset) return;
+      const minY = 88;
+      const maxX = Math.max(0, window.innerWidth - rect.width);
+      const maxY = Math.max(minY, window.innerHeight - rect.height);
+      setCurveDialogPosition({
+        x: Math.min(Math.max(0, moveEvent.clientX - offset.x), maxX),
+        y: Math.min(Math.max(minY, moveEvent.clientY - offset.y), maxY),
+      });
+    };
+    const handlePointerUp = () => {
+      curveDragOffsetRef.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
   };
   const selectedDeleteRecord = selectedCurveIds.length === 1
     ? records.find((row) => row.id === selectedCurveIds[0]) || chartRecords.find((row) => row.id === selectedCurveIds[0]) || null
@@ -2290,7 +2897,7 @@ function IndicatorCurvePage() {
   const handleDownloadTemplate = () => {
     const worksheet = XLSX.utils.json_to_sheet([
       {
-        "单位": "采油作业一区",
+        "单位": "高采采油作业一区",
         "区块": "区块1",
         "井号": "GS-201",
         "测试日期": "2026-05-24",
@@ -2307,7 +2914,7 @@ function IndicatorCurvePage() {
         "压力5": 10.8,
       },
       {
-        "单位": "采油作业一区",
+        "单位": "高采采油作业一区",
         "区块": "区块1",
         "井号": "GS-201",
         "测试日期": "2026-05-27",
@@ -2447,57 +3054,6 @@ function IndicatorCurvePage() {
         </div>
       </div>
 
-      <div className="sticky top-0 z-20 border-t border-[#99c7f3] bg-white shadow-sm">
-        <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">指示曲线概览列表</h1>
-        <div className="relative h-[360px] border border-[#99c7f3] bg-white">
-          <div className="pointer-events-none absolute right-10 top-4 z-10 grid max-w-[520px] grid-cols-2 gap-x-4 gap-y-1 bg-white/85 px-2 py-1 text-[12px] leading-5">
-            {chartSeries.map((series, index) => (
-              <div key={`indicator-legend-${series.id}`} className="flex min-w-0 items-center gap-1.5">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
-                <span className="truncate" style={{ color: chartColors[index % chartColors.length] }}>{series.name}</span>
-              </div>
-            ))}
-          </div>
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 24, right: 32, bottom: 42, left: 28 }}>
-              <CartesianGrid stroke="#d7e8f8" />
-              <XAxis
-                dataKey="injection"
-                name="日注"
-                type="number"
-                tick={{ fontSize: 12, fill: "#001a33" }}
-                label={{ value: "日注", position: "insideBottom", offset: -24, fill: "#001a33", fontSize: 13 }}
-              />
-              <YAxis
-                dataKey="pressure"
-                name="压力"
-                type="number"
-                tick={{ fontSize: 12, fill: "#001a33" }}
-                label={{ value: "压力", angle: -90, position: "insideLeft", fill: "#001a33", fontSize: 13 }}
-              />
-              <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value, name) => [value, name === "pressure" ? "压力" : "日注"]} />
-              {chartSeries.map((series, index) => (
-                <Scatter
-                  key={series.id}
-                  name={series.name}
-                  data={series.points}
-                  fill={chartColors[index % chartColors.length]}
-                  line={{ stroke: chartColors[index % chartColors.length], strokeWidth: 2 }}
-                  shape="circle"
-                >
-                  <LabelList
-                    dataKey="pressure"
-                    position="top"
-                    formatter={(value: number) => value.toFixed(1)}
-                    style={{ fill: chartColors[index % chartColors.length], fontSize: 12, fontWeight: 700 }}
-                  />
-                </Scatter>
-              ))}
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
       <div className="max-h-[540px] overflow-auto border-t border-[#99c7f3] bg-white custom-scrollbar">
         <table className="w-full min-w-[1170px] table-fixed border-collapse bg-white">
           <colgroup>
@@ -2518,7 +3074,7 @@ function IndicatorCurvePage() {
               const selected = selectedCurveIds.includes(record.id);
 
               return (
-                <tr key={record.id} className="group cursor-pointer" onClick={(event) => handleCurveRowClick(record.id, event)}>
+                <tr key={record.id} className="group cursor-pointer" onClick={() => handleCurveRowClick(record.id)}>
                   {row.map((value, valueIndex) => (
                     <td key={`${record.id}-${valueIndex}`} className={selectableCellClass(selected)}>{value}</td>
                   ))}
@@ -2535,6 +3091,72 @@ function IndicatorCurvePage() {
           </tbody>
         </table>
       </div>
+
+      {chartSeries.length > 0 && (
+        <div className="pointer-events-none fixed inset-0 z-[9999]">
+          <div
+            data-indicator-curve-dialog="true"
+            className="pointer-events-auto absolute w-[min(1024px,calc(100vw-48px))] border border-[#99c7f3] bg-white shadow-2xl"
+            style={curveDialogPosition ? { left: curveDialogPosition.x, top: curveDialogPosition.y } : { left: "50%", top: 96, transform: "translateX(-50%)" }}
+          >
+            <div className="flex cursor-move select-none items-center justify-between border-b border-[#99c7f3] bg-[#f4f8fc] px-4 py-2" onPointerDown={handleCurveDialogPointerDown}>
+              <h2 className="text-[20px] font-bold text-[#cc0000]">{"\u6307\u793a\u66f2\u7ebf"}</h2>
+              <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setSelectedCurveIds([])} className="cursor-pointer rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 py-1 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
+                {"\u5173\u95ed"}
+              </button>
+            </div>
+            <div className="flex h-[420px] bg-white">
+              <div className="w-64 shrink-0 overflow-y-auto border-r border-[#d7e8f8] bg-white px-3 py-4 text-[12px] leading-5">
+                <div className="mb-2 font-bold text-[#001a33]">{"\u4e95\u53f7"}</div>
+                <div className="grid grid-cols-1 gap-y-1">
+                  {chartSeries.map((series, index) => (
+                    <div key={`indicator-legend-${series.id}`} className="flex min-w-0 items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                      <span className="truncate" style={{ color: chartColors[index % chartColors.length] }}>{series.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{ top: 24, right: 32, bottom: 42, left: 28 }}>
+                  <CartesianGrid stroke="#d7e8f8" />
+                  <XAxis
+                    dataKey="injection"
+                    name={"\u65e5\u6ce8"}
+                    type="number"
+                    domain={chartDomains.x}
+                    allowDataOverflow={false}
+                    tick={{ fontSize: 12, fill: "#001a33" }}
+                    label={{ value: "\u65e5\u6ce8", position: "insideBottom", offset: -24, fill: "#001a33", fontSize: 13 }}
+                  />
+                  <YAxis
+                    dataKey="pressure"
+                    name={"\u538b\u529b"}
+                    type="number"
+                    domain={chartDomains.y}
+                    allowDataOverflow={false}
+                    tick={{ fontSize: 12, fill: "#001a33" }}
+                    label={{ value: "\u538b\u529b", angle: -90, position: "insideLeft", fill: "#001a33", fontSize: 13 }}
+                  />
+                  <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value, name) => [value, name === "pressure" ? "\u538b\u529b" : "\u65e5\u6ce8"]} />
+                  {chartSeries.map((series, index) => (
+                    <Scatter
+                      key={series.id}
+                      name={series.name}
+                      data={series.points}
+                      fill={chartColors[index % chartColors.length]}
+                      line={{ stroke: chartColors[index % chartColors.length], strokeWidth: 2 }}
+                      shape="circle"
+                    />
+                  ))}
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto border border-shell-border bg-white p-6 shadow-xl">
@@ -2545,12 +3167,17 @@ function IndicatorCurvePage() {
             {formError && <div className="mb-4 border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{formError}</div>}
             <div className="grid gap-4 md:grid-cols-5">
               <label className="block text-sm font-bold text-gray-700">
-                单位
-                <input value={form.unit} onChange={(event) => updateForm("unit", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+                作业区
+                <select value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red">
+                  {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
               </label>
               <label className="block text-sm font-bold text-gray-700">
                 区块
-                <input value={form.block} onChange={(event) => updateForm("block", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red" />
+                <select value={form.block} onChange={(event) => updateForm("block", event.target.value)} className="mt-2 w-full border border-gray-200 px-3 py-2 text-sm outline-none focus:border-cnpc-red">
+                  <option value="">请选择区块</option>
+                  {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
               </label>
               <label className="block text-sm font-bold text-gray-700">
                 井号
@@ -2617,7 +3244,7 @@ function WellFlushingPage() {
   const [totalRows, setTotalRows] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("1");
-  const [filters, setFilters] = useState({ unit: "", wellNo: "", fromDate: "", toDate: "" });
+  const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
   const [form, setForm] = useState<WellFlushingForm>(() => createEmptyWellFlushingForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2691,7 +3318,7 @@ function WellFlushingPage() {
   const openCreateForm = () => {
     setForm({
       ...createEmptyWellFlushingForm(),
-      unit: filters.unit || "采油作业一区",
+      unit: filters.unit || "高采采油作业一区",
       wellNo: filters.wellNo,
       washDate: filters.fromDate || new Date().toISOString().slice(0, 10),
     });
@@ -2799,7 +3426,7 @@ function WellFlushingPage() {
   const handleDownloadTemplate = () => {
     const worksheet = XLSX.utils.json_to_sheet([
       {
-        "单位": "采油作业一区",
+        "单位": "高采采油作业一区",
         "井号": "GS-101",
         "洗井日期": "2026-05-01",
         "距上次洗井时间(d)": 45,
@@ -2823,7 +3450,7 @@ function WellFlushingPage() {
         "备注": "正常洗井",
       },
       {
-        "单位": "采油作业二区",
+        "单位": "高采采油作业二区",
         "井号": "GS-102",
         "洗井日期": "2026-05-03",
         "距上次洗井时间(d)": 52,
@@ -2870,11 +3497,17 @@ function WellFlushingPage() {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <label className="flex items-center gap-1">
-            <span>单位</span>
-            <select className={`${filterClass} w-32`} value={filters.unit} onChange={(event) => updateFilter("unit", event.target.value)}>
-              <option value="">全部单位</option>
-              <option>采油作业一区</option>
-              <option>采油作业二区</option>
+            <span>作业区</span>
+            <select className={`${filterClass} w-32`} value={filters.unit} onChange={(event) => setFilters((current) => ({ ...current, unit: event.target.value, block: "" }))}>
+              <option value="">全部作业区</option>
+              {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1">
+            <span>{"\u533a\u5757"}</span>
+            <select className={`${filterClass} w-28`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)}>
+              <option value="">请选择</option>
+              {getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-1">
@@ -2942,37 +3575,38 @@ function WellFlushingPage() {
         <table className="w-full min-w-[1320px] table-fixed border-collapse bg-white">
           <thead>
             <tr>
-              <th rowSpan={3} className={`${headClass} w-28`}>单位</th>
-              <th rowSpan={3} className={`${headClass} w-16`}>井号</th>
-              <th rowSpan={3} className={`${headClass} w-24`}>洗井日期</th>
-              <th rowSpan={3} className={`${headClass} w-14`}>距上次洗井时间(d)</th>
-              <th rowSpan={3} className={`${headClass} w-16`}>洗井方式（洗井车/泵车/来水）</th>
-              <th rowSpan={3} className={`${headClass} w-16`}>洗井设备泵压/来水压力（Mpa）</th>
-              <th rowSpan={3} className={`${headClass} w-12`}>洗井时间(h)</th>
-              <th colSpan={11} className={headClass}>洗井分段统计</th>
-              <th colSpan={3} className={headClass}>固体悬浮物监测</th>
-              <th rowSpan={3} className={`${headClass} w-24`}>备注</th>
+              <th rowSpan={3} className={`${headClass} w-16`}>{"\u4e95\u53f7"}</th>
+              <th rowSpan={3} className={`${headClass} w-28`}>{"\u5355\u4f4d"}</th>
+              <th rowSpan={3} className={`${headClass} w-16`}>{"\u533a\u5757"}</th>
+              <th rowSpan={3} className={`${headClass} w-24`}>{"\u6d17\u4e95\u65e5\u671f"}</th>
+              <th rowSpan={3} className={`${headClass} w-14`}>{"\u8ddd\u4e0a\u6b21\u6d17\u4e95\u65f6\u95f4(d)"}</th>
+              <th rowSpan={3} className={`${headClass} w-16`}>{"\u6d17\u4e95\u65b9\u5f0f\uff08\u6d17\u4e95\u8f66/\u6cf5\u8f66/\u6765\u6c34\uff09"}</th>
+              <th rowSpan={3} className={`${headClass} w-16`}>{"\u6d17\u4e95\u8bbe\u5907\u6cf5\u538b/\u6765\u6c34\u538b\u529b\uff08Mpa\uff09"}</th>
+              <th rowSpan={3} className={`${headClass} w-12`}>{"\u6d17\u4e95\u65f6\u95f4(h)"}</th>
+              <th colSpan={11} className={headClass}>{"\u6d17\u4e95\u5206\u6bb5\u7edf\u8ba1"}</th>
+              <th colSpan={3} className={headClass}>{"\u56fa\u4f53\u60ac\u6d6e\u7269\u76d1\u6d4b"}</th>
+              <th rowSpan={3} className={`${headClass} w-24`}>{"\u5907\u6ce8"}</th>
             </tr>
             <tr>
-              <th rowSpan={2} className={compactNumberHeadClass}>总水量（m³）</th>
-              <th colSpan={5} className={narrowHeadClass}>一级循环总流量表数值</th>
-              <th colSpan={5} className={narrowHeadClass}>二级循环总流量表数值</th>
-              <th rowSpan={2} className={compactNumberHeadClass}>洗前(mg/L)</th>
-              <th rowSpan={2} className={compactNumberHeadClass}>洗后(mg/L)</th>
-              <th rowSpan={2} className={compactNumberHeadClass}>差值(mg/L)</th>
+              <th rowSpan={2} className={compactNumberHeadClass}>{"\u603b\u6c34\u91cf\uff08m\u00b3\uff09"}</th>
+              <th colSpan={5} className={narrowHeadClass}>{"\u4e00\u7ea7\u5faa\u73af\u603b\u6d41\u91cf\u8868\u6570\u503c"}</th>
+              <th colSpan={5} className={narrowHeadClass}>{"\u4e8c\u7ea7\u5faa\u73af\u603b\u6d41\u91cf\u8868\u6570\u503c"}</th>
+              <th rowSpan={2} className={compactNumberHeadClass}>{"\u6d17\u524d(mg/L)"}</th>
+              <th rowSpan={2} className={compactNumberHeadClass}>{"\u6d17\u540e(mg/L)"}</th>
+              <th rowSpan={2} className={compactNumberHeadClass}>{"\u5dee\u503c(mg/L)"}</th>
             </tr>
             <tr>
               {[
-                "洗前（m³）",
-                "洗后（m³）",
-                "差值（m³）",
-                "时间（h）",
-                "平均排量（m³/h）",
-                "洗前（m³）",
-                "洗后（m³）",
-                "差值（m³）",
-                "时间（h）",
-                "平均排量（m³/h）",
+                "\u6d17\u524d\uff08m\u00b3\uff09",
+                "\u6d17\u540e\uff08m\u00b3\uff09",
+                "\u5dee\u503c\uff08m\u00b3\uff09",
+                "\u65f6\u95f4\uff08h\uff09",
+                "\u5e73\u5747\u6392\u91cf\uff08m\u00b3/h\uff09",
+                "\u6d17\u524d\uff08m\u00b3\uff09",
+                "\u6d17\u540e\uff08m\u00b3\uff09",
+                "\u5dee\u503c\uff08m\u00b3\uff09",
+                "\u65f6\u95f4\uff08h\uff09",
+                "\u5e73\u5747\u6392\u91cf\uff08m\u00b3/h\uff09",
               ].map((header, index) => (
                 <th key={`${header}-${index}`} className={compactNumberHeadClass}>
                   {header}
@@ -2982,11 +3616,12 @@ function WellFlushingPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={22} className={cellClass}>正在加载...</td></tr>
+              <tr><td colSpan={23} className={cellClass}>正在加载...</td></tr>
             ) : records.map((row) => (
               <tr key={row.id} onClick={() => setSelectedId(row.id)} className="group cursor-pointer">
-                <td className={selectableCellClass(nowrapCellClass, row.id === selectedId)}>{row.unit}</td>
                 <td className={selectableCellClass(cellClass, row.id === selectedId)}>{row.wellNo}</td>
+                <td className={selectableCellClass(nowrapCellClass, row.id === selectedId)}>{row.unit}</td>
+                <td className={selectableCellClass(cellClass, row.id === selectedId)}>{formatCell(row.block)}</td>
                 <td className={selectableCellClass(nowrapCellClass, row.id === selectedId)}>{formatCell(row.washDate).slice(0, 10)}</td>
                 <td className={selectableCellClass(cellClass, row.id === selectedId)}>{row.daysSinceLastWash}</td>
                 <td className={selectableCellClass(cellClass, row.id === selectedId)}>{row.method}</td>
@@ -3000,7 +3635,7 @@ function WellFlushingPage() {
               </tr>
             ))}
             {!loading && !records.length && (
-              <tr><td colSpan={22} className={cellClass}>暂无符合条件的数据</td></tr>
+              <tr><td colSpan={23} className={cellClass}>暂无符合条件的数据</td></tr>
             )}
           </tbody>
         </table>
@@ -3013,9 +3648,12 @@ function WellFlushingPage() {
               <button type="button" onClick={() => setShowForm(false)} className="text-sm font-bold text-gray-500 hover:text-gray-900">关闭</button>
             </div>
             <div className="grid gap-3 md:grid-cols-4">
-              <select className={filterClass} value={form.unit} onChange={(event) => updateForm("unit", event.target.value)}>
-                <option>采油作业一区</option>
-                <option>采油作业二区</option>
+              <select className={filterClass} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <select className={filterClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
               <input className={filterClass} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
               <input type="date" className={filterClass} value={form.washDate} onChange={(event) => updateForm("washDate", event.target.value)} />
@@ -3064,7 +3702,7 @@ function WellFlushingPage() {
 }
 
 const INJECTION_TECH_PAGE_SIZE = 15;
-const WATER_CUT_PAGE_SIZE = 20;
+const WATER_CUT_PAGE_SIZE = 30;
 
 const todayDateInput = () => new Date().toISOString().slice(0, 10);
 
@@ -3078,7 +3716,7 @@ const compactQueryParams = (input: Record<string, string>) =>
 const createEmptyInjectionTechForm = () => ({
   wellNo: "",
   block: "",
-  workArea: "采油作业一区",
+  workArea: "高采采油作业一区",
   process: "",
   packerCount: "1",
   packerModels: "",
@@ -3090,14 +3728,25 @@ const createEmptyInjectionTechForm = () => ({
   runningDate: todayDateInput(),
 });
 
+const injectionRunningMonthsFromLastWorkDate = (lastWorkDate?: string | null) => {
+  if (!lastWorkDate) return "";
+  const start = new Date(String(lastWorkDate).slice(0, 10));
+  if (Number.isNaN(start.getTime())) return "";
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const diffDays = Math.max(0, Math.floor((todayStart.getTime() - startDay.getTime()) / 86400000));
+  return (diffDays / 30).toFixed(1);
+};
+
 function InjectionTechPage() {
   const [records, setRecords] = useState<InjectionTechRecord[]>([]);
   const [filters, setFilters] = useState({
     workArea: "",
     block: "",
     process: "",
-    packerCount: "",
-    bottomStructure: "",
+    washable: "",
+    runningMonths: "",
     wellNo: "",
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
@@ -3120,8 +3769,8 @@ function InjectionTechPage() {
     if (nextFilters.workArea && record.workArea !== nextFilters.workArea) return false;
     if (nextFilters.block && !record.block.includes(nextFilters.block)) return false;
     if (nextFilters.process && !record.process.includes(nextFilters.process)) return false;
-    if (nextFilters.packerCount && String(record.packerCount) !== nextFilters.packerCount) return false;
-    if (nextFilters.bottomStructure && !record.bottomStructure.includes(nextFilters.bottomStructure)) return false;
+    if (nextFilters.washable && record.washable !== nextFilters.washable) return false;
+    if (nextFilters.runningMonths && injectionRunningMonthsFromLastWorkDate(record.lastWorkDate) !== Number(nextFilters.runningMonths).toFixed(1)) return false;
     if (nextFilters.wellNo && !record.wellNo.includes(nextFilters.wellNo)) return false;
     return true;
   };
@@ -3174,6 +3823,12 @@ function InjectionTechPage() {
   const updateForm = (key: keyof ReturnType<typeof createEmptyInjectionTechForm>, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
+  const packerModelFormValues = Array.from({ length: 6 }, (_, index) => form.packerModels.split(",")[index] ?? "");
+  const updatePackerModelForm = (index: number, value: string) => {
+    const nextModels = [...packerModelFormValues];
+    nextModels[index] = value.trim();
+    updateForm("packerModels", nextModels.join(",").replace(/,+$/, ""));
+  };
   const handleCreate = async () => {
     if (!form.wellNo.trim() || !form.block.trim() || !form.workArea.trim() || !form.process.trim() || !form.bottomStructure.trim()) {
       setError("请填写井号、区块、作业区、注水工艺和管柱底部结构");
@@ -3184,6 +3839,7 @@ function InjectionTechPage() {
     try {
       const { data: createdRecord } = await axios.post<InjectionTechRecord>("/api/injection-tech-records", {
         ...form,
+        runningDate: form.runningDate || form.lastWorkDate,
         packerModels: form.packerModels.split(",").map((item) => item.trim()).filter(Boolean),
       });
       setForm(createEmptyInjectionTechForm());
@@ -3204,6 +3860,9 @@ function InjectionTechPage() {
       setError("");
       try {
         await axios.delete(`/api/injection-tech-records/${record.id}`);
+        setPinnedRecord((current) => (current?.id === record.id ? null : current));
+        setRecords((current) => current.filter((row) => row.id !== record.id));
+        setTotalRows((current) => Math.max(0, current - 1));
         const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
         setCurrentPage(nextPage);
         await loadRecords(nextPage, appliedFilters);
@@ -3224,33 +3883,36 @@ function InjectionTechPage() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label className="flex items-center gap-1">
             <span>作业区</span>
-            <select className={`${filterClass} w-36`} value={filters.workArea} onChange={(event) => updateFilter("workArea", event.target.value)}>
+            <select className={`${filterClass} w-36`} value={filters.workArea} onChange={(event) => setFilters((current) => ({ ...current, workArea: event.target.value, block: "" }))}>
               <option value="">请选择</option>
-              {UNIT_OPTIONS.map((option) => (
+              {FILTER_UNIT_OPTIONS.map((option) => (
                 <option key={option} value={option}>{option}</option>
               ))}
             </select>
           </label>
           <label className="flex items-center gap-1">
             <span>区块</span>
-            <input className={`${filterClass} w-24`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)} />
+            <select className={`${filterClass} w-28`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)}>
+              <option value="">请选择</option>
+              {getFilterBlockOptions(filters.workArea).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
           </label>
           <label className="flex items-center gap-1">
             <span>注水工艺</span>
             <input className={`${filterClass} w-28`} value={filters.process} onChange={(event) => updateFilter("process", event.target.value)} />
           </label>
           <label className="flex items-center gap-1">
-            <span>封隔器个数</span>
-            <select className={`${filterClass} w-20`} value={filters.packerCount} onChange={(event) => updateFilter("packerCount", event.target.value)}>
-              <option value="">请选择</option>
-              {[1, 2, 3, 4, 5, 6].map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
+            <span>{"\u662f\u5426\u53ef\u6d17\u4e95"}</span>
+            <select className={`${filterClass} w-20`} value={filters.washable} onChange={(event) => updateFilter("washable", event.target.value)}>
+              <option value="">{"\u8bf7\u9009\u62e9"}</option>
+              <option value={"\u662f"}>{"\u662f"}</option>
+              <option value={"\u5426"}>{"\u5426"}</option>
             </select>
           </label>
           <label className="flex items-center gap-1">
-            <span>管柱底部结构</span>
-            <input className={`${filterClass} w-28`} value={filters.bottomStructure} onChange={(event) => updateFilter("bottomStructure", event.target.value)} />
+            <span>{"\u7ba1\u67f1\u5165\u4e95\u65f6\u95f4"}</span>
+            <input type="number" min="0" step="0.1" className={`${filterClass} w-24`} value={filters.runningMonths} onChange={(event) => updateFilter("runningMonths", event.target.value)} />
+            <span>{"\u6708"}</span>
           </label>
           <label className="flex items-center gap-1">
             <span>井号</span>
@@ -3295,30 +3957,86 @@ function InjectionTechPage() {
       </div>
 
       {showCreate && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[#99c7f3] bg-[#f2f8fe] px-2 py-2 text-[12px] text-[#001a33]">
-          <input className={`${filterClass} w-24`} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
-          <input className={`${filterClass} w-24`} placeholder="区块" value={form.block} onChange={(event) => updateForm("block", event.target.value)} />
-          <select className={`${filterClass} w-36`} value={form.workArea} onChange={(event) => updateForm("workArea", event.target.value)}>
-            {UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-          <input className={`${filterClass} w-28`} placeholder="注水工艺" value={form.process} onChange={(event) => updateForm("process", event.target.value)} />
-          <input className={`${filterClass} w-20`} placeholder="封隔器" value={form.packerCount} onChange={(event) => updateForm("packerCount", event.target.value.replace(/\D/g, ""))} />
-          <input className={`${filterClass} w-40`} placeholder="型号逗号分隔" value={form.packerModels} onChange={(event) => updateForm("packerModels", event.target.value)} />
-          <input className={`${filterClass} w-28`} placeholder="底部结构" value={form.bottomStructure} onChange={(event) => updateForm("bottomStructure", event.target.value)} />
-          <select className={`${filterClass} w-16`} value={form.washable} onChange={(event) => updateForm("washable", event.target.value)}>
-            <option>是</option>
-            <option>否</option>
-          </select>
-          <select className={`${filterClass} w-16`} value={form.doublePacker} onChange={(event) => updateForm("doublePacker", event.target.value)}>
-            <option>否</option>
-            <option>是</option>
-          </select>
-          <input className={`${filterClass} w-28`} placeholder="洗井提醒" value={form.washReminder} onChange={(event) => updateForm("washReminder", event.target.value)} />
-          <input className={`${filterClass} w-32`} type="date" value={form.lastWorkDate} onChange={(event) => updateForm("lastWorkDate", event.target.value)} />
-          <input className={`${filterClass} w-32`} type="date" value={form.runningDate} onChange={(event) => updateForm("runningDate", event.target.value)} />
-          <button type="button" disabled={saving} onClick={handleCreate} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:opacity-50">
-            保存
-          </button>
+        <div className="border-t border-[#99c7f3] bg-[#f2f8fe] px-3 py-3 text-[12px] text-[#001a33]">
+          <div className="mb-2 font-bold text-[#001a33]">{"\u65b0\u589e\u6ce8\u6c34\u5de5\u827a\u8bb0\u5f55"}</div>
+          <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-6">
+            <label className="flex flex-col gap-1">
+              <span>{"\u4e95\u53f7"}</span>
+              <input className={filterClass} value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 md:col-span-2">
+              <span>{"\u4f5c\u4e1a\u533a"}</span>
+              <select className={filterClass} value={form.workArea} onChange={(event) => { updateForm("workArea", event.target.value); updateForm("block", ""); }}>
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u533a\u5757"}</span>
+              <select className={filterClass} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+                <option value="">请选择区块</option>
+                {getFilterBlockOptions(form.workArea).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u6ce8\u6c34\u5de5\u827a"}</span>
+              <input className={filterClass} value={form.process} onChange={(event) => updateForm("process", event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u5c01\u9694\u5668\u4e2a\u6570"}</span>
+              <input className={filterClass} value={form.packerCount} onChange={(event) => updateForm("packerCount", event.target.value.replace(/\D/g, ""))} />
+            </label>
+          </div>
+          <div className="mt-3 rounded border border-[#b7d7f4] bg-white/70 p-2">
+            <div className="mb-2 font-bold">{"\u5355\u4e2a\u5c01\u9694\u5668\u578b\u53f7\uff08\u81ea\u4e0a\u800c\u4e0b\uff09"}</div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+              {packerModelFormValues.map((model, index) => (
+                <label key={`packer-model-${index}`} className="flex flex-col gap-1">
+                  <span>{index + 1}</span>
+                  <input className={filterClass} value={model} onChange={(event) => updatePackerModelForm(index, event.target.value)} />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-4 xl:grid-cols-6">
+            <label className="flex flex-col gap-1">
+              <span>{"\u7ba1\u67f1\u5e95\u90e8\u7ed3\u6784"}</span>
+              <input className={filterClass} value={form.bottomStructure} onChange={(event) => updateForm("bottomStructure", event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u662f\u5426\u53ef\u6d17\u4e95"}</span>
+              <select className={filterClass} value={form.washable} onChange={(event) => updateForm("washable", event.target.value)}>
+                <option value={"\u662f"}>{"\u662f"}</option>
+                <option value={"\u5426"}>{"\u5426"}</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u662f\u5426\u5b58\u5728\u5c42\u6bb5\u95f4\u53cc\u5c01\u9694\u5668"}</span>
+              <select className={filterClass} value={form.doublePacker} onChange={(event) => updateForm("doublePacker", event.target.value)}>
+                <option value={"\u5426"}>{"\u5426"}</option>
+                <option value={"\u662f"}>{"\u662f"}</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u6d17\u4e95\u7279\u6b8a\u63d0\u9192"}</span>
+              <input className={filterClass} value={form.washReminder} onChange={(event) => updateForm("washReminder", event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u6700\u540e\u4e00\u6b21\u4f5c\u4e1a\u65e5\u671f"}</span>
+              <input className={filterClass} type="date" value={form.lastWorkDate} onChange={(event) => updateForm("lastWorkDate", event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span>{"\u7ba1\u67f1\u5165\u4e95\u65f6\u95f4\uff08\u6708\uff09"}</span>
+              <input className={`${filterClass} bg-slate-100`} value={injectionRunningMonthsFromLastWorkDate(form.lastWorkDate)} readOnly />
+            </label>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" onClick={() => setShowCreate(false)} className="h-6 rounded border border-[#8aaed3] bg-white px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#eef6ff]">
+              {"\u53d6\u6d88"}
+            </button>
+            <button type="button" disabled={saving} onClick={handleCreate} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:opacity-50">
+              {"\u4fdd\u5b58"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -3331,10 +4049,10 @@ function InjectionTechPage() {
           <thead>
             <tr>
               <th rowSpan={2} className={`${headerClass} w-16`}>序号</th>
-              <th rowSpan={2} className={`${headerClass} w-28`}>井号 ↕</th>
-              <th rowSpan={2} className={`${headerClass} w-24`}>区块 ↕</th>
-              <th rowSpan={2} className={`${headerClass} w-36`}>作业区 ↕</th>
-              <th rowSpan={2} className={`${headerClass} w-28`}>注水工艺 ↕</th>
+              <th rowSpan={2} className={`${headerClass} w-28`}>井号</th>
+              <th rowSpan={2} className={`${headerClass} w-36`}>作业区</th>
+              <th rowSpan={2} className={`${headerClass} w-24`}>区块</th>
+              <th rowSpan={2} className={`${headerClass} w-28`}>注水工艺</th>
               <th rowSpan={2} className={`${headerClass} w-24`}>封隔器个数</th>
               <th colSpan={6} className={`${headerClass} w-72`}>单个封隔器型号（自上而下）</th>
               <th rowSpan={2} className={`${headerClass} w-28`}>管柱底<br />部结构</th>
@@ -3342,7 +4060,7 @@ function InjectionTechPage() {
               <th rowSpan={2} className={`${headerClass} w-32`}>是否存在层<br />段间双封隔器</th>
               <th rowSpan={2} className={`${headerClass} w-28`}>洗井<br />特殊提醒</th>
               <th rowSpan={2} className={`${headerClass} w-28`}>最后一次<br />作业日期</th>
-              <th rowSpan={2} className={`${headerClass} w-24`}>管柱<br />入井<br />时间</th>
+              <th rowSpan={2} className={`${headerClass} w-24`}>{"\u7ba1\u67f1\u5165\u4e95"}<br />{"\u65f6\u95f4(\u6708)"}</th>
               <th rowSpan={2} className={`${headerClass} w-20`}>操作</th>
             </tr>
             <tr>
@@ -3356,8 +4074,8 @@ function InjectionTechPage() {
               <tr key={row.id}>
                 <td className={cellClass}>{(currentPage - 1) * INJECTION_TECH_PAGE_SIZE + index + 1}</td>
                 <td className={cellClass}>{row.wellNo}</td>
-                <td className={cellClass}>{row.block}</td>
                 <td className={cellClass}>{row.workArea}</td>
+                <td className={cellClass}>{row.block}</td>
                 <td className={cellClass}>{row.process}</td>
                 <td className={cellClass}>{row.packerCount}</td>
                 {modelCells(row.packerModels).map((model, modelIndex) => (
@@ -3368,7 +4086,7 @@ function InjectionTechPage() {
                 <td className={cellClass}>{row.doublePacker}</td>
                 <td className={cellClass}>{row.washReminder || "-"}</td>
                 <td className={cellClass}>{apiDateOnly(row.lastWorkDate)}</td>
-                <td className={cellClass}>{apiDateOnly(row.runningDate)}</td>
+                <td className={cellClass}>{injectionRunningMonthsFromLastWorkDate(row.lastWorkDate)}</td>
                 <td className={cellClass}>
                   <button type="button" onClick={() => handleDelete(row)} className="font-bold text-[#ff0000] hover:underline">删除</button>
                 </td>
@@ -3376,7 +4094,7 @@ function InjectionTechPage() {
             ))}
             {!visibleRecords.length && (
               <tr>
-                <td className={cellClass} colSpan={20}>{loading ? "加载中..." : "暂无符合条件的数据"}</td>
+                <td className={cellClass} colSpan={19}>{loading ? "加载中..." : "暂无符合条件的数据"}</td>
               </tr>
             )}
           </tbody>
@@ -3387,13 +4105,185 @@ function InjectionTechPage() {
 }
 
 const createEmptyWaterCutForm = () => ({
-  unit: "采油作业一区",
+  unit: FILTER_UNIT_OPTIONS[0],
   block: "",
   wellNo: "",
   sampleDate: todayDateInput(),
   waterCut: "",
   tester: "",
 });
+
+const createEmptyWaterCutFilters = () => ({
+  unit: "",
+  block: "",
+  wellNo: "",
+  waterCutRange: "",
+});
+
+const parseWaterCutOpinions = (remark?: string | null): WaterCutOpinion[] => {
+  if (!remark) return [];
+  try {
+    const parsed = JSON.parse(remark);
+    const rows = Array.isArray(parsed?.opinions) ? parsed.opinions : [];
+    return rows
+      .map((row: any) => ({
+        time: String(row?.time || ""),
+        content: String(row?.content || ""),
+        author: String(row?.author || ""),
+      }))
+      .filter((row) => row.time || row.content || row.author);
+  } catch {
+    return [];
+  }
+};
+
+const stringifyWaterCutOpinions = (opinions: WaterCutOpinion[]) => JSON.stringify({ opinions });
+
+const encodeUtf8 = (value: string) => new TextEncoder().encode(value);
+const zipCrcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+const crc32 = (data: Uint8Array) => {
+  let crc = 0xffffffff;
+  for (let index = 0; index < data.length; index += 1) {
+    crc = zipCrcTable[(crc ^ data[index]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+};
+const writeUint16 = (target: number[], value: number) => {
+  target.push(value & 0xff, (value >>> 8) & 0xff);
+};
+const writeUint32 = (target: number[], value: number) => {
+  target.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+};
+const createStoredZip = (files: Array<{ path: string; data: string | Uint8Array }>) => {
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+  files.forEach((file) => {
+    const nameBytes = encodeUtf8(file.path);
+    const dataBytes = typeof file.data === "string" ? encodeUtf8(file.data) : file.data;
+    const crc = crc32(dataBytes);
+    const localHeader: number[] = [];
+    writeUint32(localHeader, 0x04034b50);
+    writeUint16(localHeader, 20);
+    writeUint16(localHeader, 0x0800);
+    writeUint16(localHeader, 0);
+    writeUint16(localHeader, 0);
+    writeUint16(localHeader, 0);
+    writeUint32(localHeader, crc);
+    writeUint32(localHeader, dataBytes.length);
+    writeUint32(localHeader, dataBytes.length);
+    writeUint16(localHeader, nameBytes.length);
+    writeUint16(localHeader, 0);
+    localParts.push(new Uint8Array(localHeader), nameBytes, dataBytes);
+
+    const centralHeader: number[] = [];
+    writeUint32(centralHeader, 0x02014b50);
+    writeUint16(centralHeader, 20);
+    writeUint16(centralHeader, 20);
+    writeUint16(centralHeader, 0x0800);
+    writeUint16(centralHeader, 0);
+    writeUint16(centralHeader, 0);
+    writeUint16(centralHeader, 0);
+    writeUint32(centralHeader, crc);
+    writeUint32(centralHeader, dataBytes.length);
+    writeUint32(centralHeader, dataBytes.length);
+    writeUint16(centralHeader, nameBytes.length);
+    writeUint16(centralHeader, 0);
+    writeUint16(centralHeader, 0);
+    writeUint16(centralHeader, 0);
+    writeUint16(centralHeader, 0);
+    writeUint32(centralHeader, 0);
+    writeUint32(centralHeader, offset);
+    centralParts.push(new Uint8Array(centralHeader), nameBytes);
+    offset += localHeader.length + nameBytes.length + dataBytes.length;
+  });
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const centralOffset = offset;
+  const endHeader: number[] = [];
+  writeUint32(endHeader, 0x06054b50);
+  writeUint16(endHeader, 0);
+  writeUint16(endHeader, 0);
+  writeUint16(endHeader, files.length);
+  writeUint16(endHeader, files.length);
+  writeUint32(endHeader, centralSize);
+  writeUint32(endHeader, centralOffset);
+  writeUint16(endHeader, 0);
+  const parts = [...localParts, ...centralParts, new Uint8Array(endHeader)];
+  const output = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let cursor = 0;
+  parts.forEach((part) => {
+    output.set(part, cursor);
+    cursor += part.length;
+  });
+  return output;
+};
+const xmlEscape = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+const columnName = (index: number) => {
+  let name = "";
+  let value = index;
+  while (value >= 0) {
+    name = String.fromCharCode((value % 26) + 65) + name;
+    value = Math.floor(value / 26) - 1;
+  }
+  return name;
+};
+const sheetXml = (rows: string[][], extraXml = "") => {
+  const rowXml = rows.map((row, rowIndex) => (
+    `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => {
+      const ref = `${columnName(columnIndex)}${rowIndex + 1}`;
+      return `<c r="${ref}" t="inlineStr"><is><t>${xmlEscape(cell)}</t></is></c>`;
+    }).join("")}</row>`
+  )).join("");
+  const ref = `A1:${columnName(Math.max(0, rows[0]?.length ?? 1) - 1)}${Math.max(1, rows.length)}`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="${ref}"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData>${rowXml}</sheetData>${extraXml}</worksheet>`;
+};
+const downloadWaterCutTemplateWorkbook = () => {
+  const unitOptions = FILTER_UNIT_OPTIONS;
+  const blockOptions = getOilProductionBlocks();
+  const templateRows = [
+    ["单位", "区块", "井号", "日期", "含水 (%)", "化验员"],
+    [unitOptions[0], blockOptions[0] || "", "GS-201", "2024-04-10", "92.5", "张三"],
+    [unitOptions[1], blockOptions[3] || blockOptions[0] || "", "GS-254", "2024-04-27", "90.3", "周八"],
+  ];
+  const optionsRows = Array.from({ length: Math.max(unitOptions.length, blockOptions.length) + 1 }, (_, index) => [
+    index === 0 ? "单位选项" : unitOptions[index - 1] || "",
+    index === 0 ? "区块选项" : blockOptions[index - 1] || "",
+  ]);
+  const validationXml = `<dataValidations count="2"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="A2:A200"><formula1>&apos;选项&apos;!$A$2:$A$${unitOptions.length + 1}</formula1></dataValidation><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="B2:B200"><formula1>&apos;选项&apos;!$B$2:$B$${blockOptions.length + 1}</formula1></dataValidation></dataValidations>`;
+  const workbookBytes = createStoredZip([
+    { path: "[Content_Types].xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
+    { path: "_rels/.rels", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+    { path: "xl/_rels/workbook.xml.rels", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { path: "xl/workbook.xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="含水化验导入模板" sheetId="1" r:id="rId1"/><sheet name="选项" sheetId="2" state="hidden" r:id="rId2"/></sheets></workbook>` },
+    { path: "xl/styles.xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>` },
+    { path: "xl/worksheets/sheet1.xml", data: sheetXml(templateRows, validationXml) },
+    { path: "xl/worksheets/sheet2.xml", data: sheetXml(optionsRows) },
+  ]);
+  const blob = new Blob([workbookBytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "含水化验导入模板.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 const readExcelCell = (row: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
@@ -3420,16 +4310,11 @@ const formatExcelDate = (value: unknown) => {
 
 const formatExcelWaterCut = (value: unknown) => String(value ?? "").trim().replace(/%$/, "");
 
-function WaterCutPage() {
+function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
   const filterClass = "h-6 rounded border border-[#b8c8d8] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [records, setRecords] = useState<WaterCutRecord[]>([]);
-  const [filters, setFilters] = useState({
-    unit: "",
-    block: "",
-    wellNo: "",
-    waterCutRange: "",
-  });
+  const [filters, setFilters] = useState(() => createEmptyWaterCutFilters());
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("1");
@@ -3440,6 +4325,18 @@ function WaterCutPage() {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [curveWellNo, setCurveWellNo] = useState("");
+  const [curveRecords, setCurveRecords] = useState<WaterCutRecord[]>([]);
+  const [curveLoading, setCurveLoading] = useState(false);
+  const [curveError, setCurveError] = useState("");
+  const [curvePosition, setCurvePosition] = useState({ left: 260, top: 96 });
+  const curveDragRef = useRef<{ startX: number; startY: number; left: number; top: number } | null>(null);
+  const curveRequestIdRef = useRef(0);
+  const [opinionRecord, setOpinionRecord] = useState<WaterCutRecord | null>(null);
+  const [opinionContent, setOpinionContent] = useState("");
+  const [opinionAuthor, setOpinionAuthor] = useState("");
+  const [opinionSaving, setOpinionSaving] = useState(false);
+  const [opinionError, setOpinionError] = useState("");
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const totalPages = Math.max(1, Math.ceil(totalRows / WATER_CUT_PAGE_SIZE));
@@ -3495,8 +4392,11 @@ function WaterCutPage() {
       await axios.post("/api/water-cuts", form);
       setForm(createEmptyWaterCutForm());
       setShowCreate(false);
+      const clearedFilters = createEmptyWaterCutFilters();
+      setFilters(clearedFilters);
+      setAppliedFilters(clearedFilters);
       setCurrentPage(1);
-      await loadRecords(1, appliedFilters);
+      await loadRecords(1, clearedFilters);
     } catch (err: any) {
       setError(err?.response?.data?.error || "含水化验记录新增失败");
     } finally {
@@ -3516,6 +4416,119 @@ function WaterCutPage() {
       }
     });
   };
+  const openOpinionDialog = (record: WaterCutRecord) => {
+    setOpinionRecord(record);
+    setOpinionContent("");
+    setOpinionAuthor(currentUser?.name || "");
+    setOpinionError("");
+  };
+  const saveOpinion = async () => {
+    if (!opinionRecord) return;
+    const content = opinionContent.trim();
+    const author = opinionAuthor.trim();
+    if (!content || !author) {
+      setOpinionError("请填写意见内容和意见人");
+      return;
+    }
+    const opinions = [
+      ...parseWaterCutOpinions(opinionRecord.remark),
+      {
+        time: new Date().toLocaleString("zh-CN", { hour12: false }),
+        content,
+        author,
+      },
+    ];
+    setOpinionSaving(true);
+    setOpinionError("");
+    try {
+      const { data } = await axios.patch<WaterCutRecord>(`/api/water-cuts/${opinionRecord.id}/opinions`, {
+        opinions,
+      });
+      setRecords((current) => current.map((row) => (row.id === data.id ? data : row)));
+      setOpinionRecord(data);
+      setOpinionContent("");
+    } catch (err: any) {
+      setOpinionError(err?.response?.data?.error || "意见保存失败");
+    } finally {
+      setOpinionSaving(false);
+    }
+  };
+  const handleShowCurve = async (record: WaterCutRecord) => {
+    const requestId = curveRequestIdRef.current + 1;
+    curveRequestIdRef.current = requestId;
+    setCurveWellNo(record.wellNo);
+    setCurveRecords([]);
+    setCurveError("");
+    setCurveLoading(true);
+    try {
+      const { data } = await axios.get<PaginatedApiResponse<WaterCutRecord>>("/api/water-cuts", {
+        params: {
+          wellNo: record.wellNo,
+          page: 1,
+          pageSize: 50,
+        },
+      });
+      const rows = (data.rows || [])
+        .filter((item) => item.wellNo === record.wellNo)
+        .sort((left, right) => apiDateOnly(left.sampleDate).localeCompare(apiDateOnly(right.sampleDate)))
+        .slice(-20);
+      if (curveRequestIdRef.current !== requestId) return;
+      setCurveRecords(rows);
+      if (!rows.length) setCurveError("未找到该井号的含水化验记录");
+    } catch (err: any) {
+      if (curveRequestIdRef.current !== requestId) return;
+      setCurveError(err?.response?.data?.error || "含水曲线数据加载失败");
+    } finally {
+      if (curveRequestIdRef.current === requestId) setCurveLoading(false);
+    }
+  };
+  const startCurveDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("button")) return;
+    curveDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      left: curvePosition.left,
+      top: curvePosition.top,
+    };
+    event.preventDefault();
+  };
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const drag = curveDragRef.current;
+      if (!drag) return;
+      setCurvePosition({
+        left: Math.max(0, Math.min(window.innerWidth - 120, drag.left + event.clientX - drag.startX)),
+        top: Math.max(0, Math.min(window.innerHeight - 60, drag.top + event.clientY - drag.startY)),
+      });
+    };
+    const handleMouseUp = () => {
+      curveDragRef.current = null;
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+  const curvePoints = curveRecords
+    .map((row) => ({
+      date: apiDateOnly(row.sampleDate),
+      value: Number(row.waterCut),
+    }))
+    .filter((row) => Number.isFinite(row.value));
+  const curveMin = curvePoints.length ? Math.min(...curvePoints.map((point) => point.value)) : 0;
+  const curveMax = curvePoints.length ? Math.max(...curvePoints.map((point) => point.value)) : 100;
+  const yMin = Math.max(0, Math.floor(curveMin - 2));
+  const yMax = Math.min(100, Math.ceil(curveMax + 2));
+  const chartWidth = 760;
+  const chartHeight = 320;
+  const chartPadding = { left: 58, right: 28, top: 28, bottom: 54 };
+  const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const pointToX = (index: number) => chartPadding.left + (curvePoints.length <= 1 ? plotWidth / 2 : (index / (curvePoints.length - 1)) * plotWidth);
+  const pointToY = (value: number) => chartPadding.top + ((yMax - value) / Math.max(1, yMax - yMin)) * plotHeight;
+  const curvePolyline = curvePoints.map((point, index) => `${pointToX(index)},${pointToY(point.value)}`).join(" ");
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -3557,38 +4570,125 @@ function WaterCutPage() {
     }
   };
   const handleDownloadTemplate = () => {
-    const worksheet = XLSX.utils.json_to_sheet([
-      { "单位": "采油作业一区", "区块": "区块A", "井号": "GS-201", "日期": "2024-04-10", "含水 (%)": 92.5, "化验员": "张三" },
-      { "单位": "采油作业二区", "区块": "区块D", "井号": "GS-254", "日期": "2024-04-27", "含水 (%)": 90.3, "化验员": "周八" },
-    ]);
-    worksheet["!cols"] = [
-      { wch: 16 },
-      { wch: 10 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 10 },
-    ];
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "含水化验导入模板");
-    XLSX.writeFile(workbook, "含水化验导入模板.xlsx");
+    downloadWaterCutTemplateWorkbook();
   };
 
   return (
     <div className="rounded-md border border-[#9fc3e7] bg-white shadow-[0_0_0_1px_rgba(159,195,231,0.25)]">
       {confirmDialog}
+      {curveWellNo && (
+        <div className="fixed z-[80] w-[820px] border border-[#8fb7df] bg-white shadow-2xl" style={{ left: curvePosition.left, top: curvePosition.top }}>
+          <div onMouseDown={startCurveDrag} className="flex cursor-move select-none items-center justify-between border-b border-[#9fc3e7] bg-[#f4f8fc] px-4 py-2">
+            <div className="text-lg font-bold text-[#cc0000]">{curveWellNo} 含水曲线</div>
+            <button type="button" onClick={() => { setCurveWellNo(""); setCurveRecords([]); setCurveError(""); }} className="h-7 rounded border border-[#8fb7df] bg-[#e8f0f8] px-3 text-xs font-bold text-[#001a33] hover:bg-[#dce9f5]">
+              关闭
+            </button>
+          </div>
+          <div className="p-4">
+            {curveLoading ? (
+              <div className="py-24 text-center text-sm text-gray-500">曲线加载中...</div>
+            ) : curveError ? (
+              <div className="py-24 text-center text-sm text-red-600">{curveError}</div>
+            ) : (
+              <svg width={chartWidth} height={chartHeight} className="mx-auto block bg-white">
+                <line x1={chartPadding.left} y1={chartPadding.top} x2={chartPadding.left} y2={chartPadding.top + plotHeight} stroke="#6b7280" />
+                <line x1={chartPadding.left} y1={chartPadding.top + plotHeight} x2={chartPadding.left + plotWidth} y2={chartPadding.top + plotHeight} stroke="#6b7280" />
+                {[0, 1, 2, 3, 4].map((tick) => {
+                  const value = yMin + ((yMax - yMin) * tick) / 4;
+                  const y = pointToY(value);
+                  return (
+                    <g key={tick}>
+                      <line x1={chartPadding.left} y1={y} x2={chartPadding.left + plotWidth} y2={y} stroke="#dbeafe" />
+                      <text x={chartPadding.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#001a33">{value.toFixed(1)}</text>
+                    </g>
+                  );
+                })}
+                <text x={18} y={chartPadding.top + plotHeight / 2} fontSize="12" fill="#001a33" transform={`rotate(-90 18 ${chartPadding.top + plotHeight / 2})`}>含水(%)</text>
+                <text x={chartPadding.left + plotWidth / 2} y={chartHeight - 10} textAnchor="middle" fontSize="12" fill="#001a33">化验日期</text>
+                {curvePolyline && <polyline points={curvePolyline} fill="none" stroke="#cc0000" strokeWidth="2.5" />}
+                {curvePoints.map((point, index) => {
+                  const x = pointToX(index);
+                  const y = pointToY(point.value);
+                  const showDate = index === 0 || index === curvePoints.length - 1 || index % Math.ceil(Math.max(1, curvePoints.length / 5)) === 0;
+                  return (
+                    <g key={`${point.date}-${index}`}>
+                      <circle cx={x} cy={y} r="4" fill="#cc0000" />
+                      <text x={x} y={y - 8} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#cc0000">{point.value.toFixed(1)}</text>
+                      {showDate && <text x={x} y={chartPadding.top + plotHeight + 18} textAnchor="middle" fontSize="10" fill="#001a33">{point.date.slice(5)}</text>}
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+      {opinionRecord && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-3xl border border-[#8fb7df] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#9fc3e7] bg-[#f4f8fc] px-4 py-2">
+              <div className="text-lg font-bold text-[#cc0000]">{opinionRecord.wellNo} 意见记录</div>
+              <button type="button" onClick={() => setOpinionRecord(null)} className="h-7 rounded border border-[#8fb7df] bg-[#e8f0f8] px-3 text-xs font-bold text-[#001a33] hover:bg-[#dce9f5]">
+                关闭
+              </button>
+            </div>
+            <div className="space-y-3 p-4 text-[13px] text-[#001a33]">
+              <div className="grid grid-cols-4 gap-2 rounded border border-[#c7d9ec] bg-[#f8fbff] p-2">
+                <div><span className="font-bold">单位：</span>{opinionRecord.unit}</div>
+                <div><span className="font-bold">区块：</span>{opinionRecord.block}</div>
+                <div><span className="font-bold">日期：</span>{apiDateOnly(opinionRecord.sampleDate)}</div>
+                <div><span className="font-bold">含水：</span>{Number(opinionRecord.waterCut).toFixed(1)}%</div>
+              </div>
+              <table className="w-full border-collapse border border-[#9fc3e7] text-center">
+                <thead className="bg-[#dcebf8]">
+                  <tr>
+                    <th className="border border-[#9fc3e7] px-2 py-2">时间</th>
+                    <th className="border border-[#9fc3e7] px-2 py-2">意见内容</th>
+                    <th className="border border-[#9fc3e7] px-2 py-2">意见人</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parseWaterCutOpinions(opinionRecord.remark).map((opinion, index) => (
+                    <tr key={`${opinion.time}-${index}`}>
+                      <td className="border border-[#9fc3e7] px-2 py-2">{opinion.time}</td>
+                      <td className="border border-[#9fc3e7] px-2 py-2 text-left">{opinion.content}</td>
+                      <td className="border border-[#9fc3e7] px-2 py-2">{opinion.author}</td>
+                    </tr>
+                  ))}
+                  {!parseWaterCutOpinions(opinionRecord.remark).length && (
+                    <tr>
+                      <td className="border border-[#9fc3e7] px-2 py-8 text-gray-500" colSpan={3}>暂无意见记录</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              <div className="grid grid-cols-[1fr_160px_auto] gap-2">
+                <textarea className="min-h-20 rounded border border-[#b8c8d8] px-3 py-2 outline-none focus:border-cnpc-blue" placeholder="请输入意见内容" value={opinionContent} onChange={(event) => setOpinionContent(event.target.value)} />
+                <input className="h-8 rounded border border-[#b8c8d8] px-3 outline-none focus:border-cnpc-blue" placeholder="意见人" value={opinionAuthor} onChange={(event) => setOpinionAuthor(event.target.value)} />
+                <button type="button" disabled={opinionSaving} onClick={() => void saveOpinion()} className="h-8 rounded border border-[#a8bed5] bg-[#e8f0f8] px-4 font-bold text-[#001a33] hover:bg-[#dce9f5] disabled:opacity-50">
+                  {opinionSaving ? "保存中" : "保存"}
+                </button>
+              </div>
+              {opinionError && <div className="text-sm font-bold text-red-600">{opinionError}</div>}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label className="flex items-center gap-1">
-            <span>采油作业区</span>
-            <select className={filterClass} value={filters.unit} onChange={(event) => updateFilter("unit", event.target.value)}>
+            <span>作业区</span>
+            <select className={filterClass} value={filters.unit} onChange={(event) => setFilters((current) => ({ ...current, unit: event.target.value, block: "" }))}>
               <option value="">请选择</option>
-              {UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-1">
             <span>区块</span>
-            <input className={`${filterClass} w-24`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)} />
+            <select className={`${filterClass} w-28`} value={filters.block} onChange={(event) => updateFilter("block", event.target.value)}>
+              <option value="">请选择</option>
+              {getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
           </label>
           <label className="flex items-center gap-1">
             <span>井号</span>
@@ -3652,10 +4752,13 @@ function WaterCutPage() {
 
       {showCreate && (
         <div className="flex flex-wrap items-center gap-2 border-t border-[#9fc3e7] bg-[#f7fbff] px-2 py-2 text-[12px] text-[#001a33]">
-          <select className={`${filterClass} w-36`} value={form.unit} onChange={(event) => updateForm("unit", event.target.value)}>
-            {UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          <select className={`${filterClass} w-36`} value={form.unit} onChange={(event) => { updateForm("unit", event.target.value); updateForm("block", ""); }}>
+            {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
-          <input className={`${filterClass} w-24`} placeholder="区块" value={form.block} onChange={(event) => updateForm("block", event.target.value)} />
+          <select className={`${filterClass} w-24`} value={form.block} onChange={(event) => updateForm("block", event.target.value)}>
+            <option value="">请选择区块</option>
+            {getFilterBlockOptions(form.unit).map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
           <input className={`${filterClass} w-24`} placeholder="井号" value={form.wellNo} onChange={(event) => updateForm("wellNo", event.target.value)} />
           <input className={`${filterClass} w-32`} type="date" value={form.sampleDate} onChange={(event) => updateForm("sampleDate", event.target.value)} />
           <input className={`${filterClass} w-20`} placeholder="含水" value={form.waterCut} onChange={(event) => updateForm("waterCut", event.target.value)} />
@@ -3690,9 +4793,9 @@ function WaterCutPage() {
                 <td className="font-bold text-[#cc0000]">{Number(row.waterCut).toFixed(1)}</td>
                 <td>{row.tester}</td>
                 <td>
-                  <button type="button" className="font-bold text-[#ff0000] hover:underline">曲线</button>
+                  <button type="button" onClick={() => void handleShowCurve(row)} className="font-bold text-[#ff0000] hover:underline">曲线</button>
                   <span className="px-1 text-[#ff0000]">|</span>
-                  <button type="button" className="font-bold text-[#ff0000] hover:underline">意见</button>
+                  <button type="button" onClick={() => openOpinionDialog(row)} className="font-bold text-[#ff0000] hover:underline">意见</button>
                   <span className="px-1 text-[#ff0000]">|</span>
                   <button type="button" onClick={() => handleDelete(row)} className="font-bold text-[#ff0000] hover:underline">删除</button>
                 </td>
@@ -3720,13 +4823,10 @@ function DynamicAnalysisPage() {
   const [singleWaterMonthRecords, setSingleWaterMonthRecords] = useState<DynamicAnalysisRecord[]>([]);
   const [singleWaterYearRecords, setSingleWaterYearRecords] = useState<DynamicAnalysisRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [filters, setFilters] = useState({ unit: "采油作业一区", block: "", wellNo: "" });
-  const [overallOilFilters, setOverallOilFilters] = useState({ unit: "采油作业一区", block: "" });
-  const [overallWaterFilters, setOverallWaterFilters] = useState({ unit: "采油作业一区", block: "" });
-  const [singleOilMonthFilters, setSingleOilMonthFilters] = useState({ unit: "采油作业一区", block: "", wellNo: "" });
-  const [singleOilYearFilters, setSingleOilYearFilters] = useState({ unit: "采油作业一区", block: "", wellNo: "" });
-  const [singleWaterMonthFilters, setSingleWaterMonthFilters] = useState({ unit: "采油作业一区", block: "", wellNo: "" });
-  const [singleWaterYearFilters, setSingleWaterYearFilters] = useState({ unit: "采油作业一区", block: "", wellNo: "" });
+  const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "" });
+  const [overallOilFilters, setOverallOilFilters] = useState({ unit: "", block: "" });
+  const [singleOilFilters, setSingleOilFilters] = useState({ unit: "", block: "", wellNo: "" });
+  const [singleWaterFilters, setSingleWaterFilters] = useState({ unit: "", block: "", wellNo: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [emptyQueryMessage, setEmptyQueryMessage] = useState("");
@@ -3748,7 +4848,14 @@ function DynamicAnalysisPage() {
     { id: "single-oil" as const, label: "油井单井对比" },
     { id: "single-water" as const, label: "水井单井对比" },
   ];
-  const groupHeaders = ["旬度末", "上月平均", "上年12月份", "对比上月", "对比上年12月份"];
+
+  const BLOCK_UNIT_MAP = OIL_PRODUCTION_BLOCK_UNIT_MAP;
+  const ALL_BLOCKS = Object.keys(BLOCK_UNIT_MAP);
+  const getFilteredBlocks = (unit: string) => {
+    return getOilProductionBlocks(unit || undefined);
+  };
+
+const groupHeaders = ["旬度末", "上月平均", "上年12月份", "对比上月", "对比上年12月份"];
   const oilColumns = ["总井数", "开井数", "日产液", "日产油", "含水"];
   const waterColumns = ["总井数", "开井数", "日注水"];
   const singleOilColumns = ["日产液", "日产油", "含水"];
@@ -3781,7 +4888,7 @@ function DynamicAnalysisPage() {
     }
   };
 
-  const loadOverallWaterRecords = async (nextFilters = overallWaterFilters) => {
+  const loadOverallWaterRecords = async (nextFilters = overallOilFilters) => { // shares oil filters
     try {
       setError("");
       const params = Object.fromEntries(Object.entries({ ...nextFilters, kind: "overall-water", page: 1, pageSize: 100 }).filter(([, value]) => String(value).trim()));
@@ -3794,8 +4901,8 @@ function DynamicAnalysisPage() {
   };
 
   const loadSingleOilMonthRecords = async (
-    nextFilters = singleOilMonthFilters,
-    thresholds?: { liquid: string; oil: string; water: string },
+    nextFilters = singleOilFilters,
+    thresholds: { liquid: string; oil: string; water: string } = oilSingleMonthThresholds,
     showEmptyAlert = false,
   ) => {
     try {
@@ -3825,8 +4932,8 @@ function DynamicAnalysisPage() {
   };
 
   const loadSingleOilYearRecords = async (
-    nextFilters = singleOilYearFilters,
-    thresholds?: { liquid: string; oil: string; water: string },
+    nextFilters = singleOilFilters,
+    thresholds: { liquid: string; oil: string; water: string } = oilSingleYearThresholds,
     showEmptyAlert = false,
   ) => {
     try {
@@ -3856,8 +4963,8 @@ function DynamicAnalysisPage() {
   };
 
   const loadSingleWaterMonthRecords = async (
-    nextFilters = singleWaterMonthFilters,
-    thresholds?: { injection: string },
+    nextFilters = singleWaterFilters,
+    thresholds: { injection: string } = waterSingleMonthThresholds,
     showEmptyAlert = false,
   ) => {
     try {
@@ -3881,8 +4988,8 @@ function DynamicAnalysisPage() {
   };
 
   const loadSingleWaterYearRecords = async (
-    nextFilters = singleWaterYearFilters,
-    thresholds?: { injection: string },
+    nextFilters = singleWaterFilters,
+    thresholds: { injection: string } = waterSingleYearThresholds,
     showEmptyAlert = false,
   ) => {
     try {
@@ -3905,15 +5012,81 @@ function DynamicAnalysisPage() {
     }
   };
 
+  const loadOilSingleThresholds = async () => {
+    try {
+      const { data } = await axios.get<Record<string, string>>("/api/config");
+      const month = {
+        liquid: data.dynamicOilSingleMonthLiquidDiffMin || data.dynamicOilSingleLiquidDiffMin || defaultOilSingleThresholds.liquid,
+        oil: data.dynamicOilSingleMonthOilDiffMin || data.dynamicOilSingleOilDiffMin || defaultOilSingleThresholds.oil,
+        water: data.dynamicOilSingleMonthWaterDiffMin || data.dynamicOilSingleWaterDiffMin || defaultOilSingleThresholds.water,
+      };
+      const year = {
+        liquid: data.dynamicOilSingleYearLiquidDiffMin || data.dynamicOilSingleLiquidDiffMin || defaultOilSingleThresholds.liquid,
+        oil: data.dynamicOilSingleYearOilDiffMin || data.dynamicOilSingleOilDiffMin || defaultOilSingleThresholds.oil,
+        water: data.dynamicOilSingleYearWaterDiffMin || data.dynamicOilSingleWaterDiffMin || defaultOilSingleThresholds.water,
+      };
+      setOilSingleMonthThresholds(month);
+      setOilSingleYearThresholds(year);
+      return { month, year };
+    } catch {
+      setOilSingleMonthThresholds(defaultOilSingleThresholds);
+      setOilSingleYearThresholds(defaultOilSingleThresholds);
+      return { month: defaultOilSingleThresholds, year: defaultOilSingleThresholds };
+    }
+  };
+
+  const loadWaterSingleThresholds = async () => {
+    try {
+      const { data } = await axios.get<Record<string, string>>("/api/config");
+      const month = {
+        injection: data.dynamicWaterSingleMonthInjectionDiffMin || defaultWaterSingleThresholds.injection,
+      };
+      const year = {
+        injection: data.dynamicWaterSingleYearInjectionDiffMin || defaultWaterSingleThresholds.injection,
+      };
+      setWaterSingleMonthThresholds(month);
+      setWaterSingleYearThresholds(year);
+      return { month, year };
+    } catch {
+      setWaterSingleMonthThresholds(defaultWaterSingleThresholds);
+      setWaterSingleYearThresholds(defaultWaterSingleThresholds);
+      return { month: defaultWaterSingleThresholds, year: defaultWaterSingleThresholds };
+    }
+  };
+
   useEffect(() => {
-    void loadRecords();
-    void loadOverallOilRecords();
-    void loadOverallWaterRecords();
-    void loadSingleOilMonthRecords();
-    void loadSingleOilYearRecords();
-    void loadSingleWaterMonthRecords();
-    void loadSingleWaterYearRecords();
+    void (async () => {
+      const thresholds = await loadOilSingleThresholds();
+      void loadRecords();
+      void loadOverallOilRecords();
+      void loadOverallWaterRecords();
+      void loadSingleOilMonthRecords(singleOilFilters, thresholds.month);
+      void loadSingleOilYearRecords(singleOilFilters, thresholds.year);
+    })();
+    void (async () => {
+      const thresholds = await loadWaterSingleThresholds();
+      void loadSingleWaterMonthRecords(singleWaterFilters, thresholds.month);
+      void loadSingleWaterYearRecords(singleWaterFilters, thresholds.year);
+    })();
   }, []);
+
+  useEffect(() => {
+    if (activeSubMenu !== "single-oil") return;
+    void (async () => {
+      const thresholds = await loadOilSingleThresholds();
+      void loadSingleOilMonthRecords(singleOilFilters, thresholds.month);
+      void loadSingleOilYearRecords(singleOilFilters, thresholds.year);
+    })();
+  }, [activeSubMenu]);
+
+  useEffect(() => {
+    if (activeSubMenu !== "single-water") return;
+    void (async () => {
+      const thresholds = await loadWaterSingleThresholds();
+      void loadSingleWaterMonthRecords(singleWaterFilters, thresholds.month);
+      void loadSingleWaterYearRecords(singleWaterFilters, thresholds.year);
+    })();
+  }, [activeSubMenu]);
 
   const handleCreate = async () => {
     const kind = window.prompt("类型：overall-oil / overall-water / single-oil / single-water", activeSubMenu === "overall" ? "overall-oil" : activeSubMenu)?.trim();
@@ -3921,7 +5094,7 @@ function DynamicAnalysisPage() {
     const isWater = kind.includes("water");
     const payload = {
       kind,
-      unit: window.prompt("单位", filters.unit || overallOilFilters.unit || "采油作业一区")?.trim() || "",
+      unit: window.prompt("单位", filters.unit || overallOilFilters.unit || "高采采油作业一区")?.trim() || "",
       block: window.prompt("区块", filters.block || overallOilFilters.block || "区块1")?.trim() || "",
       wellNo: kind.startsWith("single") ? window.prompt("井号", filters.wellNo || "GS-NEW")?.trim() || "" : null,
       endValues: isWater ? ["180", "8.5", "12.1"] : ["120", "115", "450", "35", "92%"],
@@ -4072,36 +5245,62 @@ function DynamicAnalysisPage() {
   const tableHeadClass = "border border-[#9fc4e8] bg-[#e3f0fb] px-3 py-2 text-center text-sm font-bold text-slate-900";
   const tableCellClass = "border border-[#9fc4e8] bg-white px-3 py-2 text-center text-sm text-slate-900";
   const selectedAnalysisCellClass = "bg-red-50";
-  const currentMonth = new Date();
-  const previousMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
-  const formatMonth = (date: Date) => `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, "0")}月`;
+  const getTenDayPeriod = (date: Date) => {
+    const day = date.getDate();
+    if (day <= 10) return { label: "上旬", start: 1, end: 10 };
+    if (day <= 20) return { label: "中旬", start: 11, end: 20 };
+    return { label: "下旬", start: 21, end: 31 };
+  };
+  const today = new Date();
+  const currentDay = today.getDate();
+  let currentPeriodLabel: string;
+  let currentPeriodDate: Date;
+  if (currentDay <= 10) {
+    currentPeriodLabel = `${today.getFullYear()}年${String(today.getMonth() + 1).padStart(2, "0")}月上旬`;
+    currentPeriodDate = today;
+  } else if (currentDay <= 20) {
+    currentPeriodLabel = `${today.getFullYear()}年${String(today.getMonth() + 1).padStart(2, "0")}月上旬`;
+    currentPeriodDate = new Date(today.getFullYear(), today.getMonth(), 10);
+  } else {
+    currentPeriodLabel = `${today.getFullYear()}年${String(today.getMonth() + 1).padStart(2, "0")}月中旬`;
+    currentPeriodDate = new Date(today.getFullYear(), today.getMonth(), 20);
+  }
+  const prevPeriodDate = new Date(currentPeriodDate.getFullYear(), currentPeriodDate.getMonth(), currentPeriodDate.getDate() - 10);
+  const prevPeriod = getTenDayPeriod(prevPeriodDate);
+  const previousMonthLabel = `${prevPeriodDate.getFullYear()}年${String(prevPeriodDate.getMonth() + 1).padStart(2, "0")}月${prevPeriod.label}`;
+  const currentMonth = currentPeriodDate;
+  const previousMonth = prevPeriodDate;
+  const formatMonth = (d: Date) => {
+    const p = getTenDayPeriod(d);
+    return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, "0")}月${p.label}`;
+  };
   const statusRows = [
-    { no: 1, well: "GS-101", block: "区块1", unit: "采油作业一区", status: "正常", craft: "分注", oil: "3.2", water: "92.1%" },
-    { no: 2, well: "GS-102", block: "区块1", unit: "采油作业一区", status: "异常", craft: "分注", oil: "1.5", water: "95.2%" },
-    { no: 3, well: "GS-103", block: "区块2", unit: "采油作业一区", status: "维护", craft: "分注", oil: "0", water: "0%" },
-    { no: 4, well: "GS-104", block: "区块2", unit: "采油作业一区", status: "正常", craft: "分注", oil: "2.8", water: "91.5%" },
-    { no: 5, well: "GS-105", block: "区块3", unit: "采油作业一区", status: "停产", craft: "分注", oil: "0", water: "0%" },
+    { no: 1, well: "GS-101", block: "区块1", unit: "", status: "正常", craft: "分注", oil: "3.2", water: "92.1%" },
+    { no: 2, well: "GS-102", block: "区块1", unit: "", status: "异常", craft: "分注", oil: "1.5", water: "95.2%" },
+    { no: 3, well: "GS-103", block: "区块2", unit: "", status: "维护", craft: "分注", oil: "0", water: "0%" },
+    { no: 4, well: "GS-104", block: "区块2", unit: "", status: "正常", craft: "分注", oil: "2.8", water: "91.5%" },
+    { no: 5, well: "GS-105", block: "区块3", unit: "", status: "停产", craft: "分注", oil: "0", water: "0%" },
   ];
   const overallOilRows = [
-    { unit: "采油作业一区", block: "区块1", end: ["120", "115", "450", "35", "92%"], avg: ["120", "112", "445", "34", "91.8%"], lastYear: ["118", "110", "430", "32", "91.5%"], diffMonth: ["0", "+3", "+5", "+1", "0.2%"], diffYear: ["+2", "+5", "+20", "+3", "0.5%"] },
-    { unit: "采油作业一区", block: "区块2", end: ["85", "80", "320", "25", "93%"], avg: ["85", "82", "330", "26", "92.5%"], lastYear: ["82", "78", "300", "23", "92.1%"], diffMonth: ["0", "-2", "-10", "-1", "0.5%"], diffYear: ["+3", "+2", "+20", "+2", "0.9%"] },
-    { unit: "采油作业一区", block: "区块3", end: ["150", "140", "600", "45", "91%"], avg: ["150", "138", "590", "44", "90.5%"], lastYear: ["148", "136", "580", "42", "90.2%"], diffMonth: ["0", "+2", "+10", "+1", "0.5%"], diffYear: ["+2", "+4", "+20", "+3", "0.8%"] },
-    { unit: "采油作业一区", block: "区块4", end: ["95", "90", "380", "30", "92.5%"], avg: ["95", "88", "375", "29", "92.2%"], lastYear: ["92", "86", "360", "28", "92%"], diffMonth: ["0", "+2", "+5", "+1", "0.3%"], diffYear: ["+3", "+4", "+20", "+2", "0.5%"] },
-    { unit: "采油作业一区", block: "区块5", end: ["110", "105", "420", "32", "93.5%"], avg: ["110", "102", "415", "31", "93.1%"], lastYear: ["108", "100", "400", "30", "92.8%"], diffMonth: ["0", "+3", "+5", "+1", "0.4%"], diffYear: ["+2", "+5", "+20", "+2", "0.7%"] },
+    { unit: "", block: "区块1", end: ["120", "115", "450", "35", "92%"], avg: ["120", "112", "445", "34", "91.8%"], lastYear: ["118", "110", "430", "32", "91.5%"], diffMonth: ["0", "+3", "+5", "+1", "0.2%"], diffYear: ["+2", "+5", "+20", "+3", "0.5%"] },
+    { unit: "", block: "区块2", end: ["85", "80", "320", "25", "93%"], avg: ["85", "82", "330", "26", "92.5%"], lastYear: ["82", "78", "300", "23", "92.1%"], diffMonth: ["0", "-2", "-10", "-1", "0.5%"], diffYear: ["+3", "+2", "+20", "+2", "0.9%"] },
+    { unit: "", block: "区块3", end: ["150", "140", "600", "45", "91%"], avg: ["150", "138", "590", "44", "90.5%"], lastYear: ["148", "136", "580", "42", "90.2%"], diffMonth: ["0", "+2", "+10", "+1", "0.5%"], diffYear: ["+2", "+4", "+20", "+3", "0.8%"] },
+    { unit: "", block: "区块4", end: ["95", "90", "380", "30", "92.5%"], avg: ["95", "88", "375", "29", "92.2%"], lastYear: ["92", "86", "360", "28", "92%"], diffMonth: ["0", "+2", "+5", "+1", "0.3%"], diffYear: ["+3", "+4", "+20", "+2", "0.5%"] },
+    { unit: "", block: "区块5", end: ["110", "105", "420", "32", "93.5%"], avg: ["110", "102", "415", "31", "93.1%"], lastYear: ["108", "100", "400", "30", "92.8%"], diffMonth: ["0", "+3", "+5", "+1", "0.4%"], diffYear: ["+2", "+5", "+20", "+2", "0.7%"] },
   ];
   const overallWaterRows = [
-    { unit: "采油作业一区", block: "区块1", end: ["48", "46", "180"], avg: ["48", "45", "176"], lastYear: ["47", "44", "165"], diffMonth: ["0", "+1", "+4"], diffYear: ["+1", "+2", "+15"] },
-    { unit: "采油作业一区", block: "区块2", end: ["42", "40", "150"], avg: ["42", "41", "158"], lastYear: ["40", "38", "142"], diffMonth: ["0", "-1", "-8"], diffYear: ["+2", "+2", "+8"] },
-    { unit: "采油作业一区", block: "区块3", end: ["56", "53", "210"], avg: ["56", "52", "205"], lastYear: ["54", "51", "198"], diffMonth: ["0", "+1", "+5"], diffYear: ["+2", "+2", "+12"] },
-    { unit: "采油作业一区", block: "区块4", end: ["30", "28", "120"], avg: ["30", "29", "122"], lastYear: ["28", "27", "115"], diffMonth: ["0", "-1", "-2"], diffYear: ["+2", "+1", "+5"] },
-    { unit: "采油作业一区", block: "区块5", end: ["38", "36", "165"], avg: ["38", "35", "160"], lastYear: ["36", "34", "152"], diffMonth: ["0", "+1", "+5"], diffYear: ["+2", "+2", "+13"] },
+    { unit: "", block: "区块1", end: ["48", "46", "180"], avg: ["48", "45", "176"], lastYear: ["47", "44", "165"], diffMonth: ["0", "+1", "+4"], diffYear: ["+1", "+2", "+15"] },
+    { unit: "", block: "区块2", end: ["42", "40", "150"], avg: ["42", "41", "158"], lastYear: ["40", "38", "142"], diffMonth: ["0", "-1", "-8"], diffYear: ["+2", "+2", "+8"] },
+    { unit: "", block: "区块3", end: ["56", "53", "210"], avg: ["56", "52", "205"], lastYear: ["54", "51", "198"], diffMonth: ["0", "+1", "+5"], diffYear: ["+2", "+2", "+12"] },
+    { unit: "", block: "区块4", end: ["30", "28", "120"], avg: ["30", "29", "122"], lastYear: ["28", "27", "115"], diffMonth: ["0", "-1", "-2"], diffYear: ["+2", "+1", "+5"] },
+    { unit: "", block: "区块5", end: ["38", "36", "165"], avg: ["38", "35", "160"], lastYear: ["36", "34", "152"], diffMonth: ["0", "+1", "+5"], diffYear: ["+2", "+2", "+13"] },
   ];
   const singleOilSeedRows = [
-    { no: 1, unit: "采油作业一区", block: "区块1", well: "GS-101", end: ["450", "35", "92%"], avg: ["445", "34", "91.8%"], lastYear: ["430", "32", "91.5%"], diffMonth: ["+5", "+1", "0.2%"], diffYear: ["+20", "+3", "0.5%"], advice: ["复核配注", "持续观察"] },
-    { no: 2, unit: "采油作业一区", block: "区块1", well: "GS-102", end: ["320", "25", "93%"], avg: ["330", "26", "92.5%"], lastYear: ["300", "23", "92.1%"], diffMonth: ["-10", "-1", "0.5%"], diffYear: ["+20", "+2", "0.9%"], advice: ["调整制度", "重点跟踪"] },
-    { no: 3, unit: "采油作业一区", block: "区块2", well: "GS-103", end: ["0", "0", "0%"], avg: ["0", "0", "0%"], lastYear: ["280", "18", "94%"], diffMonth: ["0", "0", "0%"], diffYear: ["-280", "-18", "-94%"], advice: ["现场核实", "停产分析"] },
-    { no: 4, unit: "采油作业一区", block: "区块2", well: "GS-104", end: ["380", "30", "92.5%"], avg: ["375", "29", "92.2%"], lastYear: ["360", "28", "92%"], diffMonth: ["+5", "+1", "0.3%"], diffYear: ["+20", "+2", "0.5%"], advice: ["正常管理", "维持方案"] },
-    { no: 5, unit: "采油作业一区", block: "区块3", well: "GS-105", end: ["420", "32", "93.5%"], avg: ["415", "31", "93.1%"], lastYear: ["400", "30", "92.8%"], diffMonth: ["+5", "+1", "0.4%"], diffYear: ["+20", "+2", "0.7%"], advice: ["优化参数", "跟踪含水"] },
+    { no: 1, unit: "", block: "区块1", well: "GS-101", end: ["450", "35", "92%"], avg: ["445", "34", "91.8%"], lastYear: ["430", "32", "91.5%"], diffMonth: ["+5", "+1", "0.2%"], diffYear: ["+20", "+3", "0.5%"], advice: ["复核配注", "持续观察"] },
+    { no: 2, unit: "", block: "区块1", well: "GS-102", end: ["320", "25", "93%"], avg: ["330", "26", "92.5%"], lastYear: ["300", "23", "92.1%"], diffMonth: ["-10", "-1", "0.5%"], diffYear: ["+20", "+2", "0.9%"], advice: ["调整制度", "重点跟踪"] },
+    { no: 3, unit: "", block: "区块2", well: "GS-103", end: ["0", "0", "0%"], avg: ["0", "0", "0%"], lastYear: ["280", "18", "94%"], diffMonth: ["0", "0", "0%"], diffYear: ["-280", "-18", "-94%"], advice: ["现场核实", "停产分析"] },
+    { no: 4, unit: "", block: "区块2", well: "GS-104", end: ["380", "30", "92.5%"], avg: ["375", "29", "92.2%"], lastYear: ["360", "28", "92%"], diffMonth: ["+5", "+1", "0.3%"], diffYear: ["+20", "+2", "0.5%"], advice: ["正常管理", "维持方案"] },
+    { no: 5, unit: "", block: "区块3", well: "GS-105", end: ["420", "32", "93.5%"], avg: ["415", "31", "93.1%"], lastYear: ["400", "30", "92.8%"], diffMonth: ["+5", "+1", "0.4%"], diffYear: ["+20", "+2", "0.7%"], advice: ["优化参数", "跟踪含水"] },
   ];
   const singleOilRows = Array.from({ length: 30 }, (_, index) => {
     const seed = singleOilSeedRows[index % singleOilSeedRows.length];
@@ -4132,11 +5331,11 @@ function DynamicAnalysisPage() {
     };
   });
   const singleWaterSeedRows = [
-    { no: 1, unit: "采油作业一区", block: "区块1", well: "GS-W01", end: ["180", "8.5", "12.1"], avg: ["176", "8.2", "11.8"], lastYear: ["165", "7.9", "11.5"], diffMonth: ["+4", "+0.3", "+0.3"], diffYear: ["+15", "+0.6", "+0.6"], advice: ["稳注", "正常"] },
-    { no: 2, unit: "采油作业一区", block: "区块1", well: "GS-W02", end: ["150", "7.8", "10.6"], avg: ["158", "7.9", "10.8"], lastYear: ["142", "7.4", "10.2"], diffMonth: ["-8", "-0.1", "-0.2"], diffYear: ["+8", "+0.4", "+0.4"], advice: ["核查水量", "跟踪压力"] },
-    { no: 3, unit: "采油作业一区", block: "区块2", well: "GS-W03", end: ["210", "9.2", "13.4"], avg: ["205", "9.0", "13.1"], lastYear: ["198", "8.8", "12.7"], diffMonth: ["+5", "+0.2", "+0.3"], diffYear: ["+12", "+0.4", "+0.7"], advice: ["适度上调", "加强监测"] },
-    { no: 4, unit: "采油作业一区", block: "区块2", well: "GS-W04", end: ["0", "0", "0"], avg: ["0", "0", "0"], lastYear: ["120", "6.5", "9.8"], diffMonth: ["0", "0", "0"], diffYear: ["-120", "-6.5", "-9.8"], advice: ["现场处理", "查明原因"] },
-    { no: 5, unit: "采油作业一区", block: "区块3", well: "GS-W05", end: ["165", "8.0", "11.2"], avg: ["160", "7.8", "11.0"], lastYear: ["152", "7.5", "10.7"], diffMonth: ["+5", "+0.2", "+0.2"], diffYear: ["+13", "+0.5", "+0.5"], advice: ["维持注水", "月度复核"] },
+    { no: 1, unit: "", block: "区块1", well: "GS-W01", end: ["180", "8.5", "12.1"], avg: ["176", "8.2", "11.8"], lastYear: ["165", "7.9", "11.5"], diffMonth: ["+4", "+0.3", "+0.3"], diffYear: ["+15", "+0.6", "+0.6"], advice: ["稳注", "正常"] },
+    { no: 2, unit: "", block: "区块1", well: "GS-W02", end: ["150", "7.8", "10.6"], avg: ["158", "7.9", "10.8"], lastYear: ["142", "7.4", "10.2"], diffMonth: ["-8", "-0.1", "-0.2"], diffYear: ["+8", "+0.4", "+0.4"], advice: ["核查水量", "跟踪压力"] },
+    { no: 3, unit: "", block: "区块2", well: "GS-W03", end: ["210", "9.2", "13.4"], avg: ["205", "9.0", "13.1"], lastYear: ["198", "8.8", "12.7"], diffMonth: ["+5", "+0.2", "+0.3"], diffYear: ["+12", "+0.4", "+0.7"], advice: ["适度上调", "加强监测"] },
+    { no: 4, unit: "", block: "区块2", well: "GS-W04", end: ["0", "0", "0"], avg: ["0", "0", "0"], lastYear: ["120", "6.5", "9.8"], diffMonth: ["0", "0", "0"], diffYear: ["-120", "-6.5", "-9.8"], advice: ["现场处理", "查明原因"] },
+    { no: 5, unit: "", block: "区块3", well: "GS-W05", end: ["165", "8.0", "11.2"], avg: ["160", "7.8", "11.0"], lastYear: ["152", "7.5", "10.7"], diffMonth: ["+5", "+0.2", "+0.2"], diffYear: ["+13", "+0.5", "+0.5"], advice: ["维持注水", "月度复核"] },
   ];
   const singleWaterRows = Array.from({ length: 35 }, (_, index) => {
     const seed = singleWaterSeedRows[index % singleWaterSeedRows.length];
@@ -4200,12 +5399,18 @@ function DynamicAnalysisPage() {
   });
   const apiOverallOilRows = overallOilRecords.map(toOverallRow);
   const apiOverallWaterRows = overallWaterRecords.map(toOverallRow);
+  const overallRowOrder = new Map<string, number>(apiOverallOilRows.map((row, index) => [`${row.unit}::${row.block}`, index]));
+  const alignedOverallWaterRows = [...apiOverallWaterRows].sort((a, b) => {
+    const aOrder = overallRowOrder.get(`${a.unit}::${a.block}`) ?? Number.MAX_SAFE_INTEGER;
+    const bOrder = overallRowOrder.get(`${b.unit}::${b.block}`) ?? Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder;
+  });
   const apiSingleOilRows = records.filter((row) => row.kind === "single-oil").map(toSingleRow);
   const apiSingleWaterRows = records.filter((row) => row.kind === "single-water").map(toSingleRow);
-  const apiSingleOilMonthRows = singleOilMonthRecords.map(toSingleRow);
-  const apiSingleOilYearRows = singleOilYearRecords.map(toSingleRow);
-  const apiSingleWaterMonthRows = singleWaterMonthRecords.map(toSingleRow);
-  const apiSingleWaterYearRows = singleWaterYearRecords.map(toSingleRow);
+  const apiSingleOilMonthRows = singleOilMonthRecords.map(toSingleRow).sort((a, b) => parseFloat(a.diffMonth[0]) - parseFloat(b.diffMonth[0]));
+  const apiSingleOilYearRows = singleOilYearRecords.map(toSingleRow).sort((a, b) => parseFloat(a.diffYear[0]) - parseFloat(b.diffYear[0]));
+  const apiSingleWaterMonthRows = singleWaterMonthRecords.map(toSingleRow).sort((a, b) => parseFloat(a.diffMonth[0]) - parseFloat(b.diffMonth[0]));
+  const apiSingleWaterYearRows = singleWaterYearRecords.map(toSingleRow).sort((a, b) => parseFloat(a.diffYear[0]) - parseFloat(b.diffYear[0]));
 
   const renderOverallFilterBar = (
     values: { unit: string; block: string },
@@ -4216,22 +5421,20 @@ function DynamicAnalysisPage() {
       <div className="flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-1">
           作业区
-          <select className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}>
+          <select className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value, block: "" })}>
             <option value="">全部单位</option>
-            <option>采油作业一区</option>
-            <option>采油作业二区</option>
-            <option>采油作业三区</option>
+            <option>高采采油作业一区</option>
+            <option>高采采油作业二区</option>
+            <option>高采采油作业三区</option>
           </select>
         </label>
         <label className="inline-flex items-center gap-1">
           区块
           <select className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
             <option value="">全部区块</option>
-            <option>区块1</option>
-            <option>区块2</option>
-            <option>区块3</option>
-            <option>区块4</option>
-            <option>区块5</option>
+            {getFilteredBlocks(values.unit).map((b) => (
+              <option key={b}>{b}</option>
+            ))}
           </select>
         </label>
         <button className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900" onClick={onApply}>确定</button>
@@ -4247,11 +5450,8 @@ function DynamicAnalysisPage() {
   const renderOilSingleFilterBar = (
     values: { unit: string; block: string; wellNo: string },
     onChange: (values: { unit: string; block: string; wellNo: string }) => void,
-    thresholds: { liquid: string; oil: string; water: string },
-    onThresholdChange: (values: { liquid: string; oil: string; water: string }) => void,
     onApply: (
       values: { unit: string; block: string; wellNo: string },
-      thresholds: { liquid: string; oil: string; water: string },
     ) => void,
     totalCount?: number,
   ) => {
@@ -4263,33 +5463,25 @@ function DynamicAnalysisPage() {
         block: String(formData.get("block") ?? ""),
         wellNo: String(formData.get("wellNo") ?? ""),
       };
-      const nextThresholds = {
-        liquid: String(formData.get("liquid") ?? ""),
-        oil: String(formData.get("oil") ?? ""),
-        water: String(formData.get("water") ?? ""),
-      };
       onChange(nextValues);
-      onThresholdChange(nextThresholds);
-      onApply(nextValues, nextThresholds);
+      onApply(nextValues);
     };
 
     return (
       <form className="flex flex-wrap items-center gap-4 px-2 py-2 text-xs text-slate-900" onSubmit={handleSubmit}>
         <div className="flex flex-wrap items-center gap-3">
           <label className="inline-flex items-center gap-1">
-            单位
-            <select name="unit" className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}><option value="">全部单位</option><option>采油作业一区</option></select>
+            作业区
+            <select name="unit" className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value, block: "" })}><option value="">全部单位</option><option>高采采油作业一区</option><option>高采采油作业二区</option><option>高采采油作业三区</option></select>
           </label>
           <label className="inline-flex items-center gap-1">
             区块
             <select name="block" className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
               <option value="">全部区块</option>
-              <option>区块1</option>
-              <option>区块2</option>
-              <option>区块3</option>
-              <option>区块4</option>
-              <option>区块5</option>
-            </select>
+            {getFilteredBlocks(values.unit).map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+          </select>
           </label>
           <label className="inline-flex items-center gap-1">
             井号
@@ -4297,30 +5489,12 @@ function DynamicAnalysisPage() {
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {[
-            { key: "liquid" as const, label: "日产液", step: "0.1" },
-            { key: "oil" as const, label: "日产油", step: "0.1" },
-            { key: "water" as const, label: "含水", step: "0.1" },
-          ].map((item, index) => (
-            <label
-              key={item.key}
-              className={cn(
-                "inline-flex items-center gap-1 rounded border border-[#9fc4e8] px-3 py-1 font-bold text-slate-800",
-                index === 0 ? "bg-[#eaf4ff]" : "bg-white",
-              )}
-            >
-              <span>{item.label} 差值绝对值&gt;=</span>
-              <input
-                type="number"
-                name={item.key}
-                min="0"
-                step={item.step}
-                value={thresholds[item.key]}
-                onChange={(event) => onThresholdChange({ ...thresholds, [item.key]: event.target.value })}
-                className="h-5 w-14 rounded border border-[#a8bfd8] bg-white px-1 text-center text-xs font-bold text-cnpc-red outline-none"
-              />
-            </label>
-          ))}
+          <span className="rounded border border-[#9fc4e8] bg-[#eaf4ff] px-3 py-1 font-bold text-slate-800">
+            上月阈值：日产液≥{oilSingleMonthThresholds.liquid}，日产油≥{oilSingleMonthThresholds.oil}，含水≥{oilSingleMonthThresholds.water}
+          </span>
+          <span className="rounded border border-[#9fc4e8] bg-white px-3 py-1 font-bold text-slate-800">
+            上年12月阈值：日产液≥{oilSingleYearThresholds.liquid}，日产油≥{oilSingleYearThresholds.oil}，含水≥{oilSingleYearThresholds.water}
+          </span>
           <button type="submit" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900">确定</button>
           <button type="button" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900 disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
           {typeof totalCount === "number" && (
@@ -4336,11 +5510,8 @@ function DynamicAnalysisPage() {
   const renderWaterSingleFilterBar = (
     values: { unit: string; block: string; wellNo: string },
     onChange: (values: { unit: string; block: string; wellNo: string }) => void,
-    thresholds: { injection: string },
-    onThresholdChange: (values: { injection: string }) => void,
     onApply: (
       values: { unit: string; block: string; wellNo: string },
-      thresholds: { injection: string },
     ) => void,
     totalCount?: number,
   ) => {
@@ -4352,30 +5523,24 @@ function DynamicAnalysisPage() {
         block: String(formData.get("block") ?? ""),
         wellNo: String(formData.get("wellNo") ?? ""),
       };
-      const nextThresholds = {
-        injection: String(formData.get("injection") ?? ""),
-      };
       onChange(nextValues);
-      onThresholdChange(nextThresholds);
-      onApply(nextValues, nextThresholds);
+      onApply(nextValues);
     };
 
     return (
       <form className="flex flex-wrap items-center gap-4 px-2 py-2 text-xs text-slate-900" onSubmit={handleSubmit}>
         <div className="flex flex-wrap items-center gap-3">
           <label className="inline-flex items-center gap-1">
-            单位
-            <select name="unit" className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value })}><option value="">全部单位</option><option>采油作业一区</option></select>
+            作业区
+            <select name="unit" className={filterSelectClass} value={values.unit} onChange={(event) => onChange({ ...values, unit: event.target.value, block: "" })}><option value="">全部单位</option><option>高采采油作业一区</option><option>高采采油作业二区</option><option>高采采油作业三区</option></select>
           </label>
           <label className="inline-flex items-center gap-1">
             区块
             <select name="block" className={filterSelectClass} value={values.block} onChange={(event) => onChange({ ...values, block: event.target.value })}>
               <option value="">全部区块</option>
-              <option>区块1</option>
-              <option>区块2</option>
-              <option>区块3</option>
-              <option>区块4</option>
-              <option>区块5</option>
+              {getFilteredBlocks(values.unit).map((b) => (
+                <option key={b}>{b}</option>
+              ))}
             </select>
           </label>
           <label className="inline-flex items-center gap-1">
@@ -4384,18 +5549,12 @@ function DynamicAnalysisPage() {
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1 rounded border border-[#9fc4e8] bg-[#eaf4ff] px-3 py-1 font-bold text-slate-800">
-            <span>日注水 差值绝对值&gt;=</span>
-            <input
-              type="number"
-              name="injection"
-              min="0"
-              step="0.1"
-              value={thresholds.injection}
-              onChange={(event) => onThresholdChange({ injection: event.target.value })}
-              className="h-5 w-14 rounded border border-[#a8bfd8] bg-white px-1 text-center text-xs font-bold text-cnpc-red outline-none"
-            />
-          </label>
+          <span className="rounded border border-[#9fc4e8] bg-[#eaf4ff] px-3 py-1 font-bold text-slate-800">
+            上月阈值：日注水≥{waterSingleMonthThresholds.injection}
+          </span>
+          <span className="rounded border border-[#9fc4e8] bg-white px-3 py-1 font-bold text-slate-800">
+            上年12月阈值：日注水≥{waterSingleYearThresholds.injection}
+          </span>
           <button type="submit" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900">确定</button>
           <button type="button" className="h-6 rounded border border-[#9eb8d4] bg-[#e4f0fa] px-3 text-xs font-bold text-slate-900 disabled:opacity-50" disabled={!selectedId} onClick={handleDelete}>删除</button>
           {typeof totalCount === "number" && (
@@ -4407,12 +5566,13 @@ function DynamicAnalysisPage() {
       </form>
     );
   };
-
-  const renderAnalysisPanel = (title: string, children: React.ReactNode, filterBar: React.ReactNode) => (
-    <section className="overflow-hidden rounded border border-[#9fc4e8] bg-[#f8fbff] shadow-sm">
+  const renderAnalysisPanel = (title: string, children: React.ReactNode, filterBar?: React.ReactNode) => (
+    <section className="space-y-2">
       {filterBar}
-      <h2 className="pb-2 text-center text-xl font-black text-cnpc-red">{title}</h2>
-      {children}
+      <div className="overflow-hidden rounded border border-[#9fc4e8] bg-[#f8fbff] shadow-sm">
+        <h2 className="pb-2 text-center text-xl font-black text-cnpc-red">{title}</h2>
+        {children}
+      </div>
     </section>
   );
 
@@ -4476,46 +5636,59 @@ function DynamicAnalysisPage() {
       diffYear: string[];
     }>,
     columns: string[],
-  ) => (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1300px] border-collapse">
-        <thead>
-          <tr>
-            <th rowSpan={2} className={tableHeadClass}>单位</th>
-            <th rowSpan={2} className={tableHeadClass}>区块</th>
-            {["旬度末", "上月平均", "上年12月份", "对比上月", "对比上年12月份"].map((header) => (
-              <th key={header} colSpan={columns.length} className={tableHeadClass}>{header}</th>
-            ))}
-          </tr>
-          <tr>
-            {["旬度末", "上月平均", "上年12月份", "对比上月", "对比上年12月份"].flatMap((header) =>
-              columns.map((column) => (
-                <th key={`${header}-${column}`} className={tableHeadClass}>{column}</th>
-              )),
+  ) => {
+    const periodHeaders = ["\u65ec\u5ea6\u672b", "\u4e0a\u6708\u5e73\u5747", "\u4e0a\u5e7412\u6708\u4efd", "\u5bf9\u6bd4\u4e0a\u6708", "\u5bf9\u6bd4\u4e0a\u5e7412\u6708\u4efd"];
+    const groupWidth = 305;
+    const columnWidth = groupWidth / columns.length;
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1840px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[205px]" />
+            <col className="w-[110px]" />
+            {periodHeaders.flatMap((header) =>
+              columns.map((_, index) => <col key={`${header}-col-${index}`} style={{ width: `${columnWidth}px` }} />),
             )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id || row.block} className="cursor-pointer" onClick={() => row.id && setSelectedId(row.id)}>
-              <td className={analysisCellClass(row.id)}>{row.unit}</td>
-              <td className={analysisCellClass(row.id, "font-bold")}>{row.block}</td>
-              {[...row.end, ...row.avg, ...row.lastYear].map((value, index) => (
-                <td key={`base-${index}`} className={analysisCellClass(row.id)}>
-                  {formatAnalysisTableValue(value)}
-                </td>
-              ))}
-              {[...row.diffMonth, ...row.diffYear].map((value, index) => (
-                <td key={`diff-${index}`} className={analysisCellClass(row.id, getDiffClass(value))}>
-                  {formatAnalysisTableValue(value)}
-                </td>
+          </colgroup>
+          <thead>
+            <tr>
+              <th rowSpan={2} className={tableHeadClass}>{"\u5355\u4f4d"}</th>
+              <th rowSpan={2} className={tableHeadClass}>{"\u533a\u5757"}</th>
+              {periodHeaders.map((header) => (
+                <th key={header} colSpan={columns.length} className={tableHeadClass}>{header}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+            <tr>
+              {periodHeaders.flatMap((header) =>
+                columns.map((column, index) => (
+                  <th key={`${header}-${index}`} className={tableHeadClass}>{column}</th>
+                )),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id || row.block} className="cursor-pointer" onClick={() => row.id && setSelectedId(row.id)}>
+                <td className={analysisCellClass(row.id)}>{row.unit}</td>
+                <td className={analysisCellClass(row.id, "font-bold")}>{row.block}</td>
+                {[...row.end, ...row.avg, ...row.lastYear].map((value, index) => (
+                  <td key={`base-${index}`} className={analysisCellClass(row.id)}>
+                    {formatAnalysisTableValue(value)}
+                  </td>
+                ))}
+                {[...row.diffMonth, ...row.diffYear].map((value, index) => (
+                  <td key={`diff-${index}`} className={analysisCellClass(row.id, getDiffClass(value))}>
+                    {formatAnalysisTableValue(value)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const getDiffClass = (value: string) => {
     if (value.startsWith("-")) return "font-bold text-red-600";
@@ -4722,12 +5895,12 @@ function DynamicAnalysisPage() {
           {renderAnalysisPanel(
             "油井对比",
             renderOverallCompareTable(apiOverallOilRows, ["总井数", "开井数", "日产液", "日产油", "含水"]),
-            renderOverallFilterBar(overallOilFilters, setOverallOilFilters, () => loadOverallOilRecords()),
+            renderOverallFilterBar(overallOilFilters, (v) => { setOverallOilFilters(v); }, () => { loadOverallOilRecords(); loadOverallWaterRecords(); }),
           )}
           {renderAnalysisPanel(
             "水井对比",
-            renderOverallCompareTable(apiOverallWaterRows, ["总井数", "开井数", "日注水"]),
-            renderOverallFilterBar(overallWaterFilters, setOverallWaterFilters, () => loadOverallWaterRecords()),
+            renderOverallCompareTable(alignedOverallWaterRows, ["总井数", "开井数", "日注水"]),
+            /* filter bar removed - shares oil comparison filter above */ null,
           )}
         </div>
       )}
@@ -4737,25 +5910,20 @@ function DynamicAnalysisPage() {
             "油井单井对比 - 对比上月",
             renderSinglePeriodCompareTable("上月平均", apiSingleOilMonthRows, singleOilColumns, { maxRows: 10 }),
             renderOilSingleFilterBar(
-              singleOilMonthFilters,
-              setSingleOilMonthFilters,
-              oilSingleMonthThresholds,
-              setOilSingleMonthThresholds,
-              (values, thresholds) => loadSingleOilMonthRecords(values, thresholds, true),
+              singleOilFilters,
+              setSingleOilFilters,
+              async (values) => {
+                const thresholds = await loadOilSingleThresholds();
+                void loadSingleOilMonthRecords(values, thresholds.month, true);
+                void loadSingleOilYearRecords(values, thresholds.year, true);
+              },
               apiSingleOilMonthRows.length,
             ),
           )}
           {renderAnalysisPanel(
             "油井单井对比 - 对比上年12月份",
             renderSinglePeriodCompareTable("上年12月份", apiSingleOilYearRows, singleOilColumns, { maxRows: 10 }),
-            renderOilSingleFilterBar(
-              singleOilYearFilters,
-              setSingleOilYearFilters,
-              oilSingleYearThresholds,
-              setOilSingleYearThresholds,
-              (values, thresholds) => loadSingleOilYearRecords(values, thresholds, true),
-              apiSingleOilYearRows.length,
-            ),
+            null,
           )}
         </div>
       )}
@@ -4765,25 +5933,20 @@ function DynamicAnalysisPage() {
             "水井单井对比 - 对比上月",
             renderSinglePeriodCompareTable("上月平均", apiSingleWaterMonthRows, singleWaterColumns, { maxRows: 10 }),
             renderWaterSingleFilterBar(
-              singleWaterMonthFilters,
-              setSingleWaterMonthFilters,
-              waterSingleMonthThresholds,
-              setWaterSingleMonthThresholds,
-              (values, thresholds) => loadSingleWaterMonthRecords(values, thresholds, true),
+              singleWaterFilters,
+              setSingleWaterFilters,
+              async (values) => {
+                const thresholds = await loadWaterSingleThresholds();
+                void loadSingleWaterMonthRecords(values, thresholds.month, true);
+                void loadSingleWaterYearRecords(values, thresholds.year, true);
+              },
               apiSingleWaterMonthRows.length,
             ),
           )}
           {renderAnalysisPanel(
             "水井单井对比 - 对比上年12月份",
             renderSinglePeriodCompareTable("上年12月份", apiSingleWaterYearRows, singleWaterColumns, { maxRows: 10 }),
-            renderWaterSingleFilterBar(
-              singleWaterYearFilters,
-              setSingleWaterYearFilters,
-              waterSingleYearThresholds,
-              setWaterSingleYearThresholds,
-              (values, thresholds) => loadSingleWaterYearRecords(values, thresholds, true),
-              apiSingleWaterYearRows.length,
-            ),
+            null,
           )}
         </div>
       )}
@@ -6117,6 +7280,8 @@ function WellHistoryPage({
   const [importProgress, setImportProgress] = useState(0);
   const [pdfSaveHandler, setPdfSaveHandler] = useState<PdfSaveHandler | null>(null);
   const [pdfDownloadHandler, setPdfDownloadHandler] = useState<PdfDownloadHandler | null>(null);
+  const [richTextDocument, setRichTextDocument] = useState<WellHistoryRichTextDocument | null>(null);
+  const [editingHtml, setEditingHtml] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   const handlePdfSaveHandlerChange = useCallback((handler: PdfSaveHandler | null) => {
@@ -6149,6 +7314,23 @@ function WellHistoryPage({
   }, []);
 
   useEffect(() => {
+    if (!detail?.wellNo) { setRichTextDocument(null); setEditingHtml(""); return; }
+    let active = true;
+    axios.get<WellHistoryRichTextDocument>(`/api/well-history-archives/${encodeURIComponent(detail.wellNo)}/document`)
+      .then(({ data }) => { if (active) { setRichTextDocument(data); setEditingHtml(data.html); } })
+      .catch((err) => { if (active && err?.response?.status !== 404) setError(err?.response?.data?.error || "井史正文加载失败"); });
+    return () => { active = false; };
+  }, [detail?.wellNo]);
+
+  const saveRichTextDocument = async () => {
+    if (!detail || !richTextDocument) return false;
+    try {
+      const { data } = await axios.put<WellHistoryRichTextDocument>(`/api/well-history-archives/${encodeURIComponent(detail.wellNo)}/document`, { html: editingHtml, baseVersionNo: richTextDocument.versionNo });
+      setRichTextDocument(data); setEditingHtml(data.html); setPdfDirty(false); return true;
+    } catch (err: any) { setError(err?.response?.status === 409 ? "该井史已被其他维护者更新，请刷新后再编辑。" : err?.response?.data?.error || "井史正文保存失败"); return false; }
+  };
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadLatest = async () => {
@@ -6179,9 +7361,12 @@ function WellHistoryPage({
   const openWell = async (wellNo: string, force = false) => {
     if (!wellNo) return false;
     if (!force && wellNo !== detail?.wellNo && pdfDirty) {
-      requestConfirm("当前 PDF 有未保存的编辑内容，切换井史后这些内容会消失。是否继续切换？", () => {
-        setPdfDirty(false);
-        void openWell(wellNo, true);
+      requestConfirm("当前页面有未保存的编辑内容，切换井史后将自动保存。是否继续切换？", () => {
+        void (async () => {
+          const saved = richTextDocument ? await saveRichTextDocument() : await pdfSaveHandler?.();
+          if (saved) void openWell(wellNo, true);
+          else setError("当前页面保存失败，已取消切换井史。");
+        })();
       });
       return false;
     }
@@ -6230,9 +7415,12 @@ function WellHistoryPage({
     if (!normalized) return;
 
     if (normalized !== detail?.wellNo && pdfDirty) {
-      requestConfirm("当前 PDF 有未保存的编辑内容，切换井史后这些内容会消失。是否继续切换？", () => {
-        setPdfDirty(false);
-        void queryWell(normalized, true);
+      requestConfirm("当前页面有未保存的编辑内容，切换井史后将自动保存。是否继续切换？", () => {
+        void (async () => {
+          const saved = richTextDocument ? await saveRichTextDocument() : await pdfSaveHandler?.();
+          if (saved) void queryWell(normalized, true);
+          else setError("当前页面保存失败，已取消切换井史。");
+        })();
       });
       return;
     }
@@ -6304,6 +7492,53 @@ function WellHistoryPage({
   }, [archives, unit]);
 
   const previewUrl = detail?.currentPdf?.fileUrl || "";
+  const currentPptx = detail?.currentPptx ?? null;
+  const handleRichTextPdfDownload = async () => {
+    try {
+      const editor = document.querySelector<HTMLElement>("[data-well-history-editor]");
+      if (!editor || !detail) throw new Error("未找到可导出的井史正文");
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+      const canvas = await html2canvas(editor, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        onclone: (clonedDocument) => {
+          const clone = clonedDocument.querySelector<HTMLElement>("[data-well-history-editor]");
+          if (!clone) return;
+          clone.querySelectorAll<HTMLElement>("*").forEach((element) => element.removeAttribute("class"));
+          clone.style.cssText = "min-height:0;padding:24px;background:#fff;color:#111;font:16px/1.75 Arial,sans-serif;";
+          clone.querySelectorAll<HTMLElement>("h1,h2,h3").forEach((element) => { element.style.fontWeight = "700"; element.style.margin = "20px 0 12px"; });
+          clone.querySelectorAll<HTMLElement>("h1").forEach((element) => element.style.fontSize = "28px");
+          clone.querySelectorAll<HTMLElement>("h2").forEach((element) => element.style.fontSize = "24px");
+          clone.querySelectorAll<HTMLElement>("h3").forEach((element) => element.style.fontSize = "20px");
+          clone.querySelectorAll<HTMLElement>("img").forEach((element) => { element.style.display = "block"; element.style.maxWidth = "100%"; element.style.margin = "16px auto"; });
+          clone.querySelectorAll<HTMLElement>("table,td,th").forEach((element) => { element.style.border = "1px solid #555"; element.style.borderCollapse = "collapse"; element.style.padding = "6px"; });
+        },
+      });
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const imageHeight = (canvas.height * pageWidth) / canvas.width;
+      let offset = 0;
+      while (offset < imageHeight) {
+        if (offset) pdf.addPage();
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, -offset, pageWidth, imageHeight);
+        offset += pageHeight;
+      }
+      const url = URL.createObjectURL(pdf.output("blob"));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${detail.wellNo}-井史.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    } catch (error) {
+      console.error("Well history PDF export failed", error);
+      setError(error instanceof Error ? `PDF 导出失败：${error.message}` : "PDF 导出失败");
+    }
+  };
 
   const handleDeleteArchive = (item: WellHistoryArchiveSummary) => {
     requestConfirm(`确认删除 ${item.wellNo} 的井史资料？`, async () => {
@@ -6428,22 +7663,26 @@ function WellHistoryPage({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void pdfSaveHandler?.()}
-                  disabled={!pdfSaveHandler}
+                  onClick={() => void (richTextDocument ? saveRichTextDocument() : pdfSaveHandler?.())}
+                  disabled={richTextDocument ? !pdfDirty : !pdfSaveHandler}
                   className="inline-flex h-7 items-center gap-1 bg-cnpc-red px-3 text-xs font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save className="h-3.5 w-3.5" />保存编辑结果
                 </button>
                 <button
                   type="button"
-                  onClick={() => void pdfDownloadHandler?.()}
-                  disabled={!pdfDownloadHandler}
+                  onClick={() => void (richTextDocument ? handleRichTextPdfDownload() : pdfDownloadHandler?.())}
+                  disabled={richTextDocument ? false : !pdfDownloadHandler}
                   className="inline-flex h-7 items-center gap-1 border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Download className="h-3.5 w-3.5" />下载 PDF
                 </button>
               </div>
-              {previewUrl ? (
+              {richTextDocument ? (
+                <WellHistoryRichTextEditor html={editingHtml} editable onChange={(html) => { setEditingHtml(html); setPdfDirty(html !== richTextDocument.html); }} />
+              ) : currentPptx ? (
+                <div className="border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">该 PPTX 尚未生成富文本井史文档，请重新上传。</div>
+              ) : previewUrl ? (
                 <PdfReaderEditor
                   key={`${detail.wellNo}-${detail.currentPdf?.id ?? "no-pdf"}`}
                   wellNo={detail.wellNo}
@@ -6454,7 +7693,7 @@ function WellHistoryPage({
                   onDownloadHandlerChange={handlePdfDownloadHandlerChange}
                 />
               ) : (
-                <div className="border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">该井暂无 PDF 原件。</div>
+                <div className="border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">该井暂无 PPTX 或 PDF 原件。</div>
               )}
             </div>
           ) : (
@@ -6632,20 +7871,16 @@ function DynamicAdjustmentPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1">
-              <span>单位</span>
-              <select className={`${inputClass} w-28`} defaultValue="采油作业一区">
-                <option>采油作业一区</option>
-                <option>采油作业二区</option>
-                <option>采油作业三区</option>
+              <span>作业区</span>
+              <select className={`${inputClass} w-36`} defaultValue="高采采油作业一区">
+                {FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-1">
               <span>区块</span>
-              <select className={`${inputClass} w-24`} defaultValue="请选择">
-                <option>请选择</option>
-                <option>区块1</option>
-                <option>区块2</option>
-                <option>区块3</option>
+              <select className={`${inputClass} w-24`} defaultValue="">
+                <option value="">请选择</option>
+                {getFilterBlockOptions(FILTER_UNIT_OPTIONS[0]).map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-1">
@@ -6690,23 +7925,35 @@ function DynamicAdjustmentPage() {
           <table className="w-full min-w-[1280px] table-fixed border-collapse bg-white text-center text-[#001a33]">
             <thead>
               <tr>
-                <th rowSpan={3} className={headClass}>调配水井</th>
-                <th rowSpan={3} className={headClass}>分注工艺</th>
-                <th rowSpan={3} className={headClass}>调配日期</th>
-                <th rowSpan={3} className={headClass}>调配前日注</th>
-                <th rowSpan={3} className={headClass}>调配后日注</th>
-                <th rowSpan={3} className={headClass}>调配目的</th>
-                <th colSpan={12} className={headClass}>重点跟踪油井产量</th>
+                <th rowSpan={3} className={headClass}>{"\u8c03\u914d\u6c34\u4e95"}</th>
+                <th rowSpan={3} className={headClass}>{"\u5206\u6ce8\u5de5\u827a"}</th>
+                <th rowSpan={3} className={headClass}>{"\u8c03\u914d\u65e5\u671f"}</th>
+                <th rowSpan={3} className={headClass}>{"\u8c03\u914d\u524d\u65e5\u6ce8"}</th>
+                <th rowSpan={3} className={headClass}>{"\u8c03\u914d\u540e\u65e5\u6ce8"}</th>
+                <th rowSpan={3} className={headClass}>{"\u8c03\u914d\u76ee\u7684"}</th>
+                <th colSpan={12} className={headClass}>{"\u91cd\u70b9\u8ddf\u8e2a\u6cb9\u4e95\u4ea7\u91cf"}</th>
               </tr>
               <tr>
-                <th rowSpan={2} className={headClass}>井号</th>
-                <th colSpan={3} className={headClass}>调配前</th>
-                <th colSpan={3} className={headClass}>调配后</th>
-                <th colSpan={3} className={headClass}>差值</th>
-                <th colSpan={2} className={headClass}>阶段效果</th>
+                <th rowSpan={2} className={headClass}>{"\u6cb9\u4e95\u4e95\u53f7"}</th>
+                <th colSpan={3} className={headClass}>{"\u8c03\u914d\u524d"}</th>
+                <th colSpan={3} className={headClass}>{"\u8c03\u914d\u540e"}</th>
+                <th colSpan={3} className={headClass}>{"\u5dee\u503c"}</th>
+                <th colSpan={2} className={headClass}>{"\u9636\u6bb5\u6548\u679c"}</th>
               </tr>
               <tr>
-                {["日产液", "日产油", "含水", "日产液", "日产油", "含水", "日产液", "日产油", "含水", "阶段天数", "累增油"].map((header, index) => (
+                {[
+                  "\u65e5\u4ea7\u6db2",
+                  "\u65e5\u4ea7\u6cb9",
+                  "\u542b\u6c34",
+                  "\u65e5\u4ea7\u6db2",
+                  "\u65e5\u4ea7\u6cb9",
+                  "\u542b\u6c34",
+                  "\u65e5\u4ea7\u6db2",
+                  "\u65e5\u4ea7\u6cb9",
+                  "\u542b\u6c34",
+                  "\u9636\u6bb5\u5929\u6570",
+                  "\u7d2f\u589e\u6cb9",
+                ].map((header, index) => (
                   <th key={`${header}-${index}`} className={headClass}>{header}</th>
                 ))}
               </tr>
@@ -6791,13 +8038,19 @@ function DynamicAdjustmentPage() {
 
 function AppContent({
   activePage,
+  currentUser,
   onWellHistoryDirtyChange,
   onWellHistorySaveHandlerChange,
 }: {
   activePage: PageType;
+  currentUser: AuthUser | null;
   onWellHistoryDirtyChange?: (dirty: boolean) => void;
   onWellHistorySaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
 }) {
+  if (isManagementPage(activePage) && !hasManagementPermission(currentUser)) {
+    return <AccessDeniedPage />;
+  }
+
   switch (activePage) {
     case "home":
       return <HomePage />;
@@ -6806,11 +8059,11 @@ function AppContent({
     case "dynamic-analysis":
       return <DynamicAnalysisPage />;
     case "water-cut":
-      return <WaterCutPage />;
+      return <WaterCutPage currentUser={currentUser} />;
     case "injection-tech":
       return <InjectionTechPage />;
     case "zonal-injection":
-      return <ConcentricTestHistoryPage />;
+      return <ZonalIndicatorSummaryPage />;
     case "concentric-test-history":
       return <ConcentricTestHistoryPage />;
     case "smart-test-history":
@@ -6832,9 +8085,9 @@ function AppContent({
     case "key-matters":
       return <PlaceholderPage title="重点事项中心" />;
     case "user-management":
-      return <PlaceholderPage title="用户管理" />;
+      return <UserManagementPage />;
     case "settings":
-      return <PlaceholderPage title="系统设置" />;
+      return <SystemSettingsPage />;
     case "audit-log":
       return <PlaceholderPage title="审计日志" />;
     default:
@@ -6842,14 +8095,192 @@ function AppContent({
   }
 }
 
+type AuthUser = {
+  id: string;
+  name: string;
+  empId: string;
+  role: string;
+  unit?: string | null;
+  status?: string | null;
+};
+
+const AUTH_STORAGE_KEY = "gszhushui_current_user";
+const hasManagementPermission = (user: AuthUser | null) => user?.unit === MANAGEMENT_UNIT;
+const isManagementPage = (page: PageType) => MANAGEMENT_PAGES.includes(page);
+
+function AccessDeniedPage() {
+  return (
+    <PageShell title="无权限" subtitle="当前账号无权访问该页面">
+      <div className="rounded border border-[#9fc4e8] bg-white p-8 text-center text-sm text-slate-600 shadow-sm">
+        只有“采油管理部”账号可以访问用户管理和系统设置。
+      </div>
+    </PageShell>
+  );
+}
+
+function LoginDialog({ onLogin, onCancel }: { onLogin: (user: AuthUser) => void; onCancel: () => void }) {
+  const [empId, setEmpId] = useState("GS001");
+  const [password, setPassword] = useState("admin666");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submitLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (!empId.trim() || !password.trim()) {
+      setError("请输入工号和密码");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data } = await axios.post<AuthUser>("/api/auth/login", {
+        empId: empId.trim(),
+        password,
+      });
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+      onLogin(data);
+      onCancel();
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        setError("工号或密码错误");
+      } else if (status === 403) {
+        setError("账号已停用，请联系管理员");
+      } else {
+        setError("登录失败，请检查服务或数据库连接");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded border border-[#8fb7df] bg-white shadow-xl">
+        <div className="bg-cnpc-red px-8 py-7 text-center text-white">
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/15">
+            <Droplet className="h-10 w-10" strokeWidth={2.8} />
+          </div>
+          <h1 className="text-2xl font-black tracking-wide">注水管理平台</h1>
+          <p className="mt-2 text-sm text-white/80">登录后可录入、保存和删除数据</p>
+        </div>
+        <form data-auth-form="true" onSubmit={submitLogin} className="space-y-4 px-8 py-7">
+          <label className="block text-sm font-bold text-slate-700">
+            工号
+            <input
+              value={empId}
+              onChange={(event) => setEmpId(event.target.value)}
+              className="mt-2 h-10 w-full rounded border border-[#9fc4e8] px-3 font-normal outline-none focus:border-cnpc-red"
+              placeholder="请输入工号"
+            />
+          </label>
+          <label className="block text-sm font-bold text-slate-700">
+            密码
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="mt-2 h-10 w-full rounded border border-[#9fc4e8] px-3 font-normal outline-none focus:border-cnpc-red"
+              placeholder="请输入密码"
+            />
+          </label>
+          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-600">{error}</div>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="h-10 w-full rounded bg-cnpc-red text-sm font-bold text-white hover:bg-cnpc-red-dark disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "登录中..." : "登录"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-10 w-full rounded border border-[#9eb8d4] bg-white text-sm font-bold text-slate-700 hover:bg-[#eaf4ff]"
+          >
+            游客继续浏览
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
+  });
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [wellHistoryDirty, setWellHistoryDirty] = useState(false);
   const [pendingPage, setPendingPage] = useState<PageType | null>(null);
   const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
+  const canManageSystem = hasManagementPermission(currentUser);
+  const visibleNavItems = useMemo(
+    () => NAV_ITEMS.filter((item) => !isManagementPage(item.id) || canManageSystem),
+    [canManageSystem],
+  );
+  const logout = () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setCurrentUser(null);
+    setActivePage("home");
+    setPendingPage(null);
+    setWellHistoryDirty(false);
+  };
+  const requireLoginForWrite = () => {
+    if (currentUser) return false;
+    setShowLoginDialog(true);
+    return true;
+  };
+  const guardGuestWriteClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (currentUser) return;
+    const button = (event.target as HTMLElement).closest("button");
+    if (!button) return;
+    const text = button.textContent?.replace(/\s+/g, "") || "";
+    const writeActions = ["新增", "保存", "删除", "导入", "编辑"];
+    if (writeActions.some((action) => text.includes(action))) {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowLoginDialog(true);
+    }
+  };
+  useEffect(() => {
+    const interceptorId = axios.interceptors.request.use((config) => {
+      const method = String(config.method || "get").toLowerCase();
+      const url = String(config.url || "");
+      const isWrite = ["post", "put", "patch", "delete"].includes(method);
+      if (currentUser) {
+        const headers = AxiosHeaders.from(config.headers);
+        headers.set("x-gs-user-unit", encodeURIComponent(currentUser.unit || ""));
+        headers.set("x-gs-user-role", currentUser.role || "");
+        headers.set("x-gs-user-empid", currentUser.empId || "");
+        config.headers = headers;
+      }
+      if (!currentUser && isWrite && !url.includes("/api/auth/login")) {
+        setShowLoginDialog(true);
+        return Promise.reject(Object.assign(new Error("Login required"), { isLoginRequired: true }));
+      }
+      return config;
+    });
+    return () => axios.interceptors.request.eject(interceptorId);
+  }, [currentUser]);
+  useEffect(() => {
+    if (isManagementPage(activePage) && !canManageSystem) {
+      setActivePage("home");
+    }
+  }, [activePage, canManageSystem]);
   const requestPageChange = (page: PageType) => {
     if (page === activePage) return;
+    if (isManagementPage(page) && !canManageSystem) {
+      setActivePage("home");
+      return;
+    }
     if (activePage === "well-history" && wellHistoryDirty) {
       setPendingPage(page);
       return;
@@ -6867,7 +8298,23 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7fb] text-gray-900">
+    <div
+      className="min-h-screen bg-[#f4f7fb] text-gray-900"
+      onClickCapture={guardGuestWriteClick}
+      onSubmitCapture={(event) => {
+        if ((event.target as HTMLElement).closest('[data-auth-form="true"]')) return;
+        if (requireLoginForWrite()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+    >
+      {showLoginDialog && (
+        <LoginDialog
+          onLogin={setCurrentUser}
+          onCancel={() => setShowLoginDialog(false)}
+        />
+      )}
       {pendingPage && (
         <StyledConfirmDialog
           message="当前 PDF 有未保存的编辑内容，离开页面后这些内容会消失。是否保存？"
@@ -6891,19 +8338,30 @@ export default function App() {
               <span className="text-gray-500">⌄</span>
             </button>
             <Bell className="h-5 w-5 text-gray-500" />
-            <span>您好，管理员（管理员）</span>
-            <button className="rounded bg-cnpc-red px-4 py-2 text-sm font-bold text-white hover:bg-cnpc-red-dark">
-              <LogOut className="mr-1 inline h-4 w-4" />
-              退出
-            </button>
+            {currentUser ? (
+              <>
+                <span>您好，{currentUser.name}（{currentUser.role}）</span>
+                <button onClick={logout} className="rounded bg-cnpc-red px-4 py-2 text-sm font-bold text-white hover:bg-cnpc-red-dark">
+                  <LogOut className="mr-1 inline h-4 w-4" />
+                  退出
+                </button>
+              </>
+            ) : (
+              <>
+                <span>游客浏览</span>
+                <button onClick={() => setShowLoginDialog(true)} className="rounded bg-cnpc-red px-4 py-2 text-sm font-bold text-white hover:bg-cnpc-red-dark">
+                  登录
+                </button>
+              </>
+            )}
           </div>
         </div>
         <nav className="border-t-4 border-cnpc-yellow bg-cnpc-red">
           <div className="flex h-[60px] items-stretch overflow-x-auto px-16 no-scrollbar">
-            {NAV_ITEMS.map((item) => (
+            {visibleNavItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => requestPageChange(item.id === "zonal-injection" ? "concentric-test-history" : item.id)}
+                onClick={() => requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id)}
                 className={cn(
                   "relative shrink-0 px-6 text-base font-bold text-white transition-colors hover:bg-[#8f1016] hover:text-cnpc-yellow",
                   (activePage === item.id || (item.id === "zonal-injection" && showZonalSubNav)) &&
@@ -6937,6 +8395,7 @@ export default function App() {
       <main className="px-6 py-6">
         <AppContent
           activePage={activePage}
+          currentUser={currentUser}
           onWellHistoryDirtyChange={setWellHistoryDirty}
           onWellHistorySaveHandlerChange={(handler) => {
             wellHistorySaveHandlerRef.current = handler;
@@ -6946,4 +8405,3 @@ export default function App() {
     </div>
   );
 }
-

@@ -1,6 +1,9 @@
 import { buildDateRange } from "./coreTableRecords";
+import { getAllRawBlocksForConsolidated } from "./oilProductionBlocks";
 
 export type ConcentricTestSeedRow = {
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: number;
@@ -13,6 +16,8 @@ export type ConcentricTestSeedRow = {
 };
 
 export type ConcentricTestForm = {
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: string;
@@ -25,6 +30,8 @@ export type ConcentricTestForm = {
 };
 
 export type NormalizedConcentricTestPayload = {
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: number;
@@ -37,6 +44,8 @@ export type NormalizedConcentricTestPayload = {
 };
 
 export type SmartTestSeedRow = {
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: number;
@@ -51,6 +60,8 @@ export type SmartTestSeedRow = {
 };
 
 export type SmartTestForm = {
+  unit: string;
+  block: string;
   wellNo: string;
   testDate: string;
   allocatorCount: string;
@@ -72,6 +83,7 @@ export type SingleWellInjectionEvaluationSeedRow = {
   wellNo: string;
   process: string;
   unit: string;
+  block: string;
   evaluationDate: string;
   intervalCount: number;
   actualCount: number;
@@ -84,6 +96,7 @@ export type SingleWellInjectionEvaluationForm = {
   wellNo: string;
   process: string;
   unit: string;
+  block: string;
   evaluationDate: string;
   intervalCount: string;
   actualCount: string;
@@ -95,6 +108,8 @@ export type SingleWellInjectionEvaluationForm = {
 export type NormalizedSingleWellInjectionEvaluationPayload = SingleWellInjectionEvaluationSeedRow;
 
 export type SingleWellSealEvaluationSeedRow = {
+  unit: string;
+  block: string;
   wellNo: string;
   process: string;
   evaluationDate: string;
@@ -106,6 +121,8 @@ export type SingleWellSealEvaluationSeedRow = {
 };
 
 export type SingleWellSealEvaluationForm = {
+  unit: string;
+  block: string;
   wellNo: string;
   process: string;
   evaluationDate: string;
@@ -156,6 +173,8 @@ const toFixedStringArray = (value: unknown, length: number, fallback = "-") => {
 
 export function createEmptyConcentricTestForm(defaultDate = new Date().toISOString().slice(0, 10)): ConcentricTestForm {
   return {
+    unit: "高采采油作业一区",
+    block: "",
     wellNo: "",
     testDate: defaultDate,
     allocatorCount: "4",
@@ -175,6 +194,8 @@ export function normalizeConcentricTestPayload(input: Record<string, unknown>): 
   const remark = trim(input.remark);
 
   return {
+    unit: trim(input.unit),
+    block: trim(input.block),
     wellNo: trim(input.wellNo),
     testDate: trim(input.testDate),
     allocatorCount: Number(input.allocatorCount),
@@ -189,6 +210,8 @@ export function normalizeConcentricTestPayload(input: Record<string, unknown>): 
 
 export function createEmptySmartTestForm(defaultDate = new Date().toISOString().slice(0, 10)): SmartTestForm {
   return {
+    unit: "高采采油作业一区",
+    block: "",
     wellNo: "",
     testDate: defaultDate,
     allocatorCount: "5",
@@ -206,6 +229,8 @@ export function createEmptySmartTestForm(defaultDate = new Date().toISOString().
 export function normalizeSmartTestPayload(input: Record<string, unknown>): NormalizedSmartTestPayload {
   const remark = trim(input.remark);
   return {
+    unit: trim(input.unit),
+    block: trim(input.block),
     wellNo: trim(input.wellNo),
     testDate: trim(input.testDate),
     allocatorCount: Number(input.allocatorCount),
@@ -224,7 +249,8 @@ export function createEmptySingleWellInjectionEvaluationForm(defaultDate = new D
   return {
     wellNo: "",
     process: "",
-    unit: "",
+    unit: "高采采油作业一区",
+    block: "",
     evaluationDate: defaultDate,
     intervalCount: "4",
     actualCount: "4",
@@ -240,6 +266,7 @@ export function normalizeSingleWellInjectionEvaluationPayload(input: Record<stri
     wellNo: trim(input.wellNo),
     process: trim(input.process),
     unit: trim(input.unit),
+    block: trim(input.block),
     evaluationDate: trim(input.evaluationDate),
     intervalCount: Number(input.intervalCount),
     actualCount: Number(input.actualCount),
@@ -251,6 +278,8 @@ export function normalizeSingleWellInjectionEvaluationPayload(input: Record<stri
 
 export function createEmptySingleWellSealEvaluationForm(defaultDate = new Date().toISOString().slice(0, 10)): SingleWellSealEvaluationForm {
   return {
+    unit: "高采采油作业一区",
+    block: "",
     wellNo: "",
     process: "",
     evaluationDate: defaultDate,
@@ -264,6 +293,8 @@ export function createEmptySingleWellSealEvaluationForm(defaultDate = new Date()
 
 export function normalizeSingleWellSealEvaluationPayload(input: Record<string, unknown>): NormalizedSingleWellSealEvaluationPayload {
   return {
+    unit: trim(input.unit),
+    block: trim(input.block),
     wellNo: trim(input.wellNo),
     process: trim(input.process),
     evaluationDate: trim(input.evaluationDate),
@@ -277,6 +308,8 @@ export function normalizeSingleWellSealEvaluationPayload(input: Record<string, u
 
 export function buildConcentricTestWhere(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
+  if (trim(query.unit)) where.unit = { contains: trim(query.unit), mode: "insensitive" };
+  if (trim(query.block)) where.block = { contains: trim(query.block), mode: "insensitive" };
   if (trim(query.wellNo)) where.wellNo = { contains: trim(query.wellNo), mode: "insensitive" };
   const dateRange = buildDateRange(query.fromDate, query.toDate);
   if (Object.keys(dateRange).length) where.testDate = dateRange;
@@ -285,7 +318,8 @@ export function buildConcentricTestWhere(query: Record<string, unknown>) {
 
 export function buildSingleWellEvaluationWhere(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
-  if (trim(query.unit)) where.unit = trim(query.unit);
+  if (trim(query.unit)) where.unit = { contains: trim(query.unit), mode: "insensitive" };
+  if (trim(query.block)) where.block = { contains: trim(query.block), mode: "insensitive" };
   if (trim(query.process)) where.process = trim(query.process);
   if (trim(query.wellNo)) where.wellNo = { contains: trim(query.wellNo), mode: "insensitive" };
   const dateRange = buildDateRange(query.fromDate, query.toDate);
@@ -304,7 +338,10 @@ export function buildDynamicAnalysisWhere(query: Record<string, unknown>) {
   const where: Record<string, unknown> = {};
   if (trim(query.kind)) where.kind = trim(query.kind);
   if (trim(query.unit)) where.unit = trim(query.unit);
-  if (trim(query.block)) where.block = trim(query.block);
+  if (trim(query.block)) {
+    const rawBlocks = getAllRawBlocksForConsolidated(trim(query.block));
+    where.block = rawBlocks.length > 0 ? { in: rawBlocks } : trim(query.block);
+  }
   if (trim(query.wellNo)) where.wellNo = { contains: trim(query.wellNo), mode: "insensitive" };
   return where;
 }
@@ -365,7 +402,7 @@ export function getDynamicAnalysisDeleteMessage(record: { wellNo?: string | null
   return `确认删除 ${record.wellNo || record.block || "该记录"} 的动态分析记录？`;
 }
 
-const CONCENTRIC_TEST_HISTORY_TEMPLATE_ROWS: Array<Omit<ConcentricTestSeedRow, "testDate">> = [
+const CONCENTRIC_TEST_HISTORY_TEMPLATE_ROWS: Array<Omit<ConcentricTestSeedRow, "testDate" | "unit" | "block">> = [
   { wellNo: "雷19-10", allocatorCount: 4, freedom: "完全自由", partialStroke: null, fullyStuck: null, layerFreedom: ["完全自由", "完全自由", "部分行程", "完全自由"], dailyInjection: ["32.5", "28.0", "18.6", "21.4"], remark: "第3层行程偏小" },
   { wellNo: "雷20-12侧", allocatorCount: 3, freedom: null, partialStroke: "部分行程", fullyStuck: null, layerFreedom: ["完全自由", "部分行程", "完全自由", "-"], dailyInjection: ["25.2", "16.8", "19.5", "-"], remark: "建议跟踪复测" },
   { wellNo: "雷21-8", allocatorCount: 2, freedom: "完全自由", partialStroke: null, fullyStuck: null, layerFreedom: ["完全自由", "完全自由", "-", "-"], dailyInjection: ["30.0", "27.5", "-", "-"], remark: "正常" },
@@ -373,7 +410,7 @@ const CONCENTRIC_TEST_HISTORY_TEMPLATE_ROWS: Array<Omit<ConcentricTestSeedRow, "
   { wellNo: "雷22-15", allocatorCount: 3, freedom: null, partialStroke: "部分行程", fullyStuck: null, layerFreedom: ["部分行程", "完全自由", "完全自由", "-"], dailyInjection: ["20.6", "22.3", "26.8", "-"], remark: "一层调配后观察" },
 ];
 
-const SMART_TEST_HISTORY_TEMPLATE_ROWS: Array<Omit<SmartTestSeedRow, "testDate">> = [
+const SMART_TEST_HISTORY_TEMPLATE_ROWS: Array<Omit<SmartTestSeedRow, "testDate" | "unit" | "block">> = [
   { wellNo: "雷19-10", allocatorCount: 5, dailyAllocation: ["30", "25", "20", "18", "12"], dailyInjection: ["31.5", "24.2", "19.8", "18.6", "11.7"], allocationDiff: ["+1.5", "-0.8", "-0.2", "+0.6", "-0.3"], nozzleOpening: ["42", "38", "35", "31", "26"], wellheadPressure: "12.6", innerPressure: ["11.8", "11.2", "10.7", "10.1", "9.5"], outerPressure: ["10.6", "10.1", "9.8", "9.2", "8.9"], remark: "正常" },
   { wellNo: "雷20-12侧", allocatorCount: 4, dailyAllocation: ["26", "22", "18", "14", "-"], dailyInjection: ["25.5", "21.0", "17.6", "13.9", "-"], allocationDiff: ["-0.5", "-1.0", "-0.4", "-0.1", "-"], nozzleOpening: ["40", "36", "30", "24", "-"], wellheadPressure: "11.9", innerPressure: ["11.0", "10.5", "10.0", "9.6", "-"], outerPressure: ["10.2", "9.7", "9.4", "9.0", "-"], remark: "四层偏低" },
   { wellNo: "雷21-8", allocatorCount: 3, dailyAllocation: ["28", "24", "20", "-", "-"], dailyInjection: ["28.6", "23.8", "20.4", "-", "-"], allocationDiff: ["+0.6", "-0.2", "+0.4", "-", "-"], nozzleOpening: ["39", "34", "30", "-", "-"], wellheadPressure: "12.2", innerPressure: ["11.5", "10.8", "10.2", "-", "-"], outerPressure: ["10.8", "10.0", "9.6", "-", "-"], remark: "正常" },
@@ -385,6 +422,8 @@ const buildConcentricTests = (): ConcentricTestSeedRow[] =>
     const date = new Date(Date.UTC(2026, 4, 8 - index));
     return {
       ...template,
+      unit: index % 3 === 1 ? "????????" : index % 3 === 2 ? "????????" : "????????",
+      block: index % 3 === 1 ? "?????" : index % 3 === 2 ? "?3" : "?11",
       wellNo: `${template.wellNo}-${String(index + 1).padStart(2, "0")}`,
       testDate: date.toISOString().slice(0, 10),
     };
@@ -396,6 +435,8 @@ const buildSmartTests = (): SmartTestSeedRow[] =>
     const date = new Date(Date.UTC(2026, 4, 9 - index));
     return {
       ...template,
+      unit: index % 3 === 1 ? "????????" : index % 3 === 2 ? "????????" : "????????",
+      block: index % 3 === 1 ? "?????" : index % 3 === 2 ? "?3" : "?11",
       wellNo: `${template.wellNo}-${String(index + 1).padStart(2, "0")}`,
       testDate: date.toISOString().slice(0, 10),
     };
@@ -403,15 +444,16 @@ const buildSmartTests = (): SmartTestSeedRow[] =>
 
 const buildSingleWellInjectionEvaluations = (): SingleWellInjectionEvaluationSeedRow[] => {
   const templates = [
-    { wellNo: "雷19-10", process: "同心分注", unit: "采油作业一区", intervalCount: 4, actualCount: 4, qualifiedCount: 3, unqualified: ["1", "0", "1", "0", "0", "0"], remark: "欠注1层" },
-    { wellNo: "雷20-12侧", process: "智能分注", unit: "采油作业一区", intervalCount: 4, actualCount: 4, qualifiedCount: 4, unqualified: ["0", "0", "0", "0", "0", "0"], remark: "合格" },
-    { wellNo: "雷21-8", process: "桥式同心", unit: "采油作业二区", intervalCount: 3, actualCount: 3, qualifiedCount: 2, unqualified: ["1", "1", "0", "0", "0", "0"], remark: "封隔器待复核" },
+    { wellNo: "雷19-10", process: "同心分注", unit: "高采采油作业一区", intervalCount: 4, actualCount: 4, qualifiedCount: 3, unqualified: ["1", "0", "1", "0", "0", "0"], remark: "欠注1层" },
+    { wellNo: "雷20-12侧", process: "智能分注", unit: "高采采油作业一区", intervalCount: 4, actualCount: 4, qualifiedCount: 4, unqualified: ["0", "0", "0", "0", "0", "0"], remark: "合格" },
+    { wellNo: "雷21-8", process: "桥式同心", unit: "高采采油作业二区", intervalCount: 3, actualCount: 3, qualifiedCount: 2, unqualified: ["1", "1", "0", "0", "0", "0"], remark: "封隔器待复核" },
   ];
   return Array.from({ length: 38 }, (_, index) => {
     const template = templates[index % templates.length];
     const date = new Date(Date.UTC(2026, 4, 10 - index));
     return {
       ...template,
+      block: index % 3 === 1 ? "牛心坨油层" : index % 3 === 2 ? "高3" : "雷11",
       wellNo: `${template.wellNo}-${String(index + 1).padStart(2, "0")}`,
       evaluationDate: date.toISOString().slice(0, 10),
     };
@@ -429,6 +471,8 @@ const buildSingleWellSealEvaluations = (): SingleWellSealEvaluationSeedRow[] => 
     const date = new Date(Date.UTC(2026, 4, 10 - index));
     return {
       ...template,
+      unit: index % 3 === 1 ? "高采采油作业二区" : index % 3 === 2 ? "高采采油作业三区" : "高采采油作业一区",
+      block: index % 3 === 1 ? "牛心坨油层" : index % 3 === 2 ? "高3" : "雷11",
       wellNo: `${template.wellNo}-${String(index + 1).padStart(2, "0")}`,
       evaluationDate: date.toISOString().slice(0, 10),
     };
@@ -450,7 +494,7 @@ const buildZonalIndicatorSummaries = (): ZonalIndicatorSummarySeedRow[] => [
 const buildDynamicAnalysisRows = (): DynamicAnalysisSeedRow[] => {
   const overallOil = Array.from({ length: 5 }, (_, index) => ({
     kind: "overall-oil" as const,
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
     block: `区块${index + 1}`,
     wellNo: null,
     endValues: [String(120 - index * 5), String(115 - index * 4), String(450 - index * 20), String(35 - index), `${92 + index * 0.3}%`],
@@ -464,7 +508,7 @@ const buildDynamicAnalysisRows = (): DynamicAnalysisSeedRow[] => {
   }));
   const overallWater = Array.from({ length: 5 }, (_, index) => ({
     kind: "overall-water" as const,
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
     block: `区块${index + 1}`,
     wellNo: null,
     endValues: [String(48 - index * 2), String(46 - index * 2), String(180 - index * 8)],
@@ -478,7 +522,7 @@ const buildDynamicAnalysisRows = (): DynamicAnalysisSeedRow[] => {
   }));
   const singleOil = Array.from({ length: 30 }, (_, index) => ({
     kind: "single-oil" as const,
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
     block: `区块${(index % 5) + 1}`,
     wellNo: `GS-${String(101 + index).padStart(3, "0")}`,
     endValues: [String(450 + index), String(35 + (index % 6)), `${(92 + (index % 5) * 0.2).toFixed(1)}%`],
@@ -492,7 +536,7 @@ const buildDynamicAnalysisRows = (): DynamicAnalysisSeedRow[] => {
   }));
   const singleWater = Array.from({ length: 35 }, (_, index) => ({
     kind: "single-water" as const,
-    unit: "采油作业一区",
+    unit: "高采采油作业一区",
     block: `区块${(index % 5) + 1}`,
     wellNo: `GS-W${String(index + 1).padStart(2, "0")}`,
     endValues: [String(180 + index), (8.5 + (index % 5) * 0.1).toFixed(1), (12.1 + (index % 5) * 0.1).toFixed(1)],
