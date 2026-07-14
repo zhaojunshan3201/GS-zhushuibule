@@ -5,9 +5,15 @@
   --color-cnpc-red-dark: #7f1515;
   --color-cnpc-yellow: #ffcc00;
   --color-cnpc-blue: #0056a3;
-  --color-shell-bg: #f8fafc;
+  --color-shell-primary: #1a5276;
+  --color-shell-primary-dark: #0e2f44;
+  --color-shell-primary-light: #2980b9;
+  --color-shell-accent: #e67e22;
+  --color-shell-bg: #f0f2f5;
   --color-shell-panel: #ffffff;
-  --color-shell-border: #d8e2ec;
+  --color-shell-border: #dce1e8;
+  --color-shell-text: #2c3e50;
+  --color-shell-muted: #7f8c8d;
   --color-table-header-bg: #e6f0f9;
   --color-table-header-text: #1a2b3c;
   --color-table-border: #acc6de;
@@ -24,17 +30,21 @@
   }
 
   body {
-    @apply bg-shell-bg text-gray-900;
+    @apply bg-shell-bg text-shell-text;
   }
 }
 
 @layer components {
   .shell-app {
-    @apply min-h-screen bg-shell-bg text-gray-900;
+    @apply min-h-screen bg-shell-bg text-shell-text;
+  }
+
+  .shell-sidebar {
+    @apply fixed inset-y-0 left-0 z-50 flex w-60 flex-col overflow-y-auto bg-linear-to-b from-shell-primary-dark to-shell-primary text-white shadow-lg;
   }
 
   .shell-topbar {
-    @apply sticky top-0 z-40 bg-white;
+    @apply sticky top-0 z-40 border-b border-shell-border bg-shell-panel shadow-sm;
   }
 
   .shell-topbar-inner {
@@ -46,7 +56,7 @@
   }
 
   .shell-topbar-nav {
-    @apply border-t-4 border-cnpc-yellow bg-cnpc-red;
+    @apply border-t border-white/15 bg-shell-primary-dark;
   }
 
   .shell-topbar-nav-inner {
@@ -54,15 +64,19 @@
   }
 
   .shell-content {
-    @apply mx-auto w-full max-w-[1700px] px-4 py-4 lg:px-6 lg:py-6;
+    @apply w-full px-4 py-4 lg:px-6 lg:py-6;
+  }
+
+  .shell-main {
+    @apply min-h-screen pl-60;
   }
 
   .shell-panel {
-    @apply rounded-3xl border border-shell-border bg-shell-panel shadow-sm;
+    @apply rounded-lg border border-shell-border bg-shell-panel shadow-sm;
   }
 
   .shell-toolbar {
-    @apply flex flex-wrap items-center gap-3 rounded-2xl border border-shell-border bg-white px-4 py-3 shadow-sm;
+    @apply flex flex-wrap items-center gap-3 rounded-lg border border-shell-border bg-shell-panel px-4 py-3 shadow-sm;
   }
 
   .shell-section-title {
@@ -70,19 +84,39 @@
   }
 
   .shell-nav-link {
-    @apply inline-flex items-center border-b-4 border-transparent px-7 py-4 text-base font-bold text-white transition-colors;
+    @apply flex items-center gap-3 rounded-md px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10;
   }
 
   .shell-nav-link-active {
-    @apply border-cnpc-yellow bg-[#8f1016] text-cnpc-yellow;
+    @apply bg-shell-accent text-white shadow-sm;
   }
 
   .shell-nav-link-idle {
-    @apply hover:border-cnpc-yellow/70 hover:text-cnpc-yellow;
+    @apply hover:bg-white/10 hover:text-white;
+  }
+
+  .shell-sidebar-nav {
+    @apply flex flex-col gap-1 p-3;
+  }
+
+  .shell-subnav {
+    @apply ml-4 flex flex-col gap-1 border-l border-white/20 pl-3;
+  }
+
+  .shell-welcome-overlay {
+    @apply fixed inset-0 z-60 flex items-center justify-center bg-shell-primary-dark/60 p-4;
+  }
+
+  .shell-welcome-card {
+    @apply w-full max-w-lg rounded-lg border border-shell-border bg-shell-panel p-6 text-shell-text shadow-xl;
+  }
+
+  .shell-mobile-trigger {
+    @apply hidden items-center justify-center rounded-md border border-shell-border bg-shell-panel p-2 text-shell-primary shadow-sm;
   }
 
   .shell-primary-btn {
-    @apply inline-flex items-center justify-center rounded-xl bg-cnpc-red px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-cnpc-red-dark;
+    @apply inline-flex items-center justify-center rounded-md bg-shell-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#c96b19];
   }
 
   .shell-link {
@@ -160,5 +194,24 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #7ea6d2;
+  }
+}
+
+@media (max-width: 1023px) {
+  .shell-sidebar {
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+  }
+
+  .shell-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .shell-main {
+    padding-left: 0;
+  }
+
+  .shell-mobile-trigger {
+    display: inline-flex;
   }
 }
