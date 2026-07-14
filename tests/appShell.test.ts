@@ -1,0 +1,15 @@
+﻿import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+
+test("application shell retains content mounting while exposing reference layout regions", () => {
+  assert.match(appSource, /showWelcome/);
+  assert.match(appSource, /shell-sidebar/);
+  assert.match(appSource, /shell-topbar/);
+  assert.match(appSource, /<AppContent/);
+  assert.match(cssSource, /--color-shell-primary: #1a5276/);
+  assert.match(cssSource, /\.shell-welcome-overlay/);
+});
