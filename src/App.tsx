@@ -8221,7 +8221,6 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
-  const welcomeOverlayRef = useRef<HTMLDivElement | null>(null);
   const welcomeEnterButtonRef = useRef<HTMLButtonElement | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
   const canManageSystem = hasManagementPermission(currentUser);
@@ -8350,7 +8349,6 @@ export default function App() {
       )}
       {showWelcome && (
         <div
-          ref={welcomeOverlayRef}
           className="shell-welcome-overlay"
           role="dialog"
           aria-modal="true"
