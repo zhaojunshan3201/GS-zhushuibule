@@ -24,3 +24,8 @@ test("preserves default visual constants while scoping theme overrides", () => {
   assert.match(css, /\.shell-link\s*\{\s*color:\s*#0000ee;/);
   assert.match(css, /\[data-theme="enterprise-white"\][\s\S]*?\.shell-welcome-card\s*\{\s*box-shadow:\s*none;/);
 });
+
+test("scopes visual overrides to non-default theme keys", () => {
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /\[data-theme\] \.shell-(topbar-nav|primary-btn:hover|link)/);
+});

@@ -387,15 +387,15 @@
     box-shadow: none;
   }
 
-  [data-theme] .shell-topbar-nav {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-topbar-nav {
     border-color: var(--theme-border);
   }
 
-  [data-theme] .shell-primary-btn:hover {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-primary-btn:hover {
     background-color: var(--theme-primary-dark);
   }
 
-  [data-theme] .shell-link {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-link {
     color: var(--theme-primary);
   }
 }
