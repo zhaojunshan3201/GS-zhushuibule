@@ -14,6 +14,7 @@ test("exports PPTX slides with PowerPoint COM and returns naturally sorted PNG p
 
   assert.match(command, /New-Object -ComObject PowerPoint\.Application/);
   assert.match(command, /\.Slides\.Item\(\$index\)\.Export\(/);
+  assert.match(command, /finally \{\n  try \{\n    if \(\$presentation -ne \$null\) \{ \$presentation\.Close\(\) \}\n  \} finally \{\n    try \{\n      if \(\$ppt -ne \$null\) \{ \$ppt\.Quit\(\) \}/);
   assert.deepEqual(pages, [
     "C:\\tmp\\pages\\page-1.png",
     "C:\\tmp\\pages\\page-2.png",
