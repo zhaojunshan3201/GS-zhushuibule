@@ -32,6 +32,7 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(cssSource, /--color-shell-primary: #1a5276/);
   assert.match(cssSource, /sidebar-oilfield\.png/);
   assert.match(cssSource, /\.shell-app\[data-theme="default"\] \.shell-sidebar::after/);
+  assert.match(cssSource, /mask-image: linear-gradient\(to bottom, transparent 0%, black 34%, black 100%\)/);
   assert.match(cssSource, /\.shell-app\[data-theme="default"\] \.shell-nav-link-active/);
   assert.match(cssSource, /\.shell-welcome-overlay/);
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);

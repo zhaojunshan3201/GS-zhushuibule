@@ -50,12 +50,18 @@
     right: 0;
     bottom: 0;
     left: 0;
-    height: 255px;
+    height: 380px;
     content: "";
     pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 34%, black 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 34%, black 100%);
     background:
-      linear-gradient(to bottom, rgb(14 47 68 / 96%) 0%, rgb(14 47 68 / 48%) 34%, rgb(4 16 25 / 24%) 100%),
+      linear-gradient(to bottom, rgb(18 68 96 / 0%) 0%, rgb(8 37 55 / 24%) 48%, rgb(4 16 25 / 66%) 100%),
       url("/sidebar-oilfield.png") center bottom / cover no-repeat;
+  }
+
+  .shell-app[data-theme="default"] .shell-sidebar {
+    background: linear-gradient(to bottom, #0e2f44 0%, #174b6a 66%, #0b293d 100%);
   }
 
   .shell-topbar {
