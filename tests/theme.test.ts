@@ -2,13 +2,13 @@
 import test from "node:test";
 import { DEFAULT_THEME, getBrowserTheme, getStoredTheme, isThemeKey, persistBrowserTheme, safeGetTheme, safePersistTheme, THEME_OPTIONS, THEME_STORAGE_KEY } from "../src/shared/theme";
 
-test("declares the five selectable themes", () => {
+test("declares the four selectable themes", () => {
   assert.equal(THEME_STORAGE_KEY, "gszhushui_theme");
-  assert.deepEqual(THEME_OPTIONS.map((theme) => theme.key), ["default", "oil-blue", "enterprise-white", "industrial-dark", "emerald-gold"]);
-  assert.deepEqual(THEME_OPTIONS.map((theme) => theme.label), ["当前默认主题", "专业油田蓝", "极简企业白", "深色工业台", "墨绿鎏金"]);
+  assert.deepEqual(THEME_OPTIONS.map((theme) => theme.key), ["default", "oil-blue", "enterprise-white", "emerald-gold"]);
+  assert.deepEqual(THEME_OPTIONS.map((theme) => theme.label), ["当前默认主题", "专业油田蓝", "极简企业白", "墨绿鎏金"]);
 });
-test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), true); assert.equal(isThemeKey("unknown"), false); });
-test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("unknown"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });
+test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), false); assert.equal(isThemeKey("unknown"), false); });
+test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("industrial-dark"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });
 
 test("falls back to the default theme when storage reads throw", () => {
   assert.equal(safeGetTheme({ getItem: () => { throw new DOMException("Blocked", "SecurityError"); } }), DEFAULT_THEME);
@@ -33,7 +33,7 @@ import fs from "node:fs";
 
 test("defines visual CSS contracts for every selectable theme", () => {
   const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-  for (const theme of ["oil-blue", "enterprise-white", "industrial-dark", "emerald-gold"]) {
+  for (const theme of ["oil-blue", "enterprise-white", "emerald-gold"]) {
     assert.match(css, new RegExp(`\\[data-theme=["']${theme}["']\\]`));
   }
 });
@@ -52,7 +52,7 @@ test("scopes visual overrides to non-default theme keys", () => {
 
 test("does not apply theme text, table, or scrollbar overrides to the default theme", () => {
   const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-  const themedRoot = ':is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"])';
+  const themedRoot = ':is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"])';
   for (const selector of [".shell-section-title", ".cnpc-table td", ".custom-scrollbar::-webkit-scrollbar-track", ".custom-scrollbar::-webkit-scrollbar-thumb", ".custom-scrollbar::-webkit-scrollbar-thumb:hover"]) {
     assert.ok(css.includes(`${themedRoot} ${selector}`));
   }

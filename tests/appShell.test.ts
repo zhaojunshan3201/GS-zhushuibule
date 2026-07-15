@@ -46,7 +46,7 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(cssSource, /border-color: #dbe4ee !important/);
   assert.match(cssSource, /\.shell-app\[data-theme="enterprise-white"\] table th/);
   assert.match(cssSource, /\.shell-app\[data-theme="enterprise-white"\] table td/);
-  assert.match(cssSource, /\.login-dialog\[data-theme="industrial-dark"\]/);
+  assert.doesNotMatch(cssSource, /industrial-dark/);
   assert.match(cssSource, /\.login-dialog\[data-theme="enterprise-white"\][\s\S]*?--login-hero: #f8fbff/);
   assert.match(cssSource, /\.shell-welcome-overlay/);
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);

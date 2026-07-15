@@ -324,22 +324,6 @@
   --theme-row-hover: #f4f8fc;
 }
 
-[data-theme="industrial-dark"] {
-  --theme-primary: #12323d;
-  --theme-primary-dark: #081c24;
-  --theme-surface: #102129;
-  --theme-bg: #071218;
-  --theme-accent: #e3a629;
-  --theme-border: #2a4752;
-  --theme-text: #d8edf0;
-  --theme-muted: #8eabb2;
-  --theme-table-head: #163944;
-  --theme-table-head-text: #72e0e7;
-  --theme-table-border: #315661;
-  --theme-row: #112a32;
-  --theme-row-hover: #193942;
-}
-
 [data-theme="emerald-gold"] {
   --theme-primary: #174b3a;
   --theme-primary-dark: #0d3026;
@@ -384,7 +368,7 @@
     background-color: var(--theme-primary-dark);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-section-title {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .shell-section-title {
     color: var(--theme-text);
   }
 
@@ -416,7 +400,7 @@
     color: var(--theme-table-head-text);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .cnpc-table td {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .cnpc-table td {
     border-color: var(--theme-table-border);
     background-color: var(--theme-row);
     color: var(--theme-text);
@@ -426,16 +410,16 @@
     background-color: var(--theme-row-hover);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-track {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-track {
     background: var(--theme-bg);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-thumb {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-thumb {
     background: var(--theme-border);
     border-color: var(--theme-bg);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--theme-primary);
   }
 
@@ -447,15 +431,15 @@
     box-shadow: none;
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-topbar-nav {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .shell-topbar-nav {
     border-color: var(--theme-border);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-primary-btn:hover {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .shell-primary-btn:hover {
     background-color: var(--theme-primary-dark);
   }
 
-  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-link {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .shell-link {
     color: var(--theme-primary);
   }
 
@@ -582,23 +566,6 @@
     --login-field-focus: #1769aa;
     --login-guest-bg: #ffffff;
     --login-guest-hover: #f4f8fc;
-  }
-
-  .login-dialog[data-theme="industrial-dark"] {
-    --login-overlay: rgb(2 10 15 / 74%);
-    --login-card: #102129;
-    --login-border: #315661;
-    --login-hero: #081c24;
-    --login-hero-text: #ecf7fa;
-    --login-hero-muted: #8eabb2;
-    --login-icon: rgb(227 166 41 / 16%);
-    --login-accent: #e3a629;
-    --login-accent-hover: #c98b12;
-    --login-text: #d8edf0;
-    --login-field-border: #315661;
-    --login-field-focus: #e3a629;
-    --login-guest-bg: #112a32;
-    --login-guest-hover: #193942;
   }
 
   .login-dialog[data-theme="emerald-gold"] {
