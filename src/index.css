@@ -683,4 +683,30 @@
     background-color: #fffef8 !important;
     color: #a31b1b !important;
   }
+
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="border-[#"] {
+    border-color: #b9c4a5 !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="bg-[#f4"],
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="bg-[#f7"],
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="bg-[#dc"],
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="bg-[#e4"],
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="bg-[#ea"],
+  .shell-app[data-theme="emerald-gold"] .shell-content [class*="bg-[#d8"] {
+    background-color: #fffef8 !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#e4"],
+  .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#ea"],
+  .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#d8"] {
+    background-color: #e8ead5 !important;
+    color: #254b3d !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#e4"]:hover,
+  .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#ea"]:hover,
+  .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#d8"]:hover {
+    background-color: #dce3c8 !important;
+  }
 }
