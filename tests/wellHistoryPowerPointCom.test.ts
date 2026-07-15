@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 process.env.NODE_ENV = "test";
-const { exportPresentationSlidesWithPowerPoint, validatePptxUploadFileName } = await import("../server");
+const {
+  cleanupWellHistoryPptImportArtifacts,
+  exportPresentationSlidesWithPowerPoint,
+  validatePptxUploadFileName,
+} = await import("../server");
 
 test("exports PPTX slides with PowerPoint COM and returns naturally sorted PNG paths", async () => {
   let command = "";
@@ -69,4 +73,17 @@ test("kills the marked PowerPoint process and removes its marker when COM export
 
 test("accepts PPT uploads now that PowerPoint performs the conversion", () => {
   assert.deepEqual(validatePptxUploadFileName("source.ppt"), { ok: true });
+});
+
+test("cleans staging pages and moved PNGs when PPT import does not save", async () => {
+  const removedDirectories: string[] = [];
+  const removedFiles: string[] = [];
+
+  await cleanupWellHistoryPptImportArtifacts("C:\\tmp\\pages", ["C:\\uploads\\page-1.png"], false, {
+    rm: async (directory) => { removedDirectories.push(directory); },
+    unlink: async (filePath) => { removedFiles.push(filePath); },
+  });
+
+  assert.deepEqual(removedDirectories, ["C:\\tmp\\pages"]);
+  assert.deepEqual(removedFiles, ["C:\\uploads\\page-1.png"]);
 });

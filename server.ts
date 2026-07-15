@@ -846,6 +846,23 @@ export async function exportPresentationSlidesWithPowerPoint(
   return pages;
 }
 
+export async function cleanupWellHistoryPptImportArtifacts(
+  pageDir: string | null,
+  movedPagePaths: string[],
+  saved: boolean,
+  dependencies: {
+    rm?: (path: string, options: { recursive: true; force: true }) => Promise<unknown>;
+    unlink?: (path: string) => Promise<unknown>;
+  } = {},
+) {
+  if (pageDir) {
+    await (dependencies.rm ?? fs.rm)(pageDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+  if (!saved) {
+    await Promise.all(movedPagePaths.map((pagePath) => (dependencies.unlink ?? fs.unlink)(pagePath).catch(() => undefined)));
+  }
+}
+
 async function saveWellHistoryPptxRecord(input: {
   pptxBuffer: Buffer;
   document: PptxWellHistoryDocument;
@@ -3160,9 +3177,12 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
       const extension = getFileExtension(part.sourceOriginalName);
       const sourceName = `${sanitizeFileSegment(wellNo, "well")}-part-${part.partOrder ?? part.sourceOrder + 1}-${Date.now()}-${randomUUID()}${extension}`;
       const sourcePath = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceName);
+      const movedPagePaths: string[] = [];
+      let pageDir: string | null = null;
+      let saved = false;
       try {
         await fs.writeFile(sourcePath, Buffer.from(await part.entry.arrayBuffer()));
-        const pageDir = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, `${sanitizeFileSegment(wellNo, "well")}-pages-${randomUUID()}`);
+        pageDir = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, `${sanitizeFileSegment(wellNo, "well")}-pages-${randomUUID()}`);
         const exportedPages = await exportPresentationSlidesWithPowerPoint(sourcePath, pageDir, extension);
         const pptxPath = extension === ".ppt"
           ? path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.pptx`)
@@ -3172,11 +3192,12 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
         const pageUrls: string[] = [];
         for (const [index, pagePath] of exportedPages.entries()) {
           const pageName = `${sanitizeFileSegment(wellNo, "well")}-page-${index + 1}-${randomUUID()}.png`;
-          await fs.rename(pagePath, path.join(WELL_HISTORY_UPLOAD_DIR, pageName));
+          const uploadPath = path.join(WELL_HISTORY_UPLOAD_DIR, pageName);
+          await fs.rename(pagePath, uploadPath);
+          movedPagePaths.push(uploadPath);
           pageUrls.push(`/uploads/well-history/${pageName}`);
         }
-        await fs.rm(pageDir, { recursive: true, force: true });
-        const saved = await saveWellHistoryPptxRecord({
+        const savedRecord = await saveWellHistoryPptxRecord({
           pptxBuffer,
           document,
           wellNo,
@@ -3187,9 +3208,12 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
           sourceFormat: extension.slice(1),
           initialHtml: buildPptSlideHtml(pageUrls),
         });
-        items.push({ fileName: part.sourceOriginalName, wellNo, status: "success", pptxUrl: saved.fileUrl, versionNo: saved.versionNo, updatedAt: saved.updatedAt });
+        saved = true;
+        items.push({ fileName: part.sourceOriginalName, wellNo, status: "success", pptxUrl: savedRecord.fileUrl, versionNo: savedRecord.versionNo, updatedAt: savedRecord.updatedAt });
       } catch (error: any) {
         items.push({ fileName: part.sourceOriginalName, wellNo, status: error?.code || "pptx-import-failed", message: error?.message || serializeError(error) });
+      } finally {
+        await cleanupWellHistoryPptImportArtifacts(pageDir, movedPagePaths, saved);
       }
     }
     const successCount = items.filter(item => item.status === "success").length;
