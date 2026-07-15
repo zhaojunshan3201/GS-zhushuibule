@@ -366,13 +366,8 @@ export function collectWellHistoryPptxFileUrls(current: { fileUrl?: string | nul
 
 export function validatePptxUploadFileName(fileName: string) {
   const extension = getFileExtension(fileName);
-  if (extension === ".pptx") return { ok: true as const };
-  if (extension === ".ppt") return { ok: false as const, code: "ppt-converter-unavailable" as const };
+  if (extension === ".pptx" || extension === ".ppt") return { ok: true as const };
   return { ok: false as const, code: "invalid-pptx-file" as const };
-}
-
-export function isPptxConverterUnavailable(error: unknown) {
-  return (error as { code?: string })?.code === "ENOENT";
 }
 
 export function validatePptxEditorDocument(value: unknown) {
@@ -760,6 +755,8 @@ type PowerPointSlideExportDependencies = {
   mkdir?: (path: string, options: { recursive: true }) => Promise<unknown>;
   execFileAsync?: (file: string, args: string[], options: { timeout: number; maxBuffer: number }) => Promise<unknown>;
   readdir?: (path: string) => Promise<string[]>;
+  readFile?: (path: string) => Promise<Buffer>;
+  unlink?: (path: string) => Promise<unknown>;
 };
 
 export async function exportPresentationSlidesWithPowerPoint(
@@ -773,6 +770,7 @@ export async function exportPresentationSlidesWithPowerPoint(
   const escapedOutput = outputDir.replace(/'/g, "''");
   const pptxPath = path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.pptx`);
   const escapedPptx = pptxPath.replace(/'/g, "''");
+  const markerPath = path.join(outputDir, ".powerpoint-pid");
   const saveAsPptx = sourceExtension.toLowerCase() === ".ppt"
     ? `  $presentation.SaveAs('${escapedPptx}', 24)`
     : "";
@@ -780,8 +778,12 @@ export async function exportPresentationSlidesWithPowerPoint(
     "$ErrorActionPreference = 'Stop'",
     "$ppt = $null",
     "$presentation = $null",
+    `$markerPath = Join-Path '${escapedOutput}' '.powerpoint-pid'`,
     "try {",
     "  $ppt = New-Object -ComObject PowerPoint.Application",
+    "  $powerPointProcessId = Get-Process POWERPNT | Where-Object { $_.MainWindowHandle -eq $ppt.HWND } | Select-Object -First 1 -ExpandProperty Id",
+    "  if ($null -eq $powerPointProcessId -or [int]$powerPointProcessId -le 0) { throw 'powerpoint-process-id-not-found' }",
+    "  Set-Content -LiteralPath $markerPath -Value $powerPointProcessId -NoNewline",
     "  $ppt.DisplayAlerts = 1",
     `  $presentation = $ppt.Presentations.Open('${escapedSource}', $false, $false, $false)`,
     saveAsPptx,
@@ -795,17 +797,42 @@ export async function exportPresentationSlidesWithPowerPoint(
     "    try {",
     "      if ($ppt -ne $null) { $ppt.Quit() }",
     "    } finally {",
-    "      [System.GC]::Collect()",
-    "      [System.GC]::WaitForPendingFinalizers()",
+    "      try {",
+    "        [System.GC]::Collect()",
+    "        [System.GC]::WaitForPendingFinalizers()",
+    "      } finally {",
+    "        Remove-Item -LiteralPath $markerPath -Force -ErrorAction SilentlyContinue",
+    "      }",
     "    }",
     "  }",
     "}",
   ].join("\n");
 
-  await (dependencies.execFileAsync ?? execFileAsync)("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
-    timeout: PPT_CONVERT_TIMEOUT_MS,
-    maxBuffer: 8 * 1024 * 1024,
-  });
+  const converter = dependencies.execFileAsync ?? execFileAsync;
+  const removeMarker = async () => {
+    await (dependencies.unlink ?? fs.unlink)(markerPath).catch(() => undefined);
+  };
+  try {
+    await converter("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
+      timeout: PPT_CONVERT_TIMEOUT_MS,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  } catch (error) {
+    try {
+      const marker = await (dependencies.readFile ?? fs.readFile)(markerPath).catch(() => null);
+      const pid = Number(marker?.toString().trim());
+      if (Number.isSafeInteger(pid) && pid > 0) {
+        await converter("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+          timeout: PPT_CONVERT_TIMEOUT_MS,
+          maxBuffer: 8 * 1024 * 1024,
+        }).catch(() => undefined);
+      }
+    } finally {
+      await removeMarker();
+    }
+    throw error;
+  }
+  await removeMarker();
   const entries = await (dependencies.readdir ?? fs.readdir)(outputDir);
   const pages = entries
     .filter((entry) => /\.png$/i.test(entry))
@@ -3114,7 +3141,7 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
       const wellNo = normalizeWellHistoryWellNo(parsed.wellNo);
       const validation = validatePptxUploadFileName(entry.name);
       if (!wellNo) { items.push({ fileName: entry.name, wellNo: "", status: "invalid-name", message: "File name must match well number" }); continue; }
-      if (!validation.ok && getFileExtension(entry.name) !== ".ppt") { items.push({ fileName: entry.name, wellNo, status: validation.code, message: "Only PPT/PPTX files are supported" }); continue; }
+      if (!validation.ok) { items.push({ fileName: entry.name, wellNo, status: validation.code, message: "Only PPT/PPTX files are supported" }); continue; }
       const group = pending.get(wellNo) ?? [];
       group.push({ entry, sourceOrder, sourceOriginalName: entry.name, partOrder: parsed.order });
       pending.set(wellNo, group);

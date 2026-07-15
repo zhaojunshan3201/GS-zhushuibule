@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 process.env.NODE_ENV = "test";
-const { exportPresentationSlidesWithPowerPoint } = await import("../server");
+const { exportPresentationSlidesWithPowerPoint, validatePptxUploadFileName } = await import("../server");
 
 test("exports PPTX slides with PowerPoint COM and returns naturally sorted PNG paths", async () => {
   let command = "";
@@ -42,4 +42,31 @@ test("fails when PowerPoint did not export any PNG pages", async () => {
     }),
     /ppt-page-export-failed/,
   );
+});
+
+test("kills the marked PowerPoint process and removes its marker when COM export times out", async () => {
+  const calls: Array<{ file: string; args: string[] }> = [];
+  const removed: string[] = [];
+  const timeout = new Error("ETIMEDOUT");
+
+  await assert.rejects(
+    () => exportPresentationSlidesWithPowerPoint("C:\\tmp\\source.pptx", "C:\\tmp\\pages", ".pptx", {
+      mkdir: async () => undefined,
+      execFileAsync: async (file, args) => {
+        calls.push({ file, args });
+        if (file === "powershell.exe") throw timeout;
+      },
+      readFile: async () => Buffer.from("1234\n"),
+      unlink: async (markerPath) => { removed.push(markerPath); },
+      readdir: async () => [],
+    }),
+    (error) => error === timeout,
+  );
+
+  assert.deepEqual(calls.at(-1), { file: "taskkill.exe", args: ["/PID", "1234", "/T", "/F"] });
+  assert.deepEqual(removed, ["C:\\tmp\\pages\\.powerpoint-pid"]);
+});
+
+test("accepts PPT uploads now that PowerPoint performs the conversion", () => {
+  assert.deepEqual(validatePptxUploadFileName("source.ppt"), { ok: true });
 });
