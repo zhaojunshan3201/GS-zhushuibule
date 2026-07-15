@@ -493,29 +493,29 @@
   }
 
   .shell-app[data-theme="enterprise-white"] .home-reserve-overview {
-    border-color: #dbe4ee;
-    background: #ffffff;
+    border-color: #dbe4ee !important;
+    background: #ffffff !important;
   }
 
   .shell-app[data-theme="enterprise-white"] .home-reserve-overview > h1 {
-    border-color: #dbe4ee;
-    background: #fbfcfe;
-    color: #1f3b5b;
+    border-color: #dbe4ee !important;
+    background: #fbfcfe !important;
+    color: #1f3b5b !important;
   }
 
   .shell-app[data-theme="enterprise-white"] .home-reserve-overview th {
-    border-color: #dbe4ee;
-    background: #f4f7fb;
-    color: #244a6b;
+    border-color: #dbe4ee !important;
+    background: #f4f7fb !important;
+    color: #244a6b !important;
   }
 
   .shell-app[data-theme="enterprise-white"] .home-reserve-overview td {
-    border-color: #e1e8f0;
-    background: #ffffff;
-    color: #344b63;
+    border-color: #e1e8f0 !important;
+    background: #ffffff !important;
+    color: #344b63 !important;
   }
 
   .shell-app[data-theme="enterprise-white"] .home-reserve-overview tbody tr:hover td {
-    background: #f7faff;
+    background: #f7faff !important;
   }
 }
