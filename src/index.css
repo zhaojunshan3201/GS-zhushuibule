@@ -222,6 +222,14 @@
   .shell-mobile-trigger {
     display: inline-flex;
   }
+
+  .theme-switcher span {
+    display: none;
+  }
+
+  .theme-switcher select {
+    max-width: 120px;
+  }
 }
 
 :root {
