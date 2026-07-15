@@ -720,4 +720,28 @@
   .shell-app[data-theme="emerald-gold"] .shell-content button[class*="bg-[#d8"]:hover {
     background-color: #dce3c8 !important;
   }
+
+  .shell-app[data-theme="oil-blue"] table th {
+    border-color: #d9b5ab !important;
+    background-color: #f5e6e1 !important;
+    color: #681717 !important;
+  }
+
+  .shell-app[data-theme="oil-blue"] table td {
+    border-color: #e3c9c2 !important;
+    background-color: #fffdfb !important;
+    color: #3d2a2a !important;
+  }
+
+  .shell-app[data-theme="oil-blue"] table tbody tr:hover td {
+    background-color: #fff2e8 !important;
+  }
+
+  .shell-app[data-theme="oil-blue"] .shell-content input,
+  .shell-app[data-theme="oil-blue"] .shell-content select,
+  .shell-app[data-theme="oil-blue"] .shell-content textarea {
+    border-color: #d9b5ab !important;
+    background-color: #fffdfb !important;
+    color: #3d2a2a !important;
+  }
 }
