@@ -102,6 +102,7 @@ test("normalizeWellFlushingPayload trims and converts modal input", () => {
 
   assert.deepEqual(result, {
     unit: "采油作业一区",
+    block: "",
     wellNo: "W1",
     washDate: "2026-05-23",
     daysSinceLastWash: 12,
@@ -119,7 +120,7 @@ test("normalizeWellFlushingPayload trims and converts modal input", () => {
 test("createEmptyAbnormalWellForm and normalizeAbnormalWellPayload support modal add", () => {
   const form = createEmptyAbnormalWellForm();
   assert.equal(form.category, "欠注");
-  assert.equal(form.unit, "采油作业一区");
+  assert.equal(form.unit, "高采采油作业一区");
 
   assert.deepEqual(normalizeAbnormalWellPayload({
     category: " 欠注 ",

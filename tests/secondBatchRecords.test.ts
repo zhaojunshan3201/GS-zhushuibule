@@ -39,7 +39,7 @@ test("second-batch where helpers keep filters server-side", () => {
   });
 
   assert.deepEqual(buildSingleWellEvaluationWhere({ unit: "采油作业一区", process: "智能分注", wellNo: "雷" }), {
-    unit: "采油作业一区",
+    unit: { contains: "采油作业一区", mode: "insensitive" },
     process: "智能分注",
     wellNo: { contains: "雷", mode: "insensitive" },
   });
@@ -75,6 +75,8 @@ test("normalizeConcentricTestPayload trims modal input for database storage", ()
   });
 
   assert.deepEqual(result, {
+    unit: "",
+    block: "",
     wellNo: "雷19-10",
     testDate: "2026-05-23",
     allocatorCount: 4,
@@ -123,6 +125,7 @@ test("second-batch modal payload normalizers trim and pad array input", () => {
     wellNo: "注1",
     process: "同心分注",
     unit: "采油作业一区",
+    block: "",
     evaluationDate: "2026-05-23",
     intervalCount: 4,
     actualCount: 4,
