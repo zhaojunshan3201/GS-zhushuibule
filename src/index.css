@@ -458,4 +458,37 @@
   :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-link {
     color: var(--theme-primary);
   }
+
+  .shell-app[data-theme="enterprise-white"] .shell-sidebar {
+    border-right: 1px solid #edf0f4;
+    background: #ffffff;
+    color: #17365c;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .shell-sidebar > .flex.items-center > svg {
+    color: #3b82f6 !important;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .shell-sidebar > .flex.items-center > div > div:last-child {
+    color: #7b8798;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .shell-nav-link {
+    color: #17365c;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .shell-sidebar-nav > .shell-nav-link > svg {
+    display: none;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .shell-nav-link-active {
+    background: #ffffff;
+    color: #3574dc;
+    box-shadow: inset 3px 0 0 #3b82f6, inset 0 0 0 1px #edf0f4;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .shell-nav-link-idle:hover {
+    background: #f8fbff;
+    color: #17365c;
+  }
 }
