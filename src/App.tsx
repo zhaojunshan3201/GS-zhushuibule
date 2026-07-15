@@ -7456,7 +7456,7 @@ function WellHistoryPage({
     formData.append("block", block.trim());
 
     try {
-      const { data } = await axios.post<{ successCount: number; failureCount: number; items: WellHistoryBatchImportItem[] }>(
+      const { data } = await axios.post<{ successCount: number; supersededCount: number; failureCount: number; items: WellHistoryBatchImportItem[] }>(
         "/api/uploads/well-history-ppt-batch",
         formData,
         {
@@ -7478,7 +7478,7 @@ function WellHistoryPage({
         await openWell(firstSuccess.wellNo);
       }
       requestConfirm(
-        `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${data.successCount || 0} 个，失败 ${data.failureCount || 0} 个。`,
+        `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${data.successCount || 0} 个，覆盖跳过 ${data.supersededCount || 0} 个，失败 ${data.failureCount || 0} 个。`,
         () => {},
       );
     } catch (err: any) {
@@ -7571,8 +7571,60 @@ function WellHistoryPage({
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
       {confirmDialog}
-      <div className="space-y-3">
+      <div data-well-history-sidebar className="space-y-3">
         <input ref={fileInputRef} type="file" accept=".ppt,.pptx" multiple className="hidden" onChange={(event) => void handleBatchImport(event.target.files)} />
+
+        <div className="border border-shell-border bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-lg font-bold text-gray-900">当前井与查询</h2>
+          <div className="space-y-2 text-sm text-gray-600">
+            <div><strong>当前井号：</strong>{detail?.wellNo || "--"}</div>
+            <div><strong>单位：</strong>{detail?.unit || "--"}</div>
+            <div><strong>区块：</strong>{detail?.block || "--"}</div>
+            <div><strong>更新时间：</strong>{detail ? formatTime(detail.updatedAt) : "--"}</div>
+          </div>
+          <div className="mt-4 space-y-3">
+            <label className="block text-sm font-bold text-gray-700">
+              单位
+              <select value={unit} onChange={(event) => setUnit(event.target.value)} className="mt-1 h-9 w-full border border-gray-200 bg-white px-2 text-sm outline-none focus:border-cnpc-red">
+                {UNIT_OPTIONS.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-bold text-gray-700">
+              区块
+              <select value={block} onChange={(event) => setBlock(event.target.value)} className="mt-1 h-9 w-full border border-gray-200 bg-white px-2 text-sm outline-none focus:border-cnpc-red">
+                <option value="">请选择或留空</option>
+                {blockOptions.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-bold text-gray-700">
+              井号
+              <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入井号" className="mt-1 h-9 w-full border border-gray-200 px-2 text-sm outline-none focus:border-cnpc-red" />
+            </label>
+            <button onClick={() => void handleQuery()} className="inline-flex h-9 w-full items-center justify-center gap-1 bg-cnpc-red px-3 text-sm font-bold text-white hover:bg-red-700">
+              <Search className="h-4 w-4" />查询
+            </button>
+            <button
+              type="button"
+              onClick={() => void (richTextDocument ? saveRichTextDocument() : pdfSaveHandler?.())}
+              disabled={richTextDocument ? !pdfDirty : !pdfSaveHandler}
+              className="inline-flex h-9 w-full items-center justify-center gap-1 bg-cnpc-red px-3 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />保存编辑结果
+            </button>
+            <button
+              type="button"
+              onClick={() => void (richTextDocument ? handleRichTextPdfDownload() : pdfDownloadHandler?.())}
+              disabled={richTextDocument ? false : !pdfDownloadHandler}
+              className="inline-flex h-9 w-full items-center justify-center gap-1 border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />下载 PDF
+            </button>
+          </div>
+        </div>
 
         <div className="border border-shell-border bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
@@ -7619,74 +7671,12 @@ function WellHistoryPage({
         </div>
       </div>
 
-      <div className="space-y-5">
-        <div className="hidden border border-shell-border bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">原始井史 PDF</h1>
-              <p className="mt-1 text-sm text-gray-500">后端把 PDF 以 base64 文本返回，前端还原后使用 pdfjs 渲染。</p>
-            </div>
-            {previewUrl && (
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="border border-gray-200 px-4 py-2 text-sm font-bold text-cnpc-red hover:bg-red-50">
-                新窗口打开 PDF
-              </a>
-            )}
-          </div>
-          {error && <div className="mt-4 border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
-        </div>
-
+      <div data-well-history-content className="space-y-5">
         <div className="border border-shell-border bg-white p-3 shadow-sm">
           {loading ? (
             <div className="py-20 text-center text-sm text-gray-400">正在加载井史...</div>
           ) : detail ? (
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 pb-2 text-sm text-gray-600">
-                <span><strong>井号：</strong>{detail.wellNo}</span>
-                <span><strong>单位：</strong>{detail.unit || "--"}</span>
-                <span><strong>区块：</strong>{detail.block || "--"}</span>
-                <span><strong>更新时间：</strong>{formatTime(detail.updatedAt)}</span>
-                <span className="mx-1 h-5 w-px bg-gray-200" />
-                <label className="inline-flex items-center gap-1">
-                  单位
-                  <select value={unit} onChange={(event) => setUnit(event.target.value)} className="h-7 border border-gray-200 bg-white px-2 text-xs outline-none focus:border-cnpc-red">
-                    {UNIT_OPTIONS.map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="inline-flex items-center gap-1">
-                  区块
-                  <select value={block} onChange={(event) => setBlock(event.target.value)} className="h-7 border border-gray-200 bg-white px-2 text-xs outline-none focus:border-cnpc-red">
-                    <option value="">请选择或留空</option>
-                    {blockOptions.map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="inline-flex items-center gap-1">
-                  井号
-                  <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入井号" className="h-7 w-28 border border-gray-200 px-2 text-xs outline-none focus:border-cnpc-red" />
-                </label>
-                <button onClick={() => void handleQuery()} className="inline-flex h-7 items-center gap-1 bg-cnpc-red px-3 text-xs font-bold text-white hover:bg-red-700">
-                  <Search className="h-3.5 w-3.5" />查询
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void (richTextDocument ? saveRichTextDocument() : pdfSaveHandler?.())}
-                  disabled={richTextDocument ? !pdfDirty : !pdfSaveHandler}
-                  className="inline-flex h-7 items-center gap-1 bg-cnpc-red px-3 text-xs font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Save className="h-3.5 w-3.5" />保存编辑结果
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void (richTextDocument ? handleRichTextPdfDownload() : pdfDownloadHandler?.())}
-                  disabled={richTextDocument ? false : !pdfDownloadHandler}
-                  className="inline-flex h-7 items-center gap-1 border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Download className="h-3.5 w-3.5" />下载 PDF
-                </button>
-              </div>
               {richTextDocument ? (
                 <WellHistoryRichTextEditor html={editingHtml} editable onChange={(html) => { setEditingHtml(html); setPdfDirty(html !== richTextDocument.html); }} />
               ) : currentPptx ? (

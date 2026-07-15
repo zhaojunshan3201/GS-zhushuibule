@@ -59,3 +59,19 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher select\s*\{\s*max-width:\s*120px;/);
   assert.match(cssSource, /@media \(max-width: 639px\)\s*\{\s*\.theme-switcher\s*\{\s*display:\s*none;/);
 });
+
+test("well history actions live in the sidebar and import completion reports overwritten files", () => {
+  const sidebarMarker = appSource.indexOf("data-well-history-sidebar");
+  const contentMarker = appSource.indexOf("data-well-history-content");
+
+  assert.notEqual(sidebarMarker, -1);
+  assert.notEqual(contentMarker, -1);
+  assert.ok(sidebarMarker < contentMarker);
+
+  const sidebarSource = appSource.slice(sidebarMarker, contentMarker);
+  assert.match(sidebarSource, /handleQuery/);
+  assert.match(sidebarSource, /saveRichTextDocument/);
+  assert.match(sidebarSource, /handleRichTextPdfDownload/);
+  assert.match(appSource, /supersededCount:\s*number/);
+  assert.match(appSource, /data\.supersededCount/);
+});
