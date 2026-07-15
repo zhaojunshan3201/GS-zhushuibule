@@ -518,4 +518,24 @@
   .shell-app[data-theme="enterprise-white"] .home-reserve-overview tbody tr:hover td {
     background: #f7faff !important;
   }
+
+  .shell-app[data-theme="enterprise-white"] table th {
+    border-color: #dbe4ee !important;
+    background-color: #f4f7fb !important;
+    color: #244a6b !important;
+  }
+
+  .shell-app[data-theme="enterprise-white"] table td {
+    border-color: #e1e8f0 !important;
+    background-color: #ffffff !important;
+    color: #344b63 !important;
+  }
+
+  .shell-app[data-theme="enterprise-white"] table tbody tr:hover td {
+    background-color: #f7faff !important;
+  }
+
+  .shell-app[data-theme="enterprise-white"] table td.bg-red-50 {
+    background-color: #fff1f2 !important;
+  }
 }
