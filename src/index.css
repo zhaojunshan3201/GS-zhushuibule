@@ -635,4 +635,35 @@
   .login-dialog-guest:hover {
     background-color: var(--login-guest-hover) !important;
   }
+
+  .shell-app[data-theme="emerald-gold"] table th {
+    border-color: #b9c4a5 !important;
+    background-color: #e8ead5 !important;
+    color: #254b3d !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] table td {
+    border-color: #b9c4a5 !important;
+    background-color: #fffef8 !important;
+    color: #24372e !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] table tbody tr:hover td {
+    background-color: #f1f3df !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .shell-content input,
+  .shell-app[data-theme="emerald-gold"] .shell-content select,
+  .shell-app[data-theme="emerald-gold"] .shell-content textarea {
+    border-color: #b9c4a5 !important;
+    background-color: #fffef8 !important;
+    color: #24372e !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .shell-content input:focus,
+  .shell-app[data-theme="emerald-gold"] .shell-content select:focus,
+  .shell-app[data-theme="emerald-gold"] .shell-content textarea:focus {
+    border-color: #bf8d20 !important;
+    outline-color: #bf8d20 !important;
+  }
 }
