@@ -59,6 +59,7 @@ import {
   type SmartTestForm,
 } from "./shared/secondBatchRecords";
 import { OIL_PRODUCTION_BLOCK_UNIT_MAP, getOilProductionBlocks, normalizeOilProductionBlock } from "./shared/oilProductionBlocks";
+import { DEFAULT_THEME, getStoredTheme, THEME_OPTIONS, THEME_STORAGE_KEY, type ThemeKey } from "./shared/theme";
 
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -8205,6 +8206,10 @@ function LoginDialog({ onLogin, onCancel }: { onLogin: (user: AuthUser) => void;
 
 export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
+  const [theme, setTheme] = useState<ThemeKey>(() => {
+    if (typeof window === "undefined") return DEFAULT_THEME;
+    return getStoredTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+  });
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -8281,6 +8286,11 @@ export default function App() {
     return () => axios.interceptors.request.eject(interceptorId);
   }, [currentUser]);
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, [theme]);
+  useEffect(() => {
     if (isManagementPage(activePage) && !canManageSystem) {
       setActivePage("home");
     }
@@ -8337,6 +8347,7 @@ export default function App() {
   return (
     <div
       className="shell-app"
+      data-theme={theme}
       onClickCapture={guardGuestWriteClick}
       onSubmitCapture={(event) => {
         if ((event.target as HTMLElement).closest('[data-auth-form="true"]')) return;
@@ -8467,6 +8478,16 @@ export default function App() {
               <span className="hidden rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 sm:inline">系统运行正常</span>
             </div>
             <div className="flex items-center gap-3 text-sm text-shell-muted">
+              {activePage === "home" && (
+                <label className="theme-switcher">
+                  <span>主题切换</span>
+                  <select value={theme} onChange={(event) => setTheme(getStoredTheme(event.target.value))}>
+                    {THEME_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {currentUser ? (
                 <>
                   <span>您好，{currentUser.name}（{currentUser.role}）</span>

@@ -119,6 +119,14 @@
     @apply inline-flex items-center justify-center rounded-md bg-shell-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#c96b19];
   }
 
+  .theme-switcher {
+    @apply flex items-center gap-2 whitespace-nowrap text-xs font-medium;
+  }
+
+  .theme-switcher select {
+    @apply rounded-md border border-shell-border bg-shell-panel px-2 py-1 text-shell-text;
+  }
+
   .shell-link {
     @apply text-link-blue underline underline-offset-2 transition-colors hover:text-cnpc-blue;
   }
