@@ -1,6 +1,6 @@
 ﻿import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_THEME, getStoredTheme, isThemeKey, safeGetTheme, safePersistTheme, THEME_OPTIONS, THEME_STORAGE_KEY } from "../src/shared/theme";
+import { DEFAULT_THEME, getBrowserTheme, getStoredTheme, isThemeKey, persistBrowserTheme, safeGetTheme, safePersistTheme, THEME_OPTIONS, THEME_STORAGE_KEY } from "../src/shared/theme";
 
 test("declares the five selectable themes", () => {
   assert.equal(THEME_STORAGE_KEY, "gszhushui_theme");
@@ -16,6 +16,18 @@ test("falls back to the default theme when storage reads throw", () => {
 
 test("ignores storage write failures", () => {
   assert.doesNotThrow(() => safePersistTheme({ setItem: () => { throw new DOMException("Full", "QuotaExceededError"); } }, "oil-blue"));
+});
+
+test("falls back when accessing browser storage throws", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, get: () => ({ get localStorage() { throw new DOMException("Blocked", "SecurityError"); } }) });
+  try {
+    assert.equal(getBrowserTheme(), DEFAULT_THEME);
+    assert.doesNotThrow(() => persistBrowserTheme("oil-blue"));
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 });
 import fs from "node:fs";
 

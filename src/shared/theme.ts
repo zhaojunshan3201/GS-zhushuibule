@@ -34,3 +34,21 @@ export function safePersistTheme(storage: Pick<Storage, "setItem"> | null | unde
     // Storage can be unavailable in privacy-restricted contexts.
   }
 }
+
+export function getBrowserTheme(): ThemeKey {
+  if (typeof window === "undefined") return DEFAULT_THEME;
+  try {
+    return safeGetTheme(window.localStorage);
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+export function persistBrowserTheme(theme: ThemeKey): void {
+  if (typeof window === "undefined") return;
+  try {
+    safePersistTheme(window.localStorage, theme);
+  } catch {
+    // Storage can be unavailable before its methods are accessed.
+  }
+}

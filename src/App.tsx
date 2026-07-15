@@ -59,7 +59,7 @@ import {
   type SmartTestForm,
 } from "./shared/secondBatchRecords";
 import { OIL_PRODUCTION_BLOCK_UNIT_MAP, getOilProductionBlocks, normalizeOilProductionBlock } from "./shared/oilProductionBlocks";
-import { DEFAULT_THEME, getStoredTheme, safeGetTheme, safePersistTheme, THEME_OPTIONS, type ThemeKey } from "./shared/theme";
+import { getBrowserTheme, getStoredTheme, persistBrowserTheme, THEME_OPTIONS, type ThemeKey } from "./shared/theme";
 
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -8206,10 +8206,7 @@ function LoginDialog({ onLogin, onCancel }: { onLogin: (user: AuthUser) => void;
 
 export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
-  const [theme, setTheme] = useState<ThemeKey>(() => {
-    if (typeof window === "undefined") return DEFAULT_THEME;
-    return safeGetTheme(window.localStorage);
-  });
+  const [theme, setTheme] = useState<ThemeKey>(getBrowserTheme);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -8286,9 +8283,7 @@ export default function App() {
     return () => axios.interceptors.request.eject(interceptorId);
   }, [currentUser]);
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      safePersistTheme(window.localStorage, theme);
-    }
+    persistBrowserTheme(theme);
   }, [theme]);
   useEffect(() => {
     if (isManagementPage(activePage) && !canManageSystem) {
