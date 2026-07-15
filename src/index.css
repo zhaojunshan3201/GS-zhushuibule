@@ -491,4 +491,31 @@
     background: #f8fbff;
     color: #17365c;
   }
+
+  .shell-app[data-theme="enterprise-white"] .home-reserve-overview {
+    border-color: #dbe4ee;
+    background: #ffffff;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .home-reserve-overview > h1 {
+    border-color: #dbe4ee;
+    background: #fbfcfe;
+    color: #1f3b5b;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .home-reserve-overview th {
+    border-color: #dbe4ee;
+    background: #f4f7fb;
+    color: #244a6b;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .home-reserve-overview td {
+    border-color: #e1e8f0;
+    background: #ffffff;
+    color: #344b63;
+  }
+
+  .shell-app[data-theme="enterprise-white"] .home-reserve-overview tbody tr:hover td {
+    background: #f7faff;
+  }
 }

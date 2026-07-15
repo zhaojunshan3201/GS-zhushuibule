@@ -546,7 +546,7 @@ function HomePage() {
   const bodyCellClass = `${tableBorder} bg-white px-2 py-2 text-center text-[13px] leading-tight text-black`;
 
   return (
-    <div className="border border-[#8ebdff] bg-white">
+    <div className="home-reserve-overview border border-[#8ebdff] bg-white">
       <h1 className="border-b border-[#8ebdff] bg-[#f8fbff] py-1 text-center text-[22px] font-bold leading-tight text-[#d40000]">
         储量概览列表
       </h1>
