@@ -25,6 +25,8 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(appSource, /data-theme=\{theme\}/);
   assert.match(appSource, /主题切换/);
   assert.match(appSource, /theme-switcher/);
+  assert.match(appSource, /function LoginDialog\(\{ theme, onLogin, onCancel \}/);
+  assert.match(appSource, /<LoginDialog\s+theme=\{theme\}/);
   assert.match(appSource, /activePage === "home"/);
   assert.match(appSource, /icon: Home/);
   assert.match(appSource, /const NavIcon = item\.icon/);
@@ -44,6 +46,8 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(cssSource, /border-color: #dbe4ee !important/);
   assert.match(cssSource, /\.shell-app\[data-theme="enterprise-white"\] table th/);
   assert.match(cssSource, /\.shell-app\[data-theme="enterprise-white"\] table td/);
+  assert.match(cssSource, /\.login-dialog\[data-theme="industrial-dark"\]/);
+  assert.match(cssSource, /\.login-dialog\[data-theme="enterprise-white"\][\s\S]*?--login-hero: #f8fbff/);
   assert.match(cssSource, /\.shell-welcome-overlay/);
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher span\s*\{\s*display:\s*none;/);

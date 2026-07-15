@@ -8127,7 +8127,7 @@ function AccessDeniedPage() {
   );
 }
 
-function LoginDialog({ onLogin, onCancel }: { onLogin: (user: AuthUser) => void; onCancel: () => void }) {
+function LoginDialog({ theme, onLogin, onCancel }: { theme: ThemeKey; onLogin: (user: AuthUser) => void; onCancel: () => void }) {
   const [empId, setEmpId] = useState("GS001");
   const [password, setPassword] = useState("admin666");
   const [error, setError] = useState("");
@@ -8164,32 +8164,32 @@ function LoginDialog({ onLogin, onCancel }: { onLogin: (user: AuthUser) => void;
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded border border-[#8fb7df] bg-white shadow-xl">
-        <div className="bg-cnpc-red px-8 py-7 text-center text-white">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/15">
+    <div className="login-dialog fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm" data-theme={theme}>
+      <div className="login-dialog-card w-full max-w-md overflow-hidden rounded border border-[#8fb7df] bg-white shadow-xl">
+        <div className="login-dialog-hero bg-cnpc-red px-8 py-7 text-center text-white">
+          <div className="login-dialog-icon mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/15">
             <Droplet className="h-10 w-10" strokeWidth={2.8} />
           </div>
           <h1 className="text-2xl font-black tracking-wide">注水管理平台</h1>
           <p className="mt-2 text-sm text-white/80">登录后可录入、保存和删除数据</p>
         </div>
-        <form data-auth-form="true" onSubmit={submitLogin} className="space-y-4 px-8 py-7">
-          <label className="block text-sm font-bold text-slate-700">
+        <form data-auth-form="true" onSubmit={submitLogin} className="login-dialog-form space-y-4 px-8 py-7">
+          <label className="login-dialog-label block text-sm font-bold text-slate-700">
             工号
             <input
               value={empId}
               onChange={(event) => setEmpId(event.target.value)}
-              className="mt-2 h-10 w-full rounded border border-[#9fc4e8] px-3 font-normal outline-none focus:border-cnpc-red"
+              className="login-dialog-input mt-2 h-10 w-full rounded border border-[#9fc4e8] px-3 font-normal outline-none focus:border-cnpc-red"
               placeholder="请输入工号"
             />
           </label>
-          <label className="block text-sm font-bold text-slate-700">
+          <label className="login-dialog-label block text-sm font-bold text-slate-700">
             密码
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 h-10 w-full rounded border border-[#9fc4e8] px-3 font-normal outline-none focus:border-cnpc-red"
+              className="login-dialog-input mt-2 h-10 w-full rounded border border-[#9fc4e8] px-3 font-normal outline-none focus:border-cnpc-red"
               placeholder="请输入密码"
             />
           </label>
@@ -8197,14 +8197,14 @@ function LoginDialog({ onLogin, onCancel }: { onLogin: (user: AuthUser) => void;
           <button
             type="submit"
             disabled={loading}
-            className="h-10 w-full rounded bg-cnpc-red text-sm font-bold text-white hover:bg-cnpc-red-dark disabled:cursor-not-allowed disabled:opacity-60"
+            className="login-dialog-submit h-10 w-full rounded bg-cnpc-red text-sm font-bold text-white hover:bg-cnpc-red-dark disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "登录中..." : "登录"}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="h-10 w-full rounded border border-[#9eb8d4] bg-white text-sm font-bold text-slate-700 hover:bg-[#eaf4ff]"
+            className="login-dialog-guest h-10 w-full rounded border border-[#9eb8d4] bg-white text-sm font-bold text-slate-700 hover:bg-[#eaf4ff]"
           >
             游客继续浏览
           </button>
@@ -8364,6 +8364,7 @@ export default function App() {
     >
       {showLoginDialog && (
         <LoginDialog
+          theme={theme}
           onLogin={setCurrentUser}
           onCancel={() => setShowLoginDialog(false)}
         />

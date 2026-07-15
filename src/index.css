@@ -538,4 +538,134 @@
   .shell-app[data-theme="enterprise-white"] table td.bg-red-50 {
     background-color: #fff1f2 !important;
   }
+
+  .login-dialog {
+    --login-overlay: rgb(8 28 42 / 58%);
+    --login-card: #ffffff;
+    --login-border: #2e6488;
+    --login-hero: #0e2f44;
+    --login-hero-text: #ffffff;
+    --login-hero-muted: rgb(255 255 255 / 72%);
+    --login-icon: rgb(255 196 0 / 16%);
+    --login-accent: #e67e22;
+    --login-accent-hover: #c96b19;
+    --login-text: #243447;
+    --login-field-border: #acc6de;
+    --login-field-focus: #e67e22;
+    --login-guest-bg: #ffffff;
+    --login-guest-hover: #f7fafc;
+    background-color: var(--login-overlay) !important;
+  }
+
+  .login-dialog[data-theme="oil-blue"] {
+    --login-overlay: rgb(6 42 66 / 62%);
+    --login-border: #8eb5cc;
+    --login-hero: #062a42;
+    --login-icon: rgb(255 255 255 / 12%);
+    --login-accent: #ec7c26;
+    --login-accent-hover: #c96417;
+    --login-field-border: #a8c3d5;
+    --login-field-focus: #0f4c6e;
+  }
+
+  .login-dialog[data-theme="enterprise-white"] {
+    --login-overlay: rgb(46 68 92 / 28%);
+    --login-border: #d9e1ea;
+    --login-hero: #f8fbff;
+    --login-hero-text: #17365c;
+    --login-hero-muted: #718096;
+    --login-icon: #eaf3ff;
+    --login-accent: #1769aa;
+    --login-accent-hover: #0e4f85;
+    --login-text: #243447;
+    --login-field-border: #cbd8e5;
+    --login-field-focus: #1769aa;
+    --login-guest-bg: #ffffff;
+    --login-guest-hover: #f4f8fc;
+  }
+
+  .login-dialog[data-theme="industrial-dark"] {
+    --login-overlay: rgb(2 10 15 / 74%);
+    --login-card: #102129;
+    --login-border: #315661;
+    --login-hero: #081c24;
+    --login-hero-text: #ecf7fa;
+    --login-hero-muted: #8eabb2;
+    --login-icon: rgb(227 166 41 / 16%);
+    --login-accent: #e3a629;
+    --login-accent-hover: #c98b12;
+    --login-text: #d8edf0;
+    --login-field-border: #315661;
+    --login-field-focus: #e3a629;
+    --login-guest-bg: #112a32;
+    --login-guest-hover: #193942;
+  }
+
+  .login-dialog[data-theme="emerald-gold"] {
+    --login-overlay: rgb(7 31 24 / 60%);
+    --login-card: #fffdf4;
+    --login-border: #b9c4a5;
+    --login-hero: #0d3026;
+    --login-hero-text: #fff9e5;
+    --login-hero-muted: #d8e4cd;
+    --login-icon: rgb(191 141 32 / 17%);
+    --login-accent: #bf8d20;
+    --login-accent-hover: #9d7013;
+    --login-text: #24372e;
+    --login-field-border: #c9c7aa;
+    --login-field-focus: #bf8d20;
+    --login-guest-bg: #fffef8;
+    --login-guest-hover: #f1f3df;
+  }
+
+  .login-dialog-card {
+    border-color: var(--login-border) !important;
+    background-color: var(--login-card) !important;
+  }
+
+  .login-dialog-hero {
+    background-color: var(--login-hero) !important;
+    color: var(--login-hero-text) !important;
+  }
+
+  .login-dialog-hero p {
+    color: var(--login-hero-muted) !important;
+  }
+
+  .login-dialog-icon {
+    background-color: var(--login-icon) !important;
+  }
+
+  .login-dialog-form,
+  .login-dialog-label {
+    color: var(--login-text) !important;
+  }
+
+  .login-dialog-input {
+    border-color: var(--login-field-border) !important;
+    background-color: var(--login-card) !important;
+    color: var(--login-text) !important;
+  }
+
+  .login-dialog-input:focus {
+    border-color: var(--login-field-focus) !important;
+  }
+
+  .login-dialog-submit {
+    background-color: var(--login-accent) !important;
+  }
+
+  .login-dialog-submit:hover {
+    background-color: var(--login-accent-hover) !important;
+  }
+
+  .login-dialog-guest {
+    border-color: var(--login-field-border) !important;
+    background-color: var(--login-guest-bg) !important;
+    color: var(--login-text) !important;
+  }
+
+  .login-dialog-guest:hover {
+    background-color: var(--login-guest-hover) !important;
+  }
 }
