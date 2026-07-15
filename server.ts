@@ -756,76 +756,61 @@ function toPptxDocument(value: unknown): PptxWellHistoryDocument {
   return { ...document, source: new Uint8Array(document.source) };
 }
 
-type PptxConverterDependencies = {
+type PowerPointSlideExportDependencies = {
+  mkdir?: (path: string, options: { recursive: true }) => Promise<unknown>;
   execFileAsync?: (file: string, args: string[], options: { timeout: number; maxBuffer: number }) => Promise<unknown>;
-  stat?: typeof fs.stat;
+  readdir?: (path: string) => Promise<string[]>;
 };
 
-export async function convertPptToPptx(sourcePath: string, outputDir: string, dependencies: PptxConverterDependencies = {}) {
-  try {
-    await (dependencies.execFileAsync ?? execFileAsync)("soffice", ["--headless", "--convert-to", "pptx", "--outdir", outputDir, sourcePath], {
-      timeout: PPT_CONVERT_TIMEOUT_MS,
-      maxBuffer: 8 * 1024 * 1024,
-    });
-  } catch (error) {
-    const unavailable = isPptxConverterUnavailable(error);
-    const wrapped = new Error(unavailable ? "ppt-converter-unavailable" : "ppt-converter-failed");
-    (wrapped as Error & { code?: string }).code = unavailable ? "ppt-converter-unavailable" : "ppt-converter-failed";
-    throw wrapped;
-  }
-  const targetPath = path.join(outputDir, `${path.parse(sourcePath).name}.pptx`);
-  const stat = await (dependencies.stat ?? fs.stat)(targetPath).catch(() => null);
-  if (!stat?.size) {
-    const error = new Error("ppt-converter-failed");
-    (error as Error & { code?: string }).code = "ppt-converter-failed";
-    throw error;
-  }
-  return targetPath;
-}
-
-export async function preparePptxImportFile(
+export async function exportPresentationSlidesWithPowerPoint(
   sourcePath: string,
+  outputDir: string,
   sourceExtension: string,
-  outputDir: string,
-  convert = convertPptToPptx,
-) {
-  return sourceExtension === ".ppt" ? convert(sourcePath, outputDir) : sourcePath;
-}
-
-export async function exportPresentationSlides(
-  sourcePath: string,
-  outputDir: string,
-  dependencies: {
-    mkdir?: (path: string, options: { recursive: true }) => Promise<unknown>;
-    execFileAsync?: (file: string, args: string[], options: { timeout: number; maxBuffer: number }) => Promise<unknown>;
-    readdir?: (path: string) => Promise<string[]>;
-  } = {},
+  dependencies: PowerPointSlideExportDependencies = {},
 ) {
   await (dependencies.mkdir ?? fs.mkdir)(outputDir, { recursive: true });
-  const converter = dependencies.execFileAsync ?? execFileAsync;
-  const sourceDirectory = path.dirname(sourcePath);
-  const pdfPath = path.join(sourceDirectory, `${path.parse(sourcePath).name}.pdf`);
-  try {
-    await converter("soffice", ["--headless", "--convert-to", "pdf", "--outdir", sourceDirectory, sourcePath], { timeout: PPT_CONVERT_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 });
-  } catch (error) {
-    if (isPptxConverterUnavailable(error)) throw new Error("libreoffice-not-found: install LibreOffice and add soffice to PATH");
-    throw error;
-  }
-  const pythonScript = [
-    "import fitz, os, sys",
-    "pdf = fitz.open(sys.argv[1])",
-    "out = sys.argv[2]",
-    "for index, page in enumerate(pdf):",
-    "    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)",
-    "    pix.save(os.path.join(out, f'page-{index + 1}.png'))",
+  const escapedSource = sourcePath.replace(/'/g, "''");
+  const escapedOutput = outputDir.replace(/'/g, "''");
+  const pptxPath = path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.pptx`);
+  const escapedPptx = pptxPath.replace(/'/g, "''");
+  const saveAsPptx = sourceExtension.toLowerCase() === ".ppt"
+    ? `  $presentation.SaveAs('${escapedPptx}', 24)`
+    : "";
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$ppt = $null",
+    "$presentation = $null",
+    "try {",
+    "  $ppt = New-Object -ComObject PowerPoint.Application",
+    "  $ppt.DisplayAlerts = 1",
+    `  $presentation = $ppt.Presentations.Open('${escapedSource}', $false, $false, $false)`,
+    saveAsPptx,
+    "  for ($index = 1; $index -le $presentation.Slides.Count; $index += 1) {",
+    `    $presentation.Slides.Item($index).Export((Join-Path '${escapedOutput}' ('page-' + $index + '.png')), 'PNG')`,
+    "  }",
+    "} finally {",
+    "  if ($presentation -ne $null) { $presentation.Close() }",
+    "  if ($ppt -ne $null) { $ppt.Quit() }",
+    "  [System.GC]::Collect()",
+    "  [System.GC]::WaitForPendingFinalizers()",
+    "}",
   ].join("\n");
-  await converter(WELL_HISTORY_TEXT_PYTHON, ["-c", pythonScript, pdfPath, outputDir], { timeout: PPT_CONVERT_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 });
-  await fs.unlink(pdfPath).catch(() => undefined);
+
+  await (dependencies.execFileAsync ?? execFileAsync)("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
+    timeout: PPT_CONVERT_TIMEOUT_MS,
+    maxBuffer: 8 * 1024 * 1024,
+  });
   const entries = await (dependencies.readdir ?? fs.readdir)(outputDir);
-  return entries
+  const pages = entries
     .filter((entry) => /\.png$/i.test(entry))
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
     .map((entry) => path.join(outputDir, entry));
+  if (!pages.length) {
+    const error = new Error("ppt-page-export-failed");
+    (error as Error & { code?: string }).code = "ppt-page-export-failed";
+    throw error;
+  }
+  return pages;
 }
 
 async function saveWellHistoryPptxRecord(input: {
@@ -3144,12 +3129,13 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
       const sourcePath = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceName);
       try {
         await fs.writeFile(sourcePath, Buffer.from(await part.entry.arrayBuffer()));
-        const pptxPath = await preparePptxImportFile(sourcePath, extension, WELL_HISTORY_SOURCE_UPLOAD_DIR);
+        const pageDir = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, `${sanitizeFileSegment(wellNo, "well")}-pages-${randomUUID()}`);
+        const exportedPages = await exportPresentationSlidesWithPowerPoint(sourcePath, pageDir, extension);
+        const pptxPath = extension === ".ppt"
+          ? path.join(path.dirname(sourcePath), `${path.parse(sourcePath).name}.pptx`)
+          : sourcePath;
         const pptxBuffer = await fs.readFile(pptxPath);
         const document = await parsePptxWellHistory(pptxBuffer);
-        const pageDir = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, `${sanitizeFileSegment(wellNo, "well")}-pages-${randomUUID()}`);
-        const exportedPages = await exportPresentationSlides(pptxPath, pageDir);
-        if (!exportedPages.length) throw new Error("ppt-page-export-failed");
         const pageUrls: string[] = [];
         for (const [index, pagePath] of exportedPages.entries()) {
           const pageName = `${sanitizeFileSegment(wellNo, "well")}-page-${index + 1}-${randomUUID()}.png`;
