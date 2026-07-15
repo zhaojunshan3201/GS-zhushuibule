@@ -1134,9 +1134,9 @@ function ZonalTableShell({
   const showTopBar = Boolean(toolbar) || showFilters || showPagination;
 
   return (
-    <div className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
+    <div className="zonal-table-shell rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
       {showTopBar && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
+        <div className="zonal-table-toolbar flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
           {toolbar ? (
             <div className="flex flex-wrap items-center gap-2">{toolbar}</div>
           ) : showFilters && (

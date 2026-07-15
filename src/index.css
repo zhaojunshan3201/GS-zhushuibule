@@ -666,4 +666,21 @@
     border-color: #bf8d20 !important;
     outline-color: #bf8d20 !important;
   }
+
+  .shell-app[data-theme="emerald-gold"] .zonal-table-shell {
+    border-color: #b9c4a5 !important;
+    background-color: #fffef8 !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .zonal-table-toolbar {
+    border-color: #b9c4a5 !important;
+    background-color: #fffef8 !important;
+    color: #24372e !important;
+  }
+
+  .shell-app[data-theme="emerald-gold"] .zonal-table-shell h1 {
+    border-color: #b9c4a5 !important;
+    background-color: #fffef8 !important;
+    color: #a31b1b !important;
+  }
 }
