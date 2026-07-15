@@ -321,7 +321,6 @@
   }
 
   .shell-topbar-nav {
-    border-color: var(--theme-border);
     background-color: var(--theme-primary-dark);
   }
 
@@ -335,7 +334,7 @@
   }
 
   .shell-primary-btn:hover {
-    background-color: var(--theme-primary-dark);
+    background-color: #c96b19;
   }
 
   .shell-mobile-trigger,
@@ -348,7 +347,7 @@
   }
 
   .shell-link {
-    color: var(--theme-primary);
+    color: #0000ee;
   }
 
   .cnpc-table th {
@@ -383,7 +382,20 @@
   [data-theme="enterprise-white"] .shell-sidebar,
   [data-theme="enterprise-white"] .shell-topbar,
   [data-theme="enterprise-white"] .shell-panel,
-  [data-theme="enterprise-white"] .shell-toolbar {
+  [data-theme="enterprise-white"] .shell-toolbar,
+  [data-theme="enterprise-white"] .shell-welcome-card {
     box-shadow: none;
+  }
+
+  [data-theme] .shell-topbar-nav {
+    border-color: var(--theme-border);
+  }
+
+  [data-theme] .shell-primary-btn:hover {
+    background-color: var(--theme-primary-dark);
+  }
+
+  [data-theme] .shell-link {
+    color: var(--theme-primary);
   }
 }

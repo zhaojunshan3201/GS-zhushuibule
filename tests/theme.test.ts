@@ -17,3 +17,10 @@ test("defines visual CSS contracts for every selectable theme", () => {
     assert.match(css, new RegExp(`\\[data-theme=["']${theme}["']\\]`));
   }
 });
+
+test("preserves default visual constants while scoping theme overrides", () => {
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  assert.match(css, /\.shell-primary-btn:hover\s*\{\s*background-color:\s*#c96b19;/);
+  assert.match(css, /\.shell-link\s*\{\s*color:\s*#0000ee;/);
+  assert.match(css, /\[data-theme="enterprise-white"\][\s\S]*?\.shell-welcome-card\s*\{\s*box-shadow:\s*none;/);
+});
