@@ -30,4 +30,5 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher span\s*\{\s*display:\s*none;/);
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher select\s*\{\s*max-width:\s*120px;/);
+  assert.match(cssSource, /@media \(max-width: 639px\)\s*\{\s*\.theme-switcher\s*\{\s*display:\s*none;/);
 });

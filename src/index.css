@@ -232,6 +232,12 @@
   }
 }
 
+@media (max-width: 639px) {
+  .theme-switcher {
+    display: none;
+  }
+}
+
 :root {
   --theme-primary: #1a5276;
   --theme-primary-dark: #0e2f44;
