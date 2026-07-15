@@ -18,3 +18,19 @@ export function isThemeKey(value: string | null): value is ThemeKey {
 export function getStoredTheme(value: string | null): ThemeKey {
   return isThemeKey(value) ? value : DEFAULT_THEME;
 }
+
+export function safeGetTheme(storage: Pick<Storage, "getItem"> | null | undefined): ThemeKey {
+  try {
+    return getStoredTheme(storage?.getItem(THEME_STORAGE_KEY) ?? null);
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+export function safePersistTheme(storage: Pick<Storage, "setItem"> | null | undefined, theme: ThemeKey): void {
+  try {
+    storage?.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}

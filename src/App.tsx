@@ -59,7 +59,7 @@ import {
   type SmartTestForm,
 } from "./shared/secondBatchRecords";
 import { OIL_PRODUCTION_BLOCK_UNIT_MAP, getOilProductionBlocks, normalizeOilProductionBlock } from "./shared/oilProductionBlocks";
-import { DEFAULT_THEME, getStoredTheme, THEME_OPTIONS, THEME_STORAGE_KEY, type ThemeKey } from "./shared/theme";
+import { DEFAULT_THEME, getStoredTheme, safeGetTheme, safePersistTheme, THEME_OPTIONS, type ThemeKey } from "./shared/theme";
 
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -8208,7 +8208,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
   const [theme, setTheme] = useState<ThemeKey>(() => {
     if (typeof window === "undefined") return DEFAULT_THEME;
-    return getStoredTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+    return safeGetTheme(window.localStorage);
   });
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
@@ -8287,7 +8287,7 @@ export default function App() {
   }, [currentUser]);
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+      safePersistTheme(window.localStorage, theme);
     }
   }, [theme]);
   useEffect(() => {

@@ -1,6 +1,6 @@
 ﻿import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_THEME, getStoredTheme, isThemeKey, THEME_OPTIONS, THEME_STORAGE_KEY } from "../src/shared/theme";
+import { DEFAULT_THEME, getStoredTheme, isThemeKey, safeGetTheme, safePersistTheme, THEME_OPTIONS, THEME_STORAGE_KEY } from "../src/shared/theme";
 
 test("declares the five selectable themes", () => {
   assert.equal(THEME_STORAGE_KEY, "gszhushui_theme");
@@ -9,6 +9,14 @@ test("declares the five selectable themes", () => {
 });
 test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), true); assert.equal(isThemeKey("unknown"), false); });
 test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("unknown"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });
+
+test("falls back to the default theme when storage reads throw", () => {
+  assert.equal(safeGetTheme({ getItem: () => { throw new DOMException("Blocked", "SecurityError"); } }), DEFAULT_THEME);
+});
+
+test("ignores storage write failures", () => {
+  assert.doesNotThrow(() => safePersistTheme({ setItem: () => { throw new DOMException("Full", "QuotaExceededError"); } }, "oil-blue"));
+});
 import fs from "node:fs";
 
 test("defines visual CSS contracts for every selectable theme", () => {
@@ -28,4 +36,12 @@ test("preserves default visual constants while scoping theme overrides", () => {
 test("scopes visual overrides to non-default theme keys", () => {
   const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /\[data-theme\] \.shell-(topbar-nav|primary-btn:hover|link)/);
+});
+
+test("does not apply theme text, table, or scrollbar overrides to the default theme", () => {
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  const themedRoot = ':is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"])';
+  for (const selector of [".shell-section-title", ".cnpc-table td", ".custom-scrollbar::-webkit-scrollbar-track", ".custom-scrollbar::-webkit-scrollbar-thumb", ".custom-scrollbar::-webkit-scrollbar-thumb:hover"]) {
+    assert.ok(css.includes(`${themedRoot} ${selector}`));
+  }
 });

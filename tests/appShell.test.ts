@@ -20,7 +20,8 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(appSource, /mobileMenuTriggerRef\.current\?\.focus\(\)/);
   assert.match(appSource, /const closeMobileNav = \(\) =>/);
   assert.match(appSource, /aria-label="关闭导航菜单"/);
-  assert.match(appSource, /THEME_STORAGE_KEY/);
+  assert.match(appSource, /safeGetTheme/);
+  assert.match(appSource, /safePersistTheme/);
   assert.match(appSource, /data-theme=\{theme\}/);
   assert.match(appSource, /主题切换/);
   assert.match(appSource, /theme-switcher/);

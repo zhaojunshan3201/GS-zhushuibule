@@ -346,7 +346,7 @@
     background-color: var(--theme-primary-dark);
   }
 
-  .shell-section-title {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .shell-section-title {
     color: var(--theme-text);
   }
 
@@ -378,7 +378,7 @@
     color: var(--theme-table-head-text);
   }
 
-  .cnpc-table td {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .cnpc-table td {
     border-color: var(--theme-table-border);
     background-color: var(--theme-row);
     color: var(--theme-text);
@@ -388,16 +388,16 @@
     background-color: var(--theme-row-hover);
   }
 
-  .custom-scrollbar::-webkit-scrollbar-track {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-track {
     background: var(--theme-bg);
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-thumb {
     background: var(--theme-border);
     border-color: var(--theme-bg);
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="industrial-dark"], [data-theme="emerald-gold"]) .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--theme-primary);
   }
 
