@@ -6,11 +6,11 @@ const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8
 const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 
 test("application shell retains content mounting while exposing reference layout regions", () => {
-  assert.match(appSource, /showWelcome/);
+  assert.doesNotMatch(appSource, /showWelcome/);
   assert.match(appSource, /shell-sidebar/);
   assert.match(appSource, /shell-topbar/);
   assert.match(appSource, /<AppContent/);
-  assert.match(appSource, /aria-modal="true"/);
+  assert.doesNotMatch(appSource, /aria-modal="true"/);
   assert.match(appSource, /aria-expanded=\{mobileNavOpen\}/);
   assert.match(appSource, /aria-controls="app-sidebar"/);
   assert.match(appSource, /isMobileViewport && !mobileNavOpen/);
@@ -53,7 +53,7 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(appSource, /zonal-table-shell/);
   assert.match(cssSource, /\.shell-app\[data-theme="emerald-gold"\] \.zonal-table-shell/);
   assert.match(cssSource, /\.shell-app\[data-theme="emerald-gold"\] \.shell-content \[class\*="border-\[#"\]/);
-  assert.match(cssSource, /\.shell-welcome-overlay/);
+  assert.doesNotMatch(cssSource, /\.shell-welcome-overlay/);
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher span\s*\{\s*display:\s*none;/);
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher select\s*\{\s*max-width:\s*120px;/);

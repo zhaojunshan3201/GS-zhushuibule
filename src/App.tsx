@@ -8229,11 +8229,9 @@ export default function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [wellHistoryDirty, setWellHistoryDirty] = useState(false);
   const [pendingPage, setPendingPage] = useState<PageType | null>(null);
-  const [showWelcome, setShowWelcome] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const wellHistorySaveHandlerRef = useRef<PdfSaveHandler | null>(null);
-  const welcomeEnterButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const firstNavItemRef = useRef<HTMLButtonElement | null>(null);
   const showZonalSubNav = isZonalInjectionPage(activePage);
@@ -8311,9 +8309,6 @@ export default function App() {
     return () => mediaQuery.removeEventListener("change", updateViewport);
   }, []);
   useEffect(() => {
-    if (showWelcome) welcomeEnterButtonRef.current?.focus();
-  }, [showWelcome]);
-  useEffect(() => {
     if (isMobileViewport && mobileNavOpen) firstNavItemRef.current?.focus();
   }, [isMobileViewport, mobileNavOpen]);
   useEffect(() => {
@@ -8376,24 +8371,6 @@ export default function App() {
           onConfirm={() => void confirmPageChange()}
           onCancel={() => setPendingPage(null)}
         />
-      )}
-      {showWelcome && (
-        <div
-          className="shell-welcome-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="welcome-dialog-title"
-          onKeyDown={(event) => {
-            if (event.key === "Tab") event.preventDefault();
-          }}
-        >
-          <div className="shell-welcome-card text-center">
-            <Droplet className="mx-auto h-12 w-12 text-shell-primary" strokeWidth={2.4} />
-            <h1 id="welcome-dialog-title" className="mt-4 text-2xl font-black">注水管理平台</h1>
-            <p className="mt-3 text-sm leading-6 text-shell-muted">集中管理注水业务数据，支持动态分析、单井井史与分注管理。</p>
-            <button ref={welcomeEnterButtonRef} className="shell-primary-btn mt-6" onClick={() => setShowWelcome(false)}>进入系统</button>
-          </div>
-        </div>
       )}
       <aside
         id="app-sidebar"
