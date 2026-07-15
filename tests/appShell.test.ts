@@ -26,7 +26,13 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(appSource, /主题切换/);
   assert.match(appSource, /theme-switcher/);
   assert.match(appSource, /activePage === "home"/);
+  assert.match(appSource, /icon: Home/);
+  assert.match(appSource, /const NavIcon = item\.icon/);
+  assert.match(appSource, /<NavIcon className="h-\[18px\] w-\[18px\] shrink-0"/);
   assert.match(cssSource, /--color-shell-primary: #1a5276/);
+  assert.match(cssSource, /sidebar-oilfield\.png/);
+  assert.match(cssSource, /\.shell-app\[data-theme="default"\] \.shell-sidebar::after/);
+  assert.match(cssSource, /\.shell-app\[data-theme="default"\] \.shell-nav-link-active/);
   assert.match(cssSource, /\.shell-welcome-overlay/);
   assert.match(cssSource, /\.shell-topbar-inner\s*\{\s*@apply[^;]*h-\[60px\][^;]*;/);
   assert.match(cssSource, /@media \(max-width: 1023px\)[\s\S]*?\.theme-switcher span\s*\{\s*display:\s*none;/);

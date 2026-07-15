@@ -3,9 +3,12 @@ import axios, { AxiosHeaders } from "axios";
 import * as XLSX from "xlsx";
 import {
   Activity,
+  ChartNoAxesCombined,
   Download,
   Droplet,
+  Droplets,
   FileText,
+  FlaskConical,
   History,
   Home,
   LogOut,
@@ -14,9 +17,16 @@ import {
   Plus,
   Save,
   Search,
+  Settings,
+  SlidersHorizontal,
   Trash2,
+  TriangleAlert,
   Type,
   Upload,
+  UsersRound,
+  Workflow,
+  Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -374,19 +384,19 @@ type HomeReserveOverviewRow = {
   rowType: "block" | "subtotal" | "total";
 };
 
-const NAV_ITEMS: Array<{ id: PageType; label: string }> = [
-  { id: "home", label: "主页" },
-  { id: "dynamic-analysis", label: "动态分析" },
-  { id: "well-history", label: "单井井史" },
-  { id: "water-cut", label: "含水化验" },
-  { id: "injection-tech", label: "注水工艺" },
-  { id: "zonal-injection", label: "分注管理" },
-  { id: "well-flushing", label: "水井洗井" },
-  { id: "abnormal-wells", label: "异常水井" },
-  { id: "dynamic-adjustment", label: "动态调配" },
-  { id: "indicator-curve", label: "指示曲线" },
-  { id: "user-management", label: "用户管理" },
-  { id: "settings", label: "系统设置" },
+const NAV_ITEMS: Array<{ id: PageType; label: string; icon: LucideIcon }> = [
+  { id: "home", label: "主页", icon: Home },
+  { id: "dynamic-analysis", label: "动态分析", icon: Activity },
+  { id: "well-history", label: "单井井史", icon: History },
+  { id: "water-cut", label: "含水化验", icon: FlaskConical },
+  { id: "injection-tech", label: "注水工艺", icon: Wrench },
+  { id: "zonal-injection", label: "分注管理", icon: Workflow },
+  { id: "well-flushing", label: "水井洗井", icon: Droplets },
+  { id: "abnormal-wells", label: "异常水井", icon: TriangleAlert },
+  { id: "dynamic-adjustment", label: "动态调配", icon: SlidersHorizontal },
+  { id: "indicator-curve", label: "指示曲线", icon: ChartNoAxesCombined },
+  { id: "user-management", label: "用户管理", icon: UsersRound },
+  { id: "settings", label: "系统设置", icon: Settings },
 ];
 
 const ZONAL_INJECTION_SUB_ITEMS: Array<{ id: PageType; label: string }> = [
@@ -8406,44 +8416,49 @@ export default function App() {
           </div>
         </div>
         <nav className="shell-sidebar-nav">
-          {visibleNavItems.map((item) => (
-            <React.Fragment key={item.id}>
-              <button
-                ref={item === visibleNavItems[0] ? firstNavItemRef : undefined}
-                onClick={() => {
-                  requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id);
-                  closeMobileNav();
-                }}
-                className={cn(
-                  "shell-nav-link w-full text-left",
-                  (activePage === item.id || (item.id === "zonal-injection" && showZonalSubNav))
-                    ? "shell-nav-link-active"
-                    : "shell-nav-link-idle",
+          {visibleNavItems.map((item) => {
+            const NavIcon = item.icon;
+
+            return (
+              <React.Fragment key={item.id}>
+                <button
+                  ref={item === visibleNavItems[0] ? firstNavItemRef : undefined}
+                  onClick={() => {
+                    requestPageChange(item.id === "zonal-injection" ? "zonal-indicator-summary" : item.id);
+                    closeMobileNav();
+                  }}
+                  className={cn(
+                    "shell-nav-link w-full text-left",
+                    (activePage === item.id || (item.id === "zonal-injection" && showZonalSubNav))
+                      ? "shell-nav-link-active"
+                      : "shell-nav-link-idle",
+                  )}
+                >
+                  <NavIcon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} aria-hidden="true" />
+                  {item.label}
+                </button>
+                {item.id === "zonal-injection" && showZonalSubNav && (
+                  <div className="shell-subnav">
+                    {ZONAL_INJECTION_SUB_ITEMS.map((subItem) => (
+                      <button
+                        key={subItem.id}
+                        onClick={() => {
+                          requestPageChange(subItem.id);
+                          closeMobileNav();
+                        }}
+                        className={cn(
+                          "shell-nav-link w-full py-2 text-left text-xs",
+                          activePage === subItem.id ? "shell-nav-link-active" : "shell-nav-link-idle",
+                        )}
+                      >
+                        {subItem.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              >
-                {item.label}
-              </button>
-              {item.id === "zonal-injection" && showZonalSubNav && (
-                <div className="shell-subnav">
-                  {ZONAL_INJECTION_SUB_ITEMS.map((subItem) => (
-                    <button
-                      key={subItem.id}
-                      onClick={() => {
-                        requestPageChange(subItem.id);
-                        closeMobileNav();
-                      }}
-                      className={cn(
-                        "shell-nav-link w-full py-2 text-left text-xs",
-                        activePage === subItem.id ? "shell-nav-link-active" : "shell-nav-link-idle",
-                      )}
-                    >
-                      {subItem.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </React.Fragment>
-          ))}
+              </React.Fragment>
+            );
+          })}
         </nav>
       </aside>
       <div className="shell-main">
