@@ -744,4 +744,12 @@
     background-color: #fffdfb !important;
     color: #3d2a2a !important;
   }
+
+  .shell-app[data-theme="oil-blue"] .shell-content [class*="border-[#"] {
+    border-color: #d9b5ab !important;
+  }
+
+  .shell-app[data-theme="oil-blue"] .shell-content [class*="shadow-["] {
+    box-shadow: 0 1px 3px rgb(127 21 21 / 14%) !important;
+  }
 }
