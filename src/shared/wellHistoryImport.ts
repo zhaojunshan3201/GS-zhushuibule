@@ -43,6 +43,23 @@ export function sortWellHistoryImportParts<T extends WellHistoryImportPart>(part
   });
 }
 
+export function selectLatestWellHistoryImports<T extends { wellNo: string; sourceOrder: number }>(items: T[]) {
+  const latestByWellNo = new Map<string, T>();
+  const superseded: T[] = [];
+
+  for (const item of items) {
+    const previous = latestByWellNo.get(item.wellNo);
+    if (previous) superseded.push(previous);
+    latestByWellNo.set(item.wellNo, item);
+  }
+
+  const bySourceOrder = (left: T, right: T) => left.sourceOrder - right.sourceOrder;
+  return {
+    selected: [...latestByWellNo.values()].sort(bySourceOrder),
+    superseded: superseded.sort(bySourceOrder),
+  };
+}
+
 export function getWellHistoryRenameHint(wellNo: string) {
   const normalized = wellNo.trim() || "井号";
   return `同一井号多个PPT请重命名为 ${normalized}-1.pptx、${normalized}-2.pptx 后再导入`;

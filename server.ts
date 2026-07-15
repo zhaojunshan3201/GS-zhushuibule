@@ -48,6 +48,7 @@ import {
   getWellHistoryRenameHint,
   normalizeWellHistoryWellNo,
   parseWellHistoryImportFileName,
+  selectLatestWellHistoryImports,
   sortWellHistoryImportParts,
 } from "./src/shared/wellHistoryImport";
 
@@ -3156,7 +3157,7 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
     if (!uploadLimit.ok) return res.status(413).json({ error: uploadLimit.code });
 
     await ensureUploadDirectories();
-    const pending = new Map<string, Array<{ entry: File; sourceOrder: number; sourceOriginalName: string; partOrder: number | null }>>();
+    const pending: Array<{ entry: File; wellNo: string; sourceOrder: number; sourceOriginalName: string; partOrder: number | null }> = [];
     const items: Array<Record<string, unknown>> = [];
     for (const [sourceOrder, entry] of files.entries()) {
       if (!(entry instanceof File)) { items.push({ fileName: "unknown", status: "invalid-file" }); continue; }
@@ -3165,21 +3166,16 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
       const validation = validatePptxUploadFileName(entry.name);
       if (!wellNo) { items.push({ fileName: entry.name, wellNo: "", status: "invalid-name", message: "File name must match well number" }); continue; }
       if (!validation.ok) { items.push({ fileName: entry.name, wellNo, status: validation.code, message: "Only PPT/PPTX files are supported" }); continue; }
-      const group = pending.get(wellNo) ?? [];
-      group.push({ entry, sourceOrder, sourceOriginalName: entry.name, partOrder: parsed.order });
-      pending.set(wellNo, group);
+      pending.push({ entry, wellNo, sourceOrder, sourceOriginalName: entry.name, partOrder: parsed.order });
     }
 
-    for (const [wellNo, parts] of pending) {
-      if (parts.length !== 1) {
-        await Promise.all(parts.map(async (part) => {
-          const sourceName = `${sanitizeFileSegment(wellNo, "well")}-part-${part.partOrder ?? part.sourceOrder + 1}-${Date.now()}-${randomUUID()}${getFileExtension(part.sourceOriginalName)}`;
-          await fs.writeFile(path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceName), Buffer.from(await part.entry.arrayBuffer()));
-          items.push({ fileName: part.sourceOriginalName, wellNo, status: "merge-not-supported", message: "Multiple PPTX parts are retained as originals; PPTX merging is not supported." });
-        }));
-        continue;
-      }
-      const part = parts[0];
+    const { selected, superseded } = selectLatestWellHistoryImports(pending);
+    for (const part of superseded) {
+      items.push({ fileName: part.sourceOriginalName, wellNo: part.wellNo, status: "superseded", message: "已被同批次后续文件覆盖" });
+    }
+
+    for (const part of selected) {
+      const { wellNo } = part;
       const extension = getFileExtension(part.sourceOriginalName);
       const sourceName = `${sanitizeFileSegment(wellNo, "well")}-part-${part.partOrder ?? part.sourceOrder + 1}-${Date.now()}-${randomUUID()}${extension}`;
       const sourcePath = path.join(WELL_HISTORY_SOURCE_UPLOAD_DIR, sourceName);
@@ -3223,7 +3219,8 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
       }
     }
     const successCount = items.filter(item => item.status === "success").length;
-    res.json({ successCount, failureCount: items.length - successCount, items });
+    const supersededCount = items.filter(item => item.status === "superseded").length;
+    res.json({ successCount, supersededCount, failureCount: items.length - successCount - supersededCount, items });
   } catch (error) {
     res.status(500).json({ error: "Well history PPT batch import failed", details: serializeError(error) });
   }

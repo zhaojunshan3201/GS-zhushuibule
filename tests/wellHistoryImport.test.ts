@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getWellHistoryRenameHint,
   parseWellHistoryImportFileName,
+  selectLatestWellHistoryImports,
   sortWellHistoryImportParts,
 } from "../src/shared/wellHistoryImport";
 
@@ -51,4 +52,15 @@ test("getWellHistoryRenameHint asks for numbered names when a merged group lacks
     getWellHistoryRenameHint("GS-101"),
     "同一井号多个PPT请重命名为 GS-101-1.pptx、GS-101-2.pptx 后再导入",
   );
+});
+
+test("selectLatestWellHistoryImports keeps only the last upload for each well", () => {
+  const oldFile = { wellNo: "37-29", sourceOrder: 0, fileName: "37-29 old.pptx" };
+  const otherWell = { wellNo: "37-31", sourceOrder: 1, fileName: "37-31.pptx" };
+  const newFile = { wellNo: "37-29", sourceOrder: 2, fileName: "37-29 new.pptx" };
+
+  const result = selectLatestWellHistoryImports([oldFile, otherWell, newFile]);
+
+  assert.deepEqual(result.selected, [otherWell, newFile]);
+  assert.deepEqual(result.superseded, [oldFile]);
 });
