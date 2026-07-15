@@ -3,7 +3,7 @@ export const DEFAULT_THEME = "default" as const;
 
 export const THEME_OPTIONS = [
   { key: "default", label: "当前默认主题" },
-  { key: "oil-blue", label: "专业油田蓝" },
+  { key: "oil-blue", label: "中石油红" },
   { key: "enterprise-white", label: "极简企业白" },
   { key: "emerald-gold", label: "墨绿鎏金" },
 ] as const;

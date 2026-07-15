@@ -5,7 +5,7 @@ import { DEFAULT_THEME, getBrowserTheme, getStoredTheme, isThemeKey, persistBrow
 test("declares the four selectable themes", () => {
   assert.equal(THEME_STORAGE_KEY, "gszhushui_theme");
   assert.deepEqual(THEME_OPTIONS.map((theme) => theme.key), ["default", "oil-blue", "enterprise-white", "emerald-gold"]);
-  assert.deepEqual(THEME_OPTIONS.map((theme) => theme.label), ["当前默认主题", "专业油田蓝", "极简企业白", "墨绿鎏金"]);
+  assert.deepEqual(THEME_OPTIONS.map((theme) => theme.label), ["当前默认主题", "中石油红", "极简企业白", "墨绿鎏金"]);
 });
 test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), false); assert.equal(isThemeKey("unknown"), false); });
 test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("industrial-dark"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });
