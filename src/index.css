@@ -215,3 +215,175 @@
     display: inline-flex;
   }
 }
+
+:root {
+  --theme-primary: #1a5276;
+  --theme-primary-dark: #0e2f44;
+  --theme-surface: #ffffff;
+  --theme-bg: #f0f2f5;
+  --theme-accent: #e67e22;
+  --theme-border: #dce1e8;
+  --theme-text: #2c3e50;
+  --theme-muted: #7f8c8d;
+  --theme-table-head: #e6f0f9;
+  --theme-table-head-text: #1a2b3c;
+  --theme-table-border: #acc6de;
+  --theme-row: #ffffff;
+  --theme-row-hover: #f9fafb;
+}
+
+[data-theme="oil-blue"] {
+  --theme-primary: #0f4c6e;
+  --theme-primary-dark: #062a42;
+  --theme-surface: #f7fbff;
+  --theme-bg: #e8f0f5;
+  --theme-accent: #ec7c26;
+  --theme-border: #a8c3d5;
+  --theme-text: #102a3a;
+  --theme-muted: #5f7684;
+  --theme-table-head: #d7eaf6;
+  --theme-table-head-text: #082c43;
+  --theme-table-border: #8eb5cc;
+  --theme-row: #fbfdff;
+  --theme-row-hover: #e4f2fa;
+}
+
+[data-theme="enterprise-white"] {
+  --theme-primary: #1769aa;
+  --theme-primary-dark: #0e4f85;
+  --theme-surface: #ffffff;
+  --theme-bg: #f7f9fc;
+  --theme-accent: #1769aa;
+  --theme-border: #d9e1ea;
+  --theme-text: #243447;
+  --theme-muted: #718096;
+  --theme-table-head: #f1f6fb;
+  --theme-table-head-text: #244a6b;
+  --theme-table-border: #cbd8e5;
+  --theme-row: #ffffff;
+  --theme-row-hover: #f4f8fc;
+}
+
+[data-theme="industrial-dark"] {
+  --theme-primary: #12323d;
+  --theme-primary-dark: #081c24;
+  --theme-surface: #102129;
+  --theme-bg: #071218;
+  --theme-accent: #e3a629;
+  --theme-border: #2a4752;
+  --theme-text: #d8edf0;
+  --theme-muted: #8eabb2;
+  --theme-table-head: #163944;
+  --theme-table-head-text: #72e0e7;
+  --theme-table-border: #315661;
+  --theme-row: #112a32;
+  --theme-row-hover: #193942;
+}
+
+[data-theme="emerald-gold"] {
+  --theme-primary: #174b3a;
+  --theme-primary-dark: #0d3026;
+  --theme-surface: #fffdf4;
+  --theme-bg: #edf0e6;
+  --theme-accent: #bf8d20;
+  --theme-border: #c9c7aa;
+  --theme-text: #24372e;
+  --theme-muted: #718174;
+  --theme-table-head: #e8ead5;
+  --theme-table-head-text: #254b3d;
+  --theme-table-border: #b9c4a5;
+  --theme-row: #fffef8;
+  --theme-row-hover: #f1f3df;
+}
+
+@layer components {
+  body {
+    background-color: var(--theme-bg);
+    color: var(--theme-text);
+  }
+
+  .shell-app {
+    background-color: var(--theme-bg);
+    color: var(--theme-text);
+  }
+
+  .shell-sidebar {
+    background: linear-gradient(to bottom, var(--theme-primary-dark), var(--theme-primary));
+  }
+
+  .shell-topbar,
+  .shell-panel,
+  .shell-toolbar,
+  .shell-welcome-card,
+  .shell-mobile-trigger {
+    border-color: var(--theme-border);
+    background-color: var(--theme-surface);
+  }
+
+  .shell-topbar-nav {
+    border-color: var(--theme-border);
+    background-color: var(--theme-primary-dark);
+  }
+
+  .shell-section-title {
+    color: var(--theme-text);
+  }
+
+  .shell-nav-link-active,
+  .shell-primary-btn {
+    background-color: var(--theme-accent);
+  }
+
+  .shell-primary-btn:hover {
+    background-color: var(--theme-primary-dark);
+  }
+
+  .shell-mobile-trigger,
+  .shell-welcome-card {
+    color: var(--theme-text);
+  }
+
+  .shell-mobile-trigger {
+    color: var(--theme-primary);
+  }
+
+  .shell-link {
+    color: var(--theme-primary);
+  }
+
+  .cnpc-table th {
+    border-color: var(--theme-table-border);
+    background-color: var(--theme-table-head);
+    color: var(--theme-table-head-text);
+  }
+
+  .cnpc-table td {
+    border-color: var(--theme-table-border);
+    background-color: var(--theme-row);
+    color: var(--theme-text);
+  }
+
+  .cnpc-table tr:hover td {
+    background-color: var(--theme-row-hover);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--theme-bg);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--theme-border);
+    border-color: var(--theme-bg);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--theme-primary);
+  }
+
+  [data-theme="enterprise-white"] .shell-sidebar,
+  [data-theme="enterprise-white"] .shell-topbar,
+  [data-theme="enterprise-white"] .shell-panel,
+  [data-theme="enterprise-white"] .shell-toolbar {
+    box-shadow: none;
+  }
+}

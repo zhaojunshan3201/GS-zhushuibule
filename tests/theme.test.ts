@@ -9,3 +9,11 @@ test("declares the five selectable themes", () => {
 });
 test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), true); assert.equal(isThemeKey("unknown"), false); });
 test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("unknown"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });
+import fs from "node:fs";
+
+test("defines visual CSS contracts for every selectable theme", () => {
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  for (const theme of ["oil-blue", "enterprise-white", "industrial-dark", "emerald-gold"]) {
+    assert.match(css, new RegExp(`\\[data-theme=["']${theme}["']\\]`));
+  }
+});
