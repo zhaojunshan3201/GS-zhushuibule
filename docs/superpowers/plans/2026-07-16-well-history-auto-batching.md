@@ -4,7 +4,7 @@
 
 **Goal:** 一次选择大量 PPT/PPTX 时自动按服务端限制拆分请求，确认后串行导入并汇总结果；App 自动批量导入的单文件安全上限为 48MB。
 
-**Architecture:** 在浏览器安全的 `wellHistoryImport` 共享模块中增加纯分批函数，负责数量/体积边界。前端在所有文件范围内先按井号保留最后文件，再生成批次，复用现有批量 API 串行上传并聚合响应；App 使用 48MB 单文件安全上限，服务端及共享模块中的 50MB 绝对常量保持不变。
+**Architecture:** 在浏览器安全的 `wellHistoryImport` 共享模块中增加纯分批函数，负责数量/体积边界。前端先检查全部原始候选文件的 48MB 单文件安全上限，再按井号保留最后文件并生成批次，复用现有批量 API 串行上传并聚合响应；服务端及共享模块中的 50MB 绝对常量保持不变。
 
 **Tech Stack:** TypeScript、React、Axios、Node test runner。
 
@@ -25,7 +25,6 @@ import {
   createWellHistoryImportBatches,
   WELL_HISTORY_BATCH_MAX_BYTES,
   WELL_HISTORY_BATCH_MAX_FILES,
-  WELL_HISTORY_MAX_FILE_BYTES,
 } from "../src/shared/wellHistoryImport";
 
 test("createWellHistoryImportBatches respects file count and byte limits", () => {
@@ -44,8 +43,8 @@ test("createWellHistoryImportBatches starts a new batch before 48MB", () => {
   assert.deepEqual(result.batches.map(batch => batch.map(file => file.name)), [["a.pptx"], ["b.pptx"]]);
 });
 
-test("createWellHistoryImportBatches reports files larger than 50MB", () => {
-  const tooLarge = { name: "large.pptx", size: WELL_HISTORY_MAX_FILE_BYTES + 1 };
+test("createWellHistoryImportBatches reports files larger than 48MB", () => {
+  const tooLarge = { name: "large.pptx", size: WELL_HISTORY_BATCH_MAX_BYTES + 1 };
   const result = createWellHistoryImportBatches([tooLarge]);
   assert.deepEqual(result.batches, []);
   assert.deepEqual(result.oversized, [tooLarge]);
@@ -66,8 +65,8 @@ export const WELL_HISTORY_BATCH_MAX_BYTES = 48 * 1024 * 1024;
 export const WELL_HISTORY_MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 export function createWellHistoryImportBatches<T extends { size: number }>(files: T[]) {
-  const oversized = files.filter(file => file.size > WELL_HISTORY_MAX_FILE_BYTES);
-  const eligible = files.filter(file => file.size <= WELL_HISTORY_MAX_FILE_BYTES);
+  const oversized = files.filter(file => file.size > WELL_HISTORY_BATCH_MAX_BYTES);
+  const eligible = files.filter(file => file.size <= WELL_HISTORY_BATCH_MAX_BYTES);
   const batches: T[][] = [];
   let current: T[] = [];
   let currentBytes = 0;
@@ -129,16 +128,17 @@ const candidates = pptFiles.map((file, sourceOrder) => {
     resultWellNo: normalized,
   };
 });
+const unbatchable = candidates.filter(candidate => candidate.size > WELL_HISTORY_BATCH_MAX_BYTES);
+// 若存在超限文件，列名弹窗并 return，不能先去重。
 const { selected, superseded } = selectLatestWellHistoryImports(candidates);
 const { batches } = createWellHistoryImportBatches(selected);
-const unbatchable = selected.filter(candidate => candidate.size > WELL_HISTORY_BATCH_MAX_BYTES);
 ```
 
 `superseded` 预先形成前端汇总项，使用真实 `resultWellNo`，不发送到服务端。
 
 - [ ] **Step 3: 超限文件阻止上传**
 
-若 `unbatchable.length > 0`，用现有确认弹窗列出文件名并说明 App 自动分批单文件安全上限为 48MB，仅提供关闭，不调用上传执行函数，并清空 input。共享的 50MB 常量仅作为服务端绝对上限保留，不用于放宽 App 安全上限。
+在调用 `selectLatestWellHistoryImports` 前，若全部原始 `candidates` 中的 `unbatchable.length > 0`，用现有确认弹窗列出文件名并说明 App 自动分批单文件安全上限为 48MB，仅提供关闭，不调用上传执行函数，并清空 input。这样即使同井超限文件随后会被较小文件覆盖，也会阻止本次导入。共享的 50MB 常量仅作为服务端绝对上限保留，不用于放宽 App 安全上限。
 
 - [ ] **Step 4: 超过单批限制时请求确认**
 
@@ -186,7 +186,7 @@ setImportProgress(Math.round(((batchIndex + fraction) / batches.length) * 100));
 
 - [ ] **Step 4: 完成后统一刷新和提示**
 
-循环结束后设置进度 100、根据 failureCount 设置状态、调用一次 `loadArchives()`，并用原始总文件数展示成功/覆盖跳过/失败汇总。汇总弹窗的确认和取消回调都复用 `openFirstSuccess`，确保弹窗关闭后才打开 aggregate.items 中第一条 success；若存在未保存内容，再由正常切井确认处理。finally 清理 importing 和 file input。
+循环结束后设置进度 100、根据 failureCount 设置状态、调用一次 `loadArchives()`，并用原始总文件数展示成功/覆盖跳过/失败汇总。汇总弹窗的确认和取消回调都复用 `openFirstSuccess`，确保弹窗关闭后才打开 aggregate.items 中第一条 success。调用 `openWellRef.current(firstSuccess.wellNo, false, true)`，让汇总刷新即使目标与当前井相同也保护未保存正文；确认保存成功后才强制刷新，保存失败或 409 时不刷新。目录正常点击同井仍保留既有行为。finally 清理 importing 和 file input。
 
 - [ ] **Step 5: 验证前端契约**
 

@@ -132,6 +132,12 @@ test("well history PPT imports are deduplicated and uploaded in automatic batche
   assert.match(appSource, /setImportProgress\(Math\.round\(\(batchIndex \/ batches\.length\) \* 100\)\);/);
   assert.match(appSource, /Math\.min\(1, Math\.max\(0, event\.loaded \/ event\.total\)\)/);
   assert.match(appSource, /successCount === 0 && failureCount > 0[\s\S]*?failureCount > 0/);
+
+  const candidateOversizeIndex = appSource.indexOf("const unbatchable = candidates.filter");
+  const selectLatestIndex = appSource.indexOf("selectLatestWellHistoryImports(candidates)");
+  assert.notEqual(candidateOversizeIndex, -1);
+  assert.notEqual(selectLatestIndex, -1);
+  assert.ok(candidateOversizeIndex < selectLatestIndex, "all original candidates must be checked before deduplication");
 });
 
 test("styled confirmations support an optional cancellation action", () => {
@@ -161,14 +167,23 @@ test("well history import summary opens the first success after confirm or cance
     (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openFirstSuccess",
   );
   assert.ok(openFirstSuccess?.initializer);
-  assert.match(openFirstSuccess.initializer.getText(appAst), /openWellRef\.current\(firstSuccess\.wellNo\)/);
+  assert.match(openFirstSuccess.initializer.getText(appAst), /openWellRef\.current\(firstSuccess\.wellNo, false, true\)/);
 
   const openWellRef = pageNodes.find(
     (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openWellRef",
   );
   assert.ok(openWellRef?.initializer);
-  assert.match(openWellRef.initializer.getText(appAst), /useRef<\(wellNo: string, force\?: boolean\) => Promise<boolean>>/);
+  assert.match(openWellRef.initializer.getText(appAst), /useRef<\(wellNo: string, force\?: boolean, protectDirtySameWell\?: boolean\) => Promise<boolean>>/);
   assert.match(page.getText(appAst), /openWellRef\.current = openWell;/);
+
+  const openWell = pageNodes.find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openWell",
+  );
+  assert.ok(openWell?.initializer);
+  const openWellSource = openWell.initializer.getText(appAst);
+  assert.match(openWellSource, /protectDirtySameWell = false/);
+  assert.match(openWellSource, /!force && pdfDirty && \(wellNo !== detail\?\.wellNo \|\| protectDirtySameWell\)/);
+  assert.match(openWellSource, /openWell\(wellNo, true, protectDirtySameWell\)/);
 
   const summaryConfirm = pageNodes.find((node): node is ts.CallExpression => {
     if (!ts.isCallExpression(node) || node.expression.getText(appAst) !== "requestConfirm") return false;

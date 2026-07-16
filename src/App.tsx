@@ -7290,7 +7290,7 @@ function WellHistoryPage({
   onSaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const openWellRef = useRef<(wellNo: string, force?: boolean) => Promise<boolean>>(async () => false);
+  const openWellRef = useRef<(wellNo: string, force?: boolean, protectDirtySameWell?: boolean) => Promise<boolean>>(async () => false);
   const [unit, setUnit] = useState("");
   const [block, setBlock] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -7383,13 +7383,13 @@ function WellHistoryPage({
     };
   }, []);
 
-  const openWell = async (wellNo: string, force = false) => {
+  const openWell = async (wellNo: string, force = false, protectDirtySameWell = false) => {
     if (!wellNo) return false;
-    if (!force && wellNo !== detail?.wellNo && pdfDirty) {
+    if (!force && pdfDirty && (wellNo !== detail?.wellNo || protectDirtySameWell)) {
       requestConfirm("当前页面有未保存的编辑内容，切换井史后将自动保存。是否继续切换？", () => {
         void (async () => {
           const saved = richTextDocument ? await saveRichTextDocument() : await pdfSaveHandler?.();
-          if (saved) void openWell(wellNo, true);
+          if (saved) void openWell(wellNo, true, protectDirtySameWell);
           else setError("当前页面保存失败，已取消切换井史。");
         })();
       });
@@ -7473,9 +7473,7 @@ function WellHistoryPage({
         resultWellNo: normalized,
       };
     });
-    const { selected, superseded } = selectLatestWellHistoryImports(candidates);
-    const { batches } = createWellHistoryImportBatches(selected);
-    const unbatchable = selected.filter((candidate) => candidate.size > WELL_HISTORY_BATCH_MAX_BYTES);
+    const unbatchable = candidates.filter((candidate) => candidate.size > WELL_HISTORY_BATCH_MAX_BYTES);
 
     if (unbatchable.length) {
       const fileNames = unbatchable.map((candidate) => candidate.sourceOriginalName).join("、");
@@ -7486,6 +7484,9 @@ function WellHistoryPage({
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
+
+    const { selected, superseded } = selectLatestWellHistoryImports(candidates);
+    const { batches } = createWellHistoryImportBatches(selected);
 
     const executeBatches = async () => {
       setError("");
@@ -7548,7 +7549,7 @@ function WellHistoryPage({
 
         const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
         const openFirstSuccess = firstSuccess?.wellNo ? () => {
-          void openWellRef.current(firstSuccess.wellNo);
+          void openWellRef.current(firstSuccess.wellNo, false, true);
         } : () => {};
         requestConfirm(
           `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${successCount} 个，覆盖跳过 ${supersededCount} 个，失败 ${failureCount} 个。`,
