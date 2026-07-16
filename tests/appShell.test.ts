@@ -105,6 +105,17 @@ test("system settings uploads and persists a sidebar logo while the shell falls 
   assert.match(appSource, /<Droplet className="h-8 w-8 text-shell-accent"/);
 });
 
+test("sidebar logo upload notifies the application shell without a page refresh", () => {
+  const settingsPage = findFunction("SystemSettingsPage");
+  assert.ok(settingsPage?.body);
+  assert.match(settingsPage.getText(appAst), /window\.dispatchEvent\(new CustomEvent\("sidebar-logo-updated", \{ detail: data\.url \}\)\)/);
+
+  const appSource = findFunction("App")?.getText(appAst) ?? "";
+  assert.match(appSource, /const handleSidebarLogoUpdated = \(event: Event\) => setSidebarLogo\(String\(\(event as CustomEvent<string>\)\.detail \|\| ""\)\)/);
+  assert.match(appSource, /window\.addEventListener\("sidebar-logo-updated", handleSidebarLogoUpdated\)/);
+  assert.match(appSource, /window\.removeEventListener\("sidebar-logo-updated", handleSidebarLogoUpdated\)/);
+});
+
 test("well history actions live in the sidebar and import completion reports overwritten files", () => {
   const sidebarMarker = appSource.indexOf("data-well-history-sidebar");
   const contentMarker = appSource.indexOf("data-well-history-content");

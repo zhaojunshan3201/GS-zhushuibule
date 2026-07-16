@@ -1018,6 +1018,7 @@ function SystemSettingsPage() {
       const { data } = await axios.post<{ url: string }>("/api/uploads/image", formData);
       await axios.post("/api/config", { key: "sidebarLogo", value: data.url });
       setConfig((current) => ({ ...current, sidebarLogo: data.url }));
+      window.dispatchEvent(new CustomEvent("sidebar-logo-updated", { detail: data.url }));
       setMessage("侧边栏 Logo 已更新");
     } catch (err) {
       setError("侧边栏 Logo 上传失败");
@@ -8426,9 +8427,12 @@ export default function App() {
     persistBrowserTheme(theme);
   }, [theme]);
   useEffect(() => {
+    const handleSidebarLogoUpdated = (event: Event) => setSidebarLogo(String((event as CustomEvent<string>).detail || ""));
+    window.addEventListener("sidebar-logo-updated", handleSidebarLogoUpdated);
     void axios.get<Record<string, string>>("/api/config")
       .then(({ data }) => setSidebarLogo(data.sidebarLogo || ""))
       .catch(() => setSidebarLogo(""));
+    return () => window.removeEventListener("sidebar-logo-updated", handleSidebarLogoUpdated);
   }, []);
   useEffect(() => {
     if (isManagementPage(activePage) && !canManageSystem) {
