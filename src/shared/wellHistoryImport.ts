@@ -20,7 +20,7 @@ export function createWellHistoryImportBatches<T extends { size: number }>(files
   let currentBytes = 0;
 
   for (const file of files) {
-    if (file.size > WELL_HISTORY_MAX_FILE_BYTES) {
+    if (file.size > WELL_HISTORY_BATCH_MAX_BYTES) {
       oversized.push(file);
       continue;
     }
@@ -85,9 +85,10 @@ export function selectLatestWellHistoryImports<T extends { wellNo: string; sourc
   const superseded: T[] = [];
 
   for (const item of items) {
-    const previous = latestByWellNo.get(item.wellNo);
+    const dedupeKey = item.wellNo || `\u0000invalid:${item.sourceOrder}`;
+    const previous = latestByWellNo.get(dedupeKey);
     if (previous) superseded.push(previous);
-    latestByWellNo.set(item.wellNo, item);
+    latestByWellNo.set(dedupeKey, item);
   }
 
   const bySourceOrder = (left: T, right: T) => left.sourceOrder - right.sourceOrder;

@@ -7290,6 +7290,7 @@ function WellHistoryPage({
   onSaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const openWellRef = useRef<(wellNo: string, force?: boolean) => Promise<boolean>>(async () => false);
   const [unit, setUnit] = useState("");
   const [block, setBlock] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -7413,6 +7414,7 @@ function WellHistoryPage({
       setLoading(false);
     }
   };
+  openWellRef.current = openWell;
 
   const queryWell = async (normalized: string, force = false) => {
     const exactMatched = await openWell(normalized, force);
@@ -7455,6 +7457,7 @@ function WellHistoryPage({
     const pptFiles = Array.from(files).filter((file) => /\.(ppt|pptx)$/i.test(file.name));
     if (!pptFiles.length) {
       setError("请选择 PPT/PPTX 文件");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
@@ -7466,7 +7469,7 @@ function WellHistoryPage({
         size: file.size,
         sourceOrder,
         sourceOriginalName: file.name,
-        wellNo: normalized || `__invalid_${sourceOrder}`,
+        wellNo: normalized,
         resultWellNo: normalized,
       };
     });
@@ -7502,6 +7505,7 @@ function WellHistoryPage({
       try {
         for (const [batchIndex, batch] of batches.entries()) {
           setImportStatus(`正在导入第 ${batchIndex + 1}/${batches.length} 批...`);
+          setImportProgress(Math.round((batchIndex / batches.length) * 100));
           const formData = new FormData();
           batch.forEach((candidate) => formData.append("files", candidate.file));
           formData.append("unit", unit);
@@ -7515,7 +7519,7 @@ function WellHistoryPage({
                 headers: { "Content-Type": "multipart/form-data" },
                 onUploadProgress: (event) => {
                   if (!event.total) return;
-                  const fraction = event.loaded / event.total;
+                  const fraction = Math.min(1, Math.max(0, event.loaded / event.total));
                   setImportProgress(Math.round(((batchIndex + fraction) / batches.length) * 100));
                 },
               },
@@ -7538,13 +7542,13 @@ function WellHistoryPage({
 
         setImportProgress(100);
         setImportStatus(
-          failureCount === pptFiles.length ? "导入失败" : failureCount ? "导入完成（部分失败）" : "导入完成",
+          successCount === 0 && failureCount > 0 ? "导入失败" : failureCount > 0 ? "导入完成（部分失败）" : "导入完成",
         );
         await loadArchives();
 
         const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
         const openFirstSuccess = firstSuccess?.wellNo ? () => {
-          void openWell(firstSuccess.wellNo);
+          void openWellRef.current(firstSuccess.wellNo);
         } : () => {};
         requestConfirm(
           `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${successCount} 个，覆盖跳过 ${supersededCount} 个，失败 ${failureCount} 个。`,

@@ -49,18 +49,8 @@ test("createWellHistoryImportBatches keeps files totaling exactly 48 MB together
   assert.deepEqual(result.oversized, []);
 });
 
-test("createWellHistoryImportBatches separates files larger than 50 MB", () => {
-  const oversized = { name: "oversized", size: 50 * MB + 1 };
-
-  const result = createWellHistoryImportBatches([oversized]);
-
-  assert.equal(WELL_HISTORY_MAX_FILE_BYTES, 50 * MB);
-  assert.deepEqual(result.batches, []);
-  assert.deepEqual(result.oversized, [oversized]);
-});
-
-test("createWellHistoryImportBatches accepts a file exactly at the 50 MB limit", () => {
-  const file = { name: "at-limit", size: WELL_HISTORY_MAX_FILE_BYTES };
+test("createWellHistoryImportBatches accepts a file exactly at the 48 MB batch limit", () => {
+  const file = { name: "at-limit", size: WELL_HISTORY_BATCH_MAX_BYTES };
 
   const result = createWellHistoryImportBatches([file]);
 
@@ -68,9 +58,19 @@ test("createWellHistoryImportBatches accepts a file exactly at the 50 MB limit",
   assert.deepEqual(result.oversized, []);
 });
 
+test("createWellHistoryImportBatches rejects a file one byte above the 48 MB batch limit", () => {
+  const file = { name: "oversized", size: WELL_HISTORY_BATCH_MAX_BYTES + 1 };
+
+  const result = createWellHistoryImportBatches([file]);
+
+  assert.equal(WELL_HISTORY_MAX_FILE_BYTES, 50 * MB);
+  assert.deepEqual(result.batches, []);
+  assert.deepEqual(result.oversized, [file]);
+});
+
 test("createWellHistoryImportBatches preserves eligible order around an oversized file", () => {
   const first = { name: "first", size: 1 };
-  const oversized = { name: "oversized", size: WELL_HISTORY_MAX_FILE_BYTES + 1 };
+  const oversized = { name: "oversized", size: WELL_HISTORY_BATCH_MAX_BYTES + 1 };
   const second = { name: "second", size: 1 };
 
   const result = createWellHistoryImportBatches([first, oversized, second]);
@@ -135,4 +135,17 @@ test("selectLatestWellHistoryImports keeps only the last upload for each well", 
 
   assert.deepEqual(result.selected, [otherWell, newFile]);
   assert.deepEqual(result.superseded, [oldFile]);
+});
+
+test("selectLatestWellHistoryImports keeps invalid names distinct from each other and legal names", () => {
+  const firstInvalid = { wellNo: "", sourceOrder: 0, fileName: "first.pptx" };
+  const legalOldSentinel = { wellNo: "__invalid_0", sourceOrder: 1, fileName: "legal.pptx" };
+  const secondInvalid = { wellNo: "", sourceOrder: 2, fileName: "second.pptx" };
+
+  const result = selectLatestWellHistoryImports([firstInvalid, legalOldSentinel, secondInvalid]);
+
+  assert.deepEqual(result.selected, [firstInvalid, legalOldSentinel, secondInvalid]);
+  assert.deepEqual(result.superseded, []);
+  assert.equal(result.selected[0].wellNo, "");
+  assert.equal(result.selected[2].wellNo, "");
 });

@@ -128,6 +128,10 @@ test("well history PPT imports are deduplicated and uploaded in automatic batche
   assert.match(appSource, /batch-request-failed/);
   assert.match(appSource, /正在导入第 \$\{batchIndex \+ 1\}\/\$\{batches\.length\} 批/);
   assert.match(appSource, /supersededCount/);
+  assert.match(appSource, /if \(!pptFiles\.length\) \{[\s\S]*?fileInputRef\.current\.value = "";[\s\S]*?return;/);
+  assert.match(appSource, /setImportProgress\(Math\.round\(\(batchIndex \/ batches\.length\) \* 100\)\);/);
+  assert.match(appSource, /Math\.min\(1, Math\.max\(0, event\.loaded \/ event\.total\)\)/);
+  assert.match(appSource, /successCount === 0 && failureCount > 0[\s\S]*?failureCount > 0/);
 });
 
 test("styled confirmations support an optional cancellation action", () => {
@@ -157,7 +161,14 @@ test("well history import summary opens the first success after confirm or cance
     (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openFirstSuccess",
   );
   assert.ok(openFirstSuccess?.initializer);
-  assert.match(openFirstSuccess.initializer.getText(appAst), /openWell\(firstSuccess\.wellNo\)/);
+  assert.match(openFirstSuccess.initializer.getText(appAst), /openWellRef\.current\(firstSuccess\.wellNo\)/);
+
+  const openWellRef = pageNodes.find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openWellRef",
+  );
+  assert.ok(openWellRef?.initializer);
+  assert.match(openWellRef.initializer.getText(appAst), /useRef<\(wellNo: string, force\?: boolean\) => Promise<boolean>>/);
+  assert.match(page.getText(appAst), /openWellRef\.current = openWell;/);
 
   const summaryConfirm = pageNodes.find((node): node is ts.CallExpression => {
     if (!ts.isCallExpression(node) || node.expression.getText(appAst) !== "requestConfirm") return false;
