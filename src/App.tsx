@@ -7273,7 +7273,7 @@ function WellHistoryPage({
   onSaveHandlerChange?: (handler: PdfSaveHandler | null) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [unit, setUnit] = useState(UNIT_OPTIONS[0]);
+  const [unit, setUnit] = useState("");
   const [block, setBlock] = useState("");
   const [keyword, setKeyword] = useState("");
   const [archives, setArchives] = useState<WellHistoryArchiveSummary[]>([]);
@@ -7351,8 +7351,6 @@ function WellHistoryPage({
         setPdfDirty(false);
         setSelectedWellNo(data.wellNo);
         setKeyword(data.wellNo);
-        if (data.unit) setUnit(data.unit);
-        if (data.block) setBlock(data.block);
       } catch (err: any) {
         if (!cancelled && err?.response?.status !== 404) {
           setError(err?.response?.data?.error || "最近上传井史加载失败");
@@ -7387,8 +7385,6 @@ function WellHistoryPage({
       setPdfDirty(false);
       setSelectedWellNo(data.wellNo);
       setKeyword(data.wellNo);
-      if (data.unit) setUnit(data.unit);
-      if (data.block) setBlock(data.block);
       return true;
     } catch (err: any) {
       setDetail(null);
@@ -7491,14 +7487,6 @@ function WellHistoryPage({
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
-
-  const blockOptions = useMemo(() => {
-    const options = new Set<string>();
-    archives.forEach((item) => {
-      if (item.block && (!item.unit || item.unit === unit)) options.add(item.block);
-    });
-    return Array.from(options);
-  }, [archives, unit]);
 
   const previewUrl = detail?.currentPdf?.fileUrl || "";
   const currentPptx = detail?.currentPptx ?? null;
@@ -7604,9 +7592,10 @@ function WellHistoryPage({
           </div>
           <div className="mt-4 space-y-3">
             <label className="block text-sm font-bold text-gray-700">
-              单位
-              <select value={unit} onChange={(event) => setUnit(event.target.value)} className="mt-1 h-9 w-full border border-gray-200 bg-white px-2 text-sm outline-none focus:border-cnpc-red">
-                {UNIT_OPTIONS.map((item) => (
+              作业区
+              <select value={unit} onChange={(event) => { setUnit(event.target.value); setBlock(""); }} className="mt-1 h-9 w-full border border-gray-200 bg-white px-2 text-sm outline-none focus:border-cnpc-red">
+                <option value="">全部单位</option>
+                {FILTER_UNIT_OPTIONS.map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
@@ -7614,8 +7603,8 @@ function WellHistoryPage({
             <label className="block text-sm font-bold text-gray-700">
               区块
               <select value={block} onChange={(event) => setBlock(event.target.value)} className="mt-1 h-9 w-full border border-gray-200 bg-white px-2 text-sm outline-none focus:border-cnpc-red">
-                <option value="">请选择或留空</option>
-                {blockOptions.map((item) => (
+                <option value="">全部区块</option>
+                {getFilterBlockOptions(unit).map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>

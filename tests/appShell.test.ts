@@ -72,6 +72,11 @@ test("well history actions live in the sidebar and import completion reports ove
   assert.match(sidebarSource, /handleQuery/);
   assert.match(sidebarSource, /saveRichTextDocument/);
   assert.match(sidebarSource, /handleRichTextPdfDownload/);
+  assert.match(sidebarSource, /作业区/);
+  assert.match(sidebarSource, /<option value="">全部单位<\/option>/);
+  assert.match(sidebarSource, /<option value="">全部区块<\/option>/);
+  assert.match(sidebarSource, /FILTER_UNIT_OPTIONS\.map/);
+  assert.match(sidebarSource, /getFilterBlockOptions\(unit\)/);
   const importIndex = sidebarSource.indexOf("fileInputRef.current?.click()");
   const currentIndex = sidebarSource.indexOf("handleQuery");
   const archiveIndex = sidebarSource.indexOf("archives.map((item)");
