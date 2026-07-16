@@ -72,6 +72,15 @@ test("well history actions live in the sidebar and import completion reports ove
   assert.match(sidebarSource, /handleQuery/);
   assert.match(sidebarSource, /saveRichTextDocument/);
   assert.match(sidebarSource, /handleRichTextPdfDownload/);
+
+  const wellHistoryPageEndMatch = appSource.slice(contentMarker).match(/\r?\n}\r?\n\r?\nconst formatDateOnly/);
+  assert.ok(wellHistoryPageEndMatch?.index !== undefined);
+  const wellHistoryPageEnd = contentMarker + wellHistoryPageEndMatch.index;
+  const contentSource = appSource.slice(contentMarker, wellHistoryPageEnd);
+  assert.doesNotMatch(contentSource, /handleQuery/);
+  assert.doesNotMatch(contentSource, /saveRichTextDocument/);
+  assert.doesNotMatch(contentSource, /handleRichTextPdfDownload/);
+
   assert.match(appSource, /supersededCount:\s*number/);
   assert.match(appSource, /data\.supersededCount/);
 });
