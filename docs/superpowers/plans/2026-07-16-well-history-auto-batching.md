@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 一次选择大量 PPT/PPTX 时自动按服务端限制拆分请求，确认后串行导入并汇总结果。
+**Goal:** 一次选择大量 PPT/PPTX 时自动按服务端限制拆分请求，确认后串行导入并汇总结果；App 自动批量导入的单文件安全上限为 48MB。
 
-**Architecture:** 在浏览器安全的 `wellHistoryImport` 共享模块中增加纯分批函数，负责数量/体积边界。前端在所有文件范围内先按井号保留最后文件，再生成批次，复用现有批量 API 串行上传并聚合响应；服务端限制保持不变。
+**Architecture:** 在浏览器安全的 `wellHistoryImport` 共享模块中增加纯分批函数，负责数量/体积边界。前端在所有文件范围内先按井号保留最后文件，再生成批次，复用现有批量 API 串行上传并聚合响应；App 使用 48MB 单文件安全上限，服务端及共享模块中的 50MB 绝对常量保持不变。
 
 **Tech Stack:** TypeScript、React、Axios、Node test runner。
 
@@ -130,14 +130,15 @@ const candidates = pptFiles.map((file, sourceOrder) => {
   };
 });
 const { selected, superseded } = selectLatestWellHistoryImports(candidates);
-const { batches, oversized } = createWellHistoryImportBatches(selected);
+const { batches } = createWellHistoryImportBatches(selected);
+const unbatchable = selected.filter(candidate => candidate.size > WELL_HISTORY_BATCH_MAX_BYTES);
 ```
 
 `superseded` 预先形成前端汇总项，使用真实 `resultWellNo`，不发送到服务端。
 
 - [ ] **Step 3: 超限文件阻止上传**
 
-若 `oversized.length > 0`，用现有确认弹窗显示文件名和 50MB 限制，仅提供关闭，不调用上传执行函数，并清空 input。
+若 `unbatchable.length > 0`，用现有确认弹窗列出文件名并说明 App 自动分批单文件安全上限为 48MB，仅提供关闭，不调用上传执行函数，并清空 input。共享的 50MB 常量仅作为服务端绝对上限保留，不用于放宽 App 安全上限。
 
 - [ ] **Step 4: 超过单批限制时请求确认**
 
@@ -185,7 +186,7 @@ setImportProgress(Math.round(((batchIndex + fraction) / batches.length) * 100));
 
 - [ ] **Step 4: 完成后统一刷新和提示**
 
-循环结束后设置进度 100、根据 failureCount 设置状态、调用一次 `loadArchives()`，打开 aggregate.items 中第一条 success，并用原始总文件数展示成功/覆盖跳过/失败汇总。finally 清理 importing 和 file input。
+循环结束后设置进度 100、根据 failureCount 设置状态、调用一次 `loadArchives()`，并用原始总文件数展示成功/覆盖跳过/失败汇总。汇总弹窗的确认和取消回调都复用 `openFirstSuccess`，确保弹窗关闭后才打开 aggregate.items 中第一条 success；若存在未保存内容，再由正常切井确认处理。finally 清理 importing 和 file input。
 
 - [ ] **Step 5: 验证前端契约**
 

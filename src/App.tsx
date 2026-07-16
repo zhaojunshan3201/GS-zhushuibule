@@ -503,10 +503,15 @@ function useStyledConfirmDialog() {
   const [pendingConfirm, setPendingConfirm] = useState<{
     message: string;
     onConfirm: () => void | Promise<void>;
+    onCancel: () => void | Promise<void>;
   } | null>(null);
 
-  const requestConfirm = (message: string, onConfirm: () => void | Promise<void>) => {
-    setPendingConfirm({ message, onConfirm });
+  const requestConfirm = (
+    message: string,
+    onConfirm: () => void | Promise<void>,
+    onCancel?: () => void | Promise<void>,
+  ) => {
+    setPendingConfirm({ message, onConfirm, onCancel: onCancel ?? (() => {}) });
   };
 
   const confirmDialog = pendingConfirm ? (
@@ -517,7 +522,11 @@ function useStyledConfirmDialog() {
         setPendingConfirm(null);
         void action();
       }}
-      onCancel={() => setPendingConfirm(null)}
+      onCancel={() => {
+        const action = pendingConfirm.onCancel;
+        setPendingConfirm(null);
+        void action();
+      }}
     />
   ) : null;
 
@@ -7534,11 +7543,13 @@ function WellHistoryPage({
         await loadArchives();
 
         const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
+        const openFirstSuccess = firstSuccess?.wellNo ? () => {
+          void openWell(firstSuccess.wellNo);
+        } : () => {};
         requestConfirm(
           `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${successCount} 个，覆盖跳过 ${supersededCount} 个，失败 ${failureCount} 个。`,
-          firstSuccess?.wellNo ? () => {
-            void openWell(firstSuccess.wellNo);
-          } : () => {},
+          openFirstSuccess,
+          openFirstSuccess,
         );
       } finally {
         setImporting(false);

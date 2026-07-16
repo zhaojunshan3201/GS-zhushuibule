@@ -1,9 +1,27 @@
 ﻿import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import ts from "typescript";
 
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+const appAst = ts.createSourceFile("App.tsx", appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+function descendants(node: ts.Node) {
+  const nodes: ts.Node[] = [];
+  const visit = (child: ts.Node) => {
+    nodes.push(child);
+    child.forEachChild(visit);
+  };
+  node.forEachChild(visit);
+  return nodes;
+}
+
+function findFunction(name: string) {
+  return appAst.statements.find(
+    (statement): statement is ts.FunctionDeclaration => ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+  );
+}
 
 test("application shell retains content mounting while exposing reference layout regions", () => {
   assert.doesNotMatch(appSource, /showWelcome/);
@@ -110,8 +128,42 @@ test("well history PPT imports are deduplicated and uploaded in automatic batche
   assert.match(appSource, /batch-request-failed/);
   assert.match(appSource, /正在导入第 \$\{batchIndex \+ 1\}\/\$\{batches\.length\} 批/);
   assert.match(appSource, /supersededCount/);
-  assert.match(
-    appSource,
-    /requestConfirm\([\s\S]*?firstSuccess\?\.wellNo \? \(\) => \{[\s\S]*?void openWell\(firstSuccess\.wellNo\);[\s\S]*?\} : \(\) => \{\}/,
+});
+
+test("styled confirmations support an optional cancellation action", () => {
+  const hook = findFunction("useStyledConfirmDialog");
+  assert.ok(hook?.body);
+
+  const requestConfirm = descendants(hook).find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "requestConfirm",
   );
+  assert.ok(requestConfirm?.initializer && ts.isArrowFunction(requestConfirm.initializer));
+  const cancelParameter = requestConfirm.initializer.parameters[2];
+  assert.equal(cancelParameter?.name.getText(appAst), "onCancel");
+  assert.ok(cancelParameter.questionToken, "onCancel must remain optional");
+
+  const hookSource = hook.getText(appAst);
+  assert.match(hookSource, /onCancel:\s*\(\) => void \| Promise<void>/);
+  assert.match(hookSource, /setPendingConfirm\(\{ message, onConfirm, onCancel:/);
+  assert.match(hookSource, /const action = pendingConfirm\.onCancel;[\s\S]*?setPendingConfirm\(null\);[\s\S]*?void action\(\);/);
+});
+
+test("well history import summary opens the first success after confirm or cancel", () => {
+  const page = findFunction("WellHistoryPage");
+  assert.ok(page?.body);
+
+  const pageNodes = descendants(page);
+  const openFirstSuccess = pageNodes.find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openFirstSuccess",
+  );
+  assert.ok(openFirstSuccess?.initializer);
+  assert.match(openFirstSuccess.initializer.getText(appAst), /openWell\(firstSuccess\.wellNo\)/);
+
+  const summaryConfirm = pageNodes.find((node): node is ts.CallExpression => {
+    if (!ts.isCallExpression(node) || node.expression.getText(appAst) !== "requestConfirm") return false;
+    return node.arguments[0]?.getText(appAst).includes("PPT 导入完成") ?? false;
+  });
+  assert.ok(summaryConfirm);
+  assert.equal(summaryConfirm.arguments[1]?.getText(appAst), "openFirstSuccess");
+  assert.equal(summaryConfirm.arguments[2]?.getText(appAst), "openFirstSuccess");
 });
