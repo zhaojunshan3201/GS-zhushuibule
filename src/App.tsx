@@ -959,6 +959,7 @@ function SystemSettingsPage() {
   const [responsibilityText, setResponsibilityText] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const sidebarLogoInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSettings = useCallback(async () => {
     setError("");
@@ -993,6 +994,33 @@ function SystemSettingsPage() {
       await loadSettings();
     } catch (err) {
       setError(SETTINGS_TEXT.configSaveFailed);
+    }
+  };
+
+  const uploadSidebarLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("请选择图片文件");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("图片大小不能超过 5MB");
+      return;
+    }
+
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("target", "sidebarLogo");
+      const { data } = await axios.post<{ url: string }>("/api/uploads/image", formData);
+      await axios.post("/api/config", { key: "sidebarLogo", value: data.url });
+      setConfig((current) => ({ ...current, sidebarLogo: data.url }));
+      setMessage("侧边栏 Logo 已更新");
+    } catch (err) {
+      setError("侧边栏 Logo 上传失败");
     }
   };
 
@@ -1064,6 +1092,11 @@ function SystemSettingsPage() {
                 <input value={config[item.key] || ""} onChange={(event) => setConfig({ ...config, [item.key]: event.target.value })} className="mt-1 h-8 w-full border border-[#9fc4e8] px-2 font-normal" />
               </label>
             ))}
+          </div>
+          <div className="flex items-center gap-3 border-t border-[#d6e8f8] px-4 py-3">
+            <input ref={sidebarLogoInputRef} type="file" accept="image/*" className="hidden" onChange={uploadSidebarLogo} />
+            <button type="button" onClick={() => sidebarLogoInputRef.current?.click()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-white px-3 text-xs font-bold text-[#1a5276]"><Upload className="h-3.5 w-3.5" />上传侧边栏 Logo</button>
+            {config.sidebarLogo && <img src={config.sidebarLogo} alt="侧边栏 Logo 预览" className="h-8 max-w-32 object-contain" />}
           </div>
           <div className="border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
             <button type="button" onClick={() => void saveConfig()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{SETTINGS_TEXT.saveBase}</button>
@@ -8315,6 +8348,7 @@ function LoginDialog({ theme, onLogin, onCancel }: { theme: ThemeKey; onLogin: (
 export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
   const [theme, setTheme] = useState<ThemeKey>(getBrowserTheme);
+  const [sidebarLogo, setSidebarLogo] = useState("");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -8391,6 +8425,11 @@ export default function App() {
   useEffect(() => {
     persistBrowserTheme(theme);
   }, [theme]);
+  useEffect(() => {
+    void axios.get<Record<string, string>>("/api/config")
+      .then(({ data }) => setSidebarLogo(data.sidebarLogo || ""))
+      .catch(() => setSidebarLogo(""));
+  }, []);
   useEffect(() => {
     if (isManagementPage(activePage) && !canManageSystem) {
       setActivePage("home");
@@ -8485,7 +8524,7 @@ export default function App() {
           关闭
         </button>
         <div className="flex items-center gap-3 px-5 py-6">
-          <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />
+          {sidebarLogo ? <img src={sidebarLogo} alt="侧边栏 Logo" className="h-8 w-8 shrink-0 object-contain" onError={() => setSidebarLogo("")} /> : <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />}
           <div>
             <div className="font-black tracking-wide">注水管理平台</div>
             <div className="mt-0.5 text-xs text-white/65">生产运行管理系统</div>

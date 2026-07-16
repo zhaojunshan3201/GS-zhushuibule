@@ -79,6 +79,32 @@ test("application shell retains content mounting while exposing reference layout
   assert.match(cssSource, /@media \(max-width: 639px\)\s*\{\s*\.theme-switcher\s*\{\s*display:\s*none;/);
 });
 
+test("system settings uploads and persists a sidebar logo while the shell falls back to its default mark", () => {
+  const settingsPage = findFunction("SystemSettingsPage");
+  assert.ok(settingsPage?.body);
+
+  const settingsSource = settingsPage.getText(appAst);
+  assert.match(settingsSource, /sidebarLogoInputRef/);
+  assert.match(settingsSource, /new FormData\(\)/);
+  assert.match(settingsSource, /formData\.append\("file", file\)/);
+  assert.match(settingsSource, /formData\.append\("target", "sidebarLogo"\)/);
+  assert.match(settingsSource, /axios\.post<\{ url: string \}>\("\/api\/uploads\/image", formData\)/);
+  assert.match(settingsSource, /axios\.post\("\/api\/config", \{ key: "sidebarLogo", value: data\.url \}\)/);
+  assert.match(settingsSource, /file\.size > 5 \* 1024 \* 1024/);
+  assert.match(settingsSource, /accept="image\/\*"/);
+  assert.match(settingsSource, /上传侧边栏 Logo/);
+  assert.match(settingsSource, /config\.sidebarLogo && <img src=\{config\.sidebarLogo\}/);
+  assert.doesNotMatch(settingsSource, /<input[^>]+value=\{config\.sidebarLogo/);
+
+  const appSource = findFunction("App")?.getText(appAst) ?? "";
+  assert.match(appSource, /const \[sidebarLogo, setSidebarLogo\] = useState\(""\)/);
+  assert.match(appSource, /axios\.get<Record<string, string>>\("\/api\/config"\)/);
+  assert.match(appSource, /setSidebarLogo\(data\.sidebarLogo \|\| ""\)/);
+  assert.match(appSource, /sidebarLogo \? <img src=\{sidebarLogo\}/);
+  assert.match(appSource, /onError=\{\(\) => setSidebarLogo\(""\)\}/);
+  assert.match(appSource, /<Droplet className="h-8 w-8 text-shell-accent"/);
+});
+
 test("well history actions live in the sidebar and import completion reports overwritten files", () => {
   const sidebarMarker = appSource.indexOf("data-well-history-sidebar");
   const contentMarker = appSource.indexOf("data-well-history-content");
