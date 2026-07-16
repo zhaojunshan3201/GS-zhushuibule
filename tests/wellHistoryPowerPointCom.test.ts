@@ -5,8 +5,14 @@ process.env.NODE_ENV = "test";
 const {
   cleanupWellHistoryPptImportArtifacts,
   exportPresentationSlidesWithPowerPoint,
+  validatePptxRequestContentLength,
   validatePptxUploadFileName,
 } = await import("../server");
+
+test("allows multipart requests when the browser omits Content-Length", () => {
+  assert.deepEqual(validatePptxRequestContentLength(undefined), { ok: true });
+  assert.deepEqual(validatePptxRequestContentLength(String(51 * 1024 * 1024)), { ok: false, code: "pptx-total-too-large" });
+});
 
 test("exports PPTX slides with PowerPoint COM and returns naturally sorted PNG paths", async () => {
   let command = "";

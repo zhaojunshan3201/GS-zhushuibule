@@ -7519,7 +7519,6 @@ function WellHistoryPage({
               "/api/uploads/well-history-ppt-batch",
               formData,
               {
-                headers: { "Content-Type": "multipart/form-data" },
                 onUploadProgress: (event) => {
                   if (!event.total) return;
                   const fraction = Math.min(1, Math.max(0, event.loaded / event.total));

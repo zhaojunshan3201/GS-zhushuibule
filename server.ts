@@ -336,10 +336,7 @@ function getFileExtension(fileName: string) {
 }
 
 export function validatePptxRequestContentLength(value: string | string[] | undefined) {
-  if (value === undefined || Array.isArray(value) || !/^\d+$/.test(value)) {
-    return { ok: false as const, code: "pptx-content-length-required" as const };
-  }
-  if (Number(value) > MAX_WELL_HISTORY_PPTX_TOTAL_BYTES) {
+  if (!Array.isArray(value) && value !== undefined && /^\d+$/.test(value) && Number(value) > MAX_WELL_HISTORY_PPTX_TOTAL_BYTES) {
     return { ok: false as const, code: "pptx-total-too-large" as const };
   }
   return { ok: true as const };
@@ -3144,7 +3141,7 @@ app.post("/api/uploads/well-history-ppt-batch", async (req, res) => {
   try {
     const contentLength = validatePptxRequestContentLength(req.headers["content-length"]);
     if (!contentLength.ok) {
-      return res.status(contentLength.code === "pptx-total-too-large" ? 413 : 411).json({ error: contentLength.code });
+      return res.status(413).json({ error: contentLength.code });
     }
     const formData = await parseMultipartForm(req);
     const files = formData.getAll("files");
