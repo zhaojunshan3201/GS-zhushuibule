@@ -77,7 +77,6 @@ import {
   selectLatestWellHistoryImports,
   WELL_HISTORY_BATCH_MAX_BYTES,
   WELL_HISTORY_BATCH_MAX_FILES,
-  WELL_HISTORY_MAX_FILE_BYTES,
 } from "./shared/wellHistoryImport";
 
 
@@ -7463,12 +7462,13 @@ function WellHistoryPage({
       };
     });
     const { selected, superseded } = selectLatestWellHistoryImports(candidates);
-    const { batches, oversized } = createWellHistoryImportBatches(selected);
+    const { batches } = createWellHistoryImportBatches(selected);
+    const unbatchable = selected.filter((candidate) => candidate.size > WELL_HISTORY_BATCH_MAX_BYTES);
 
-    if (oversized.length) {
-      const fileNames = oversized.map((candidate) => candidate.sourceOriginalName).join("、");
+    if (unbatchable.length) {
+      const fileNames = unbatchable.map((candidate) => candidate.sourceOriginalName).join("、");
       requestConfirm(
-        `以下文件超过单文件最大 ${Math.round(WELL_HISTORY_MAX_FILE_BYTES / 1024 / 1024)}MB，已阻止本次全部上传：${fileNames}`,
+        `以下文件超过自动分批单文件上限48MB，已阻止本次全部上传：${fileNames}`,
         () => {},
       );
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -7534,10 +7534,11 @@ function WellHistoryPage({
         await loadArchives();
 
         const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
-        if (firstSuccess?.wellNo) await openWell(firstSuccess.wellNo);
         requestConfirm(
           `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${successCount} 个，覆盖跳过 ${supersededCount} 个，失败 ${failureCount} 个。`,
-          () => {},
+          firstSuccess?.wellNo ? () => {
+            void openWell(firstSuccess.wellNo);
+          } : () => {},
         );
       } finally {
         setImporting(false);

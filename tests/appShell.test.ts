@@ -104,9 +104,14 @@ test("well history PPT imports are deduplicated and uploaded in automatic batche
   assert.match(appSource, /selectLatestWellHistoryImports/);
   assert.match(appSource, /WELL_HISTORY_BATCH_MAX_BYTES/);
   assert.match(appSource, /WELL_HISTORY_BATCH_MAX_FILES/);
-  assert.match(appSource, /WELL_HISTORY_MAX_FILE_BYTES/);
+  assert.match(appSource, /candidate\.size > WELL_HISTORY_BATCH_MAX_BYTES/);
+  assert.match(appSource, /自动分批单文件上限.*48MB/);
   assert.match(appSource, /batches\.entries\(\)/);
   assert.match(appSource, /batch-request-failed/);
   assert.match(appSource, /正在导入第 \$\{batchIndex \+ 1\}\/\$\{batches\.length\} 批/);
   assert.match(appSource, /supersededCount/);
+  assert.match(
+    appSource,
+    /requestConfirm\([\s\S]*?firstSuccess\?\.wellNo \? \(\) => \{[\s\S]*?void openWell\(firstSuccess\.wellNo\);[\s\S]*?\} : \(\) => \{\}/,
+  );
 });
