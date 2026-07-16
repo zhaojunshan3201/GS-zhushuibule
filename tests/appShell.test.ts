@@ -194,6 +194,17 @@ test("well history import summary opens the first success after confirm or cance
   assert.equal(summaryConfirm.arguments[2]?.getText(appAst), "openFirstSuccess");
 });
 
+test("well history PPT import requires a selected operating area before uploading", () => {
+  const page = findFunction("WellHistoryPage");
+  assert.ok(page?.body);
+
+  const handler = descendants(page).find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "handleBatchImport",
+  );
+  assert.ok(handler?.initializer);
+  assert.match(handler.initializer.getText(appAst), /if \(!unit\) \{[\s\S]*?请选择作业区后再导入 PPT/);
+});
+
 test("opening an already selected well refreshes its rich text document", () => {
   const page = findFunction("WellHistoryPage");
   assert.ok(page?.body);

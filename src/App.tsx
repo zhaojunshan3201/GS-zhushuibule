@@ -7462,6 +7462,11 @@ function WellHistoryPage({
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
+    if (!unit) {
+      requestConfirm("请选择作业区后再导入 PPT。", () => {});
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
     const candidates = pptFiles.map((file, sourceOrder) => {
       const parsed = parseWellHistoryImportFileName(file.name);
