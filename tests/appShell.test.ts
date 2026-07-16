@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import { groupWellHistoryArchivesByUnit } from "../src/shared/wellHistoryDirectory";
 
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
@@ -247,13 +248,36 @@ test("well history directory groups wells by operating area with collapsible hea
 
   const pageSource = page.getText(appAst);
   assert.match(pageSource, /const \[collapsedUnits, setCollapsedUnits\] = useState<Record<string, boolean>>\(\{\}\)/);
-  assert.match(pageSource, /const archivesByUnit = useMemo\(\(\) =>[\s\S]*?item\.unit \|\| "未分配作业区"[\s\S]*?\[archives\]\)/);
+  assert.match(pageSource, /const archivesByUnit = useMemo\(\(\) => groupWellHistoryArchivesByUnit\(archives\), \[archives\]\)/);
   assert.match(pageSource, /Object\.entries\(archivesByUnit\)[\s\S]*?\.map\(\(\[unitName, unitArchives\]\) =>/);
   assert.match(pageSource, /作业区：\{unitName\}（\{unitArchives\.length\}）/);
   assert.match(pageSource, /onClick=\{\(\) => setCollapsedUnits\(\(current\) => \(\{ \.\.\.current, \[unitName\]: !current\[unitName\] \}\)\)\}/);
   assert.match(pageSource, /<ChevronDown[\s\S]*?collapsedUnits\[unitName\] && "-rotate-90"/);
-  assert.match(pageSource, /!collapsedUnits\[unitName\] && \([\s\S]*?unitArchives\.map\(\(item\) =>/);
+  assert.match(pageSource, /hidden=\{collapsedUnits\[unitName\]\}[\s\S]*?unitArchives\.map\(\(item\) =>/);
   assert.match(pageSource, /onClick=\{\(\) => void openWell\(item\.wellNo\)\}/);
   assert.match(pageSource, /onClick=\{\(\) => handleDeleteArchive\(item\)\}/);
   assert.match(pageSource, /selectedWellNo === item\.wellNo/);
+  assert.match(pageSource, /const getWellHistoryUnitContentId = \(unitName: string\) => `well-history-directory-\$\{encodeURIComponent\(unitName\)\}`/);
+  assert.match(pageSource, /aria-expanded=\{!collapsedUnits\[unitName\]\}/);
+  assert.match(pageSource, /aria-controls=\{getWellHistoryUnitContentId\(unitName\)\}/);
+  assert.match(pageSource, /id=\{getWellHistoryUnitContentId\(unitName\)\}/);
+  assert.match(pageSource, /hidden=\{collapsedUnits\[unitName\]\}/);
+});
+
+test("well history directory groups archive entries by operating area and keeps unassigned entries together", () => {
+  const grouped = groupWellHistoryArchivesByUnit([
+    { wellNo: "W-01", unit: "一区" },
+    { wellNo: "W-02", unit: null },
+    { wellNo: "W-03", unit: "二区" },
+    { wellNo: "W-04" },
+    { wellNo: "W-05", unit: "一区" },
+  ]);
+
+  assert.deepEqual(Object.keys(grouped), ["一区", "未分配作业区", "二区"]);
+  assert.deepEqual(grouped["一区"].map((item) => item.wellNo), ["W-01", "W-05"]);
+  assert.deepEqual(grouped["二区"].map((item) => item.wellNo), ["W-03"]);
+  assert.deepEqual(grouped["未分配作业区"].map((item) => item.wellNo), ["W-02", "W-04"]);
+  assert.equal(grouped["一区"].length, 2);
+  assert.equal(grouped["未分配作业区"].length, 2);
+  assert.equal(grouped["二区"].length, 1);
 });

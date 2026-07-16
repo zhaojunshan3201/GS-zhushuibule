@@ -79,6 +79,7 @@ import {
   WELL_HISTORY_BATCH_MAX_BYTES,
   WELL_HISTORY_BATCH_MAX_FILES,
 } from "./shared/wellHistoryImport";
+import { groupWellHistoryArchivesByUnit } from "./shared/wellHistoryDirectory";
 
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -7651,11 +7652,8 @@ function WellHistoryPage({
     });
   };
 
-  const archivesByUnit = useMemo(() => archives.reduce<Record<string, WellHistoryArchiveSummary[]>>((groups, item) => {
-    const unitName = item.unit || "未分配作业区";
-    (groups[unitName] ||= []).push(item);
-    return groups;
-  }, {}), [archives]);
+  const archivesByUnit = useMemo(() => groupWellHistoryArchivesByUnit(archives), [archives]);
+  const getWellHistoryUnitContentId = (unitName: string) => `well-history-directory-${encodeURIComponent(unitName)}`;
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -7747,13 +7745,18 @@ function WellHistoryPage({
                 <button
                   type="button"
                   onClick={() => setCollapsedUnits((current) => ({ ...current, [unitName]: !current[unitName] }))}
+                  aria-expanded={!collapsedUnits[unitName]}
+                  aria-controls={getWellHistoryUnitContentId(unitName)}
                   className="flex w-full items-center justify-between border border-gray-200 bg-gray-100 px-3 py-2 text-left text-sm font-bold text-gray-800"
                 >
                   <span>作业区：{unitName}（{unitArchives.length}）</span>
                   <ChevronDown className={cn("h-4 w-4 transition-transform", collapsedUnits[unitName] && "-rotate-90")} />
                 </button>
-                {!collapsedUnits[unitName] && (
-                  <div className="space-y-1.5 pl-2">
+                <div
+                  id={getWellHistoryUnitContentId(unitName)}
+                  hidden={collapsedUnits[unitName]}
+                  className="space-y-1.5 pl-2"
+                >
                     {unitArchives.map((item) => (
                       <div key={item.wellNo} className={cn("flex items-center justify-between gap-2 border px-3 py-2 transition-all", selectedWellNo === item.wellNo ? "border-cnpc-red bg-red-50/40" : "border-gray-200 bg-gray-50")}>
                         <button onClick={() => void openWell(item.wellNo)} className="min-w-0 flex-1 truncate text-left text-sm font-bold text-gray-900 [&>p]:hidden">
@@ -7768,8 +7771,7 @@ function WellHistoryPage({
                         </button>
                       </div>
                     ))}
-                  </div>
-                )}
+                </div>
               </div>
             ))}
             {!archives.length && <div className="border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">暂无井史目录</div>}
