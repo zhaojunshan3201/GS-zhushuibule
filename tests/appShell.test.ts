@@ -72,7 +72,13 @@ test("well history actions live in the sidebar and import completion reports ove
   assert.match(sidebarSource, /handleQuery/);
   assert.match(sidebarSource, /saveRichTextDocument/);
   assert.match(sidebarSource, /handleRichTextPdfDownload/);
-  assert.ok(sidebarSource.indexOf("fileInputRef.current?.click()") < sidebarSource.indexOf("handleQuery"));
+  const importIndex = sidebarSource.indexOf("fileInputRef.current?.click()");
+  const currentIndex = sidebarSource.indexOf("handleQuery");
+  const archiveIndex = sidebarSource.indexOf("archives.map((item)");
+  assert.notEqual(importIndex, -1);
+  assert.notEqual(currentIndex, -1);
+  assert.notEqual(archiveIndex, -1);
+  assert.ok(importIndex < currentIndex && currentIndex < archiveIndex);
 
   const wellHistoryPageEndMatch = appSource.slice(contentMarker).match(/\r?\n}\r?\n\r?\nconst formatDateOnly/);
   assert.ok(wellHistoryPageEndMatch?.index !== undefined);
