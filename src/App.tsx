@@ -7308,6 +7308,7 @@ function WellHistoryPage({
   const [pdfSaveHandler, setPdfSaveHandler] = useState<PdfSaveHandler | null>(null);
   const [pdfDownloadHandler, setPdfDownloadHandler] = useState<PdfDownloadHandler | null>(null);
   const [richTextDocument, setRichTextDocument] = useState<WellHistoryRichTextDocument | null>(null);
+  const [richTextRefreshKey, setRichTextRefreshKey] = useState(0);
   const [editingHtml, setEditingHtml] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
@@ -7347,7 +7348,7 @@ function WellHistoryPage({
       .then(({ data }) => { if (active) { setRichTextDocument(data); setEditingHtml(data.html); } })
       .catch((err) => { if (active && err?.response?.status !== 404) setError(err?.response?.data?.error || "井史正文加载失败"); });
     return () => { active = false; };
-  }, [detail?.wellNo]);
+  }, [detail?.wellNo, richTextRefreshKey]);
 
   const saveRichTextDocument = async () => {
     if (!detail || !richTextDocument) return false;
@@ -7400,6 +7401,7 @@ function WellHistoryPage({
     try {
       const { data } = await axios.get<WellHistoryArchiveDetail>(`/api/well-history-archives/${encodeURIComponent(wellNo)}`);
       setDetail(data);
+      setRichTextRefreshKey((key) => key + 1);
       setPdfDirty(false);
       setSelectedWellNo(data.wellNo);
       setKeyword(data.wellNo);

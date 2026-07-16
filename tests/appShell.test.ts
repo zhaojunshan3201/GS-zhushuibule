@@ -193,3 +193,39 @@ test("well history import summary opens the first success after confirm or cance
   assert.equal(summaryConfirm.arguments[1]?.getText(appAst), "openFirstSuccess");
   assert.equal(summaryConfirm.arguments[2]?.getText(appAst), "openFirstSuccess");
 });
+
+test("opening an already selected well refreshes its rich text document", () => {
+  const page = findFunction("WellHistoryPage");
+  assert.ok(page?.body);
+
+  const pageNodes = descendants(page);
+  const refreshState = pageNodes.find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "[richTextRefreshKey, setRichTextRefreshKey]",
+  );
+  assert.ok(refreshState?.initializer && ts.isCallExpression(refreshState.initializer));
+  assert.equal(refreshState.initializer.expression.getText(appAst), "useState");
+  assert.equal(refreshState.initializer.arguments[0]?.getText(appAst), "0");
+
+  const richTextEffect = pageNodes.find((node): node is ts.CallExpression => {
+    if (!ts.isCallExpression(node) || node.expression.getText(appAst) !== "useEffect") return false;
+    return node.arguments[0]?.getText(appAst).includes("/document") ?? false;
+  });
+  assert.ok(richTextEffect);
+  assert.equal(richTextEffect.arguments[1]?.getText(appAst), "[detail?.wellNo, richTextRefreshKey]");
+
+  const openWell = pageNodes.find(
+    (node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(appAst) === "openWell",
+  );
+  assert.ok(openWell?.initializer && ts.isArrowFunction(openWell.initializer) && ts.isBlock(openWell.initializer.body));
+  const successTry = openWell.initializer.body.statements.find(ts.isTryStatement);
+  assert.ok(successTry);
+  const successStatements = successTry.tryBlock.statements;
+  const setDetailIndex = successStatements.findIndex(
+    (statement) => ts.isExpressionStatement(statement) && statement.expression.getText(appAst) === "setDetail(data)",
+  );
+  const refreshIndex = successStatements.findIndex(
+    (statement) => ts.isExpressionStatement(statement) && statement.expression.getText(appAst) === "setRichTextRefreshKey((key) => key + 1)",
+  );
+  assert.notEqual(setDetailIndex, -1);
+  assert.ok(refreshIndex > setDetailIndex, "refresh key must increment after a successful detail load");
+});
