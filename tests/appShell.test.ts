@@ -109,7 +109,11 @@ test("system settings uploads and persists a sidebar logo while the shell falls 
 test("sidebar logo upload notifies the application shell without a page refresh", () => {
   const settingsPage = findFunction("SystemSettingsPage");
   assert.ok(settingsPage?.body);
-  assert.match(settingsPage.getText(appAst), /window\.dispatchEvent\(new CustomEvent\("sidebar-logo-updated", \{ detail: data\.url \}\)\)/);
+  const settingsSource = settingsPage.getText(appAst);
+  assert.match(settingsSource, /const requestId = \+\+sidebarLogoUploadRequestRef\.current/);
+  assert.match(settingsSource, /sidebarLogoConfigQueueRef\.current\.then\(persistLogo, persistLogo\)/);
+  assert.match(settingsSource, /isCurrentSidebarLogoUpload\(requestId, sidebarLogoUploadRequestRef\.current\)/);
+  assert.match(settingsSource, /window\.dispatchEvent\(new CustomEvent\("sidebar-logo-updated", \{ detail: data\.url \}\)\)/);
 
   const appSource = findFunction("App")?.getText(appAst) ?? "";
   assert.match(appSource, /const handleSidebarLogoUpdated = \(event: Event\) => setSidebarLogoState\(\(state\) => applySidebarLogoUpdate\(state, String\(\(event as CustomEvent<string>\)\.detail \|\| ""\)\)\)/);

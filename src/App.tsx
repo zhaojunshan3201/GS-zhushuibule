@@ -57,7 +57,7 @@ import {
   type AbnormalWellForm,
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
-import { applySidebarLogoLoad, applySidebarLogoUpdate } from "./shared/sidebarLogo";
+import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -961,6 +961,8 @@ function SystemSettingsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const sidebarLogoInputRef = useRef<HTMLInputElement | null>(null);
+  const sidebarLogoUploadRequestRef = useRef(0);
+  const sidebarLogoConfigQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const loadSettings = useCallback(async () => {
     setError("");
@@ -999,6 +1001,7 @@ function SystemSettingsPage() {
   };
 
   const uploadSidebarLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const requestId = ++sidebarLogoUploadRequestRef.current;
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -1017,12 +1020,21 @@ function SystemSettingsPage() {
       formData.append("file", file);
       formData.append("target", "sidebarLogo");
       const { data } = await axios.post<{ url: string }>("/api/uploads/image", formData);
-      await axios.post("/api/config", { key: "sidebarLogo", value: data.url });
-      setConfig((current) => ({ ...current, sidebarLogo: data.url }));
-      window.dispatchEvent(new CustomEvent("sidebar-logo-updated", { detail: data.url }));
-      setMessage("侧边栏 Logo 已更新");
+      if (!isCurrentSidebarLogoUpload(requestId, sidebarLogoUploadRequestRef.current)) return;
+
+      const persistLogo = async () => {
+        if (!isCurrentSidebarLogoUpload(requestId, sidebarLogoUploadRequestRef.current)) return;
+        await axios.post("/api/config", { key: "sidebarLogo", value: data.url });
+        if (!isCurrentSidebarLogoUpload(requestId, sidebarLogoUploadRequestRef.current)) return;
+        setConfig((current) => ({ ...current, sidebarLogo: data.url }));
+        window.dispatchEvent(new CustomEvent("sidebar-logo-updated", { detail: data.url }));
+        setMessage("侧边栏 Logo 已更新");
+      };
+      const queuedPersist = sidebarLogoConfigQueueRef.current.then(persistLogo, persistLogo);
+      sidebarLogoConfigQueueRef.current = queuedPersist;
+      await queuedPersist;
     } catch (err) {
-      setError("侧边栏 Logo 上传失败");
+      if (isCurrentSidebarLogoUpload(requestId, sidebarLogoUploadRequestRef.current)) setError("侧边栏 Logo 上传失败");
     }
   };
 
