@@ -59,6 +59,26 @@ test("createWellHistoryImportBatches separates files larger than 50 MB", () => {
   assert.deepEqual(result.oversized, [oversized]);
 });
 
+test("createWellHistoryImportBatches accepts a file exactly at the 50 MB limit", () => {
+  const file = { name: "at-limit", size: WELL_HISTORY_MAX_FILE_BYTES };
+
+  const result = createWellHistoryImportBatches([file]);
+
+  assert.deepEqual(result.batches, [[file]]);
+  assert.deepEqual(result.oversized, []);
+});
+
+test("createWellHistoryImportBatches preserves eligible order around an oversized file", () => {
+  const first = { name: "first", size: 1 };
+  const oversized = { name: "oversized", size: WELL_HISTORY_MAX_FILE_BYTES + 1 };
+  const second = { name: "second", size: 1 };
+
+  const result = createWellHistoryImportBatches([first, oversized, second]);
+
+  assert.deepEqual(result.batches, [[first, second]]);
+  assert.deepEqual(result.oversized, [oversized]);
+});
+
 test("parseWellHistoryImportFileName groups numbered files under the same well number", () => {
   assert.deepEqual(parseWellHistoryImportFileName("GS-101-1.pptx"), {
     wellNo: "GS-101",
