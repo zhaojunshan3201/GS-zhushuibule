@@ -97,11 +97,12 @@ test("system settings uploads and persists a sidebar logo while the shell falls 
   assert.doesNotMatch(settingsSource, /<input[^>]+value=\{config\.sidebarLogo/);
 
   const appSource = findFunction("App")?.getText(appAst) ?? "";
-  assert.match(appSource, /const \[sidebarLogo, setSidebarLogo\] = useState\(""\)/);
+  assert.match(appSource, /const \[sidebarLogoState, setSidebarLogoState\] = useState\(\{ url: "", version: 0 \}\)/);
+  assert.match(appSource, /const sidebarLogo = sidebarLogoState\.url/);
   assert.match(appSource, /axios\.get<Record<string, string>>\("\/api\/config"\)/);
-  assert.match(appSource, /setSidebarLogo\(data\.sidebarLogo \|\| ""\)/);
+  assert.match(appSource, /applySidebarLogoLoad\(state, requestVersion, data\.sidebarLogo \|\| ""\)/);
   assert.match(appSource, /sidebarLogo \? <img src=\{sidebarLogo\}/);
-  assert.match(appSource, /onError=\{\(\) => setSidebarLogo\(""\)\}/);
+  assert.match(appSource, /onError=\{\(\) => setSidebarLogoState\(\(state\) => applySidebarLogoUpdate\(state, ""\)\)\}/);
   assert.match(appSource, /<Droplet className="h-8 w-8 text-shell-accent"/);
 });
 
@@ -111,7 +112,7 @@ test("sidebar logo upload notifies the application shell without a page refresh"
   assert.match(settingsPage.getText(appAst), /window\.dispatchEvent\(new CustomEvent\("sidebar-logo-updated", \{ detail: data\.url \}\)\)/);
 
   const appSource = findFunction("App")?.getText(appAst) ?? "";
-  assert.match(appSource, /const handleSidebarLogoUpdated = \(event: Event\) => setSidebarLogo\(String\(\(event as CustomEvent<string>\)\.detail \|\| ""\)\)/);
+  assert.match(appSource, /const handleSidebarLogoUpdated = \(event: Event\) => setSidebarLogoState\(\(state\) => applySidebarLogoUpdate\(state, String\(\(event as CustomEvent<string>\)\.detail \|\| ""\)\)\)/);
   assert.match(appSource, /window\.addEventListener\("sidebar-logo-updated", handleSidebarLogoUpdated\)/);
   assert.match(appSource, /window\.removeEventListener\("sidebar-logo-updated", handleSidebarLogoUpdated\)/);
 });

@@ -57,6 +57,7 @@ import {
   type AbnormalWellForm,
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
+import { applySidebarLogoLoad, applySidebarLogoUpdate } from "./shared/sidebarLogo";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -8349,7 +8350,8 @@ function LoginDialog({ theme, onLogin, onCancel }: { theme: ThemeKey; onLogin: (
 export default function App() {
   const [activePage, setActivePage] = useState<PageType>("home");
   const [theme, setTheme] = useState<ThemeKey>(getBrowserTheme);
-  const [sidebarLogo, setSidebarLogo] = useState("");
+  const [sidebarLogoState, setSidebarLogoState] = useState({ url: "", version: 0 });
+  const sidebarLogo = sidebarLogoState.url;
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -8427,11 +8429,12 @@ export default function App() {
     persistBrowserTheme(theme);
   }, [theme]);
   useEffect(() => {
-    const handleSidebarLogoUpdated = (event: Event) => setSidebarLogo(String((event as CustomEvent<string>).detail || ""));
+    const requestVersion = sidebarLogoState.version;
+    const handleSidebarLogoUpdated = (event: Event) => setSidebarLogoState((state) => applySidebarLogoUpdate(state, String((event as CustomEvent<string>).detail || "")));
     window.addEventListener("sidebar-logo-updated", handleSidebarLogoUpdated);
     void axios.get<Record<string, string>>("/api/config")
-      .then(({ data }) => setSidebarLogo(data.sidebarLogo || ""))
-      .catch(() => setSidebarLogo(""));
+      .then(({ data }) => setSidebarLogoState((state) => applySidebarLogoLoad(state, requestVersion, data.sidebarLogo || "")))
+      .catch(() => setSidebarLogoState((state) => applySidebarLogoLoad(state, requestVersion, "")));
     return () => window.removeEventListener("sidebar-logo-updated", handleSidebarLogoUpdated);
   }, []);
   useEffect(() => {
@@ -8528,7 +8531,7 @@ export default function App() {
           关闭
         </button>
         <div className="flex items-center gap-3 px-5 py-6">
-          {sidebarLogo ? <img src={sidebarLogo} alt="侧边栏 Logo" className="h-8 w-8 shrink-0 object-contain" onError={() => setSidebarLogo("")} /> : <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />}
+          {sidebarLogo ? <img src={sidebarLogo} alt="侧边栏 Logo" className="h-8 w-8 shrink-0 object-contain" onError={() => setSidebarLogoState((state) => applySidebarLogoUpdate(state, ""))} /> : <Droplet className="h-8 w-8 text-shell-accent" strokeWidth={2.4} />}
           <div>
             <div className="font-black tracking-wide">注水管理平台</div>
             <div className="mt-0.5 text-xs text-white/65">生产运行管理系统</div>
