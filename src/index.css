@@ -708,6 +708,34 @@
     background-color: #dce3c8 !important;
   }
 
+  .shell-app[data-theme="default"] .shell-content table th {
+    border-color: #acc6de !important;
+    background-color: #e6f0f9 !important;
+    color: #1a2b3c !important;
+  }
+
+  .shell-app[data-theme="default"] .shell-content table td {
+    border-color: #acc6de !important;
+    background-color: #ffffff !important;
+    color: #1a2b3c !important;
+  }
+
+  .shell-app[data-theme="default"] .shell-content table tbody tr:hover td {
+    background-color: #f7fbff !important;
+  }
+
+  .shell-app[data-theme="default"] .zonal-table-shell,
+  .shell-app[data-theme="default"] .zonal-table-toolbar,
+  .shell-app[data-theme="default"] .shell-content :is(div, section, article, form, h1)[class*="border-[#"] {
+    border-color: #acc6de !important;
+  }
+
+  .shell-app[data-theme="default"] .zonal-table-shell,
+  .shell-app[data-theme="default"] .zonal-table-toolbar,
+  .shell-app[data-theme="default"] .zonal-table-shell h1 {
+    background-color: #ffffff !important;
+  }
+
   .shell-app[data-theme="oil-blue"] table th {
     border-color: #d9b5ab !important;
     background-color: #f5e6e1 !important;

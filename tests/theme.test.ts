@@ -57,3 +57,10 @@ test("does not apply theme text, table, or scrollbar overrides to the default th
     assert.ok(css.includes(`${themedRoot} ${selector}`));
   }
 });
+
+test("uses one blue-gray table palette for the default theme", () => {
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  assert.match(css, /\.shell-app\[data-theme="default"\] \.shell-content table th[\s\S]*?border-color: #acc6de !important;[\s\S]*?background-color: #e6f0f9 !important;/);
+  assert.match(css, /\.shell-app\[data-theme="default"\] \.shell-content table td[\s\S]*?border-color: #acc6de !important;[\s\S]*?background-color: #ffffff !important;/);
+  assert.match(css, /\.shell-app\[data-theme="default"\] \.zonal-table-shell[\s\S]*?border-color: #acc6de !important;/);
+});
