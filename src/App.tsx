@@ -70,6 +70,15 @@ import {
 } from "./shared/secondBatchRecords";
 import { OIL_PRODUCTION_BLOCK_UNIT_MAP, getOilProductionBlocks, normalizeOilProductionBlock } from "./shared/oilProductionBlocks";
 import { getBrowserTheme, getStoredTheme, persistBrowserTheme, THEME_OPTIONS, type ThemeKey } from "./shared/theme";
+import {
+  createWellHistoryImportBatches,
+  normalizeWellHistoryWellNo,
+  parseWellHistoryImportFileName,
+  selectLatestWellHistoryImports,
+  WELL_HISTORY_BATCH_MAX_BYTES,
+  WELL_HISTORY_BATCH_MAX_FILES,
+  WELL_HISTORY_MAX_FILE_BYTES,
+} from "./shared/wellHistoryImport";
 
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -7441,51 +7450,112 @@ function WellHistoryPage({
       return;
     }
 
-    setError("");
-    setImporting(true);
-    setImportStatus("导入中...");
-    setImportProgress(0);
+    const candidates = pptFiles.map((file, sourceOrder) => {
+      const parsed = parseWellHistoryImportFileName(file.name);
+      const normalized = normalizeWellHistoryWellNo(parsed.wellNo);
+      return {
+        file,
+        size: file.size,
+        sourceOrder,
+        sourceOriginalName: file.name,
+        wellNo: normalized || `__invalid_${sourceOrder}`,
+        resultWellNo: normalized,
+      };
+    });
+    const { selected, superseded } = selectLatestWellHistoryImports(candidates);
+    const { batches, oversized } = createWellHistoryImportBatches(selected);
 
-    const formData = new FormData();
-    pptFiles.forEach((file) => formData.append("files", file));
-    formData.append("unit", unit);
-    formData.append("block", block.trim());
-
-    try {
-      const { data } = await axios.post<{ successCount: number; supersededCount: number; failureCount: number; items: WellHistoryBatchImportItem[] }>(
-        "/api/uploads/well-history-ppt-batch",
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-          onUploadProgress: (event) => {
-            if (!event.total) return;
-            setImportProgress(Math.min(90, Math.round((event.loaded / event.total) * 90)));
-          },
-        },
-      );
-
-      const items = data.items || [];
-      setImportStatus(data.failureCount ? "导入完成（部分失败）" : "导入完成");
-      setImportProgress(100);
-      await loadArchives();
-
-      const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
-      if (firstSuccess?.wellNo) {
-        await openWell(firstSuccess.wellNo);
-      }
+    if (oversized.length) {
+      const fileNames = oversized.map((candidate) => candidate.sourceOriginalName).join("、");
       requestConfirm(
-        `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${data.successCount || 0} 个，覆盖跳过 ${data.supersededCount || 0} 个，失败 ${data.failureCount || 0} 个。`,
+        `以下文件超过单文件最大 ${Math.round(WELL_HISTORY_MAX_FILE_BYTES / 1024 / 1024)}MB，已阻止本次全部上传：${fileNames}`,
         () => {},
       );
-    } catch (err: any) {
-      setImportStatus("导入失败");
-      setImportProgress(100);
-      setError(err?.response?.data?.error || "PPT 批量导入失败");
-      requestConfirm(`PPT 导入失败：共 ${pptFiles.length} 个文件，成功 0 个，失败 ${pptFiles.length} 个。`, () => {});
-    } finally {
-      setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
     }
+
+    const executeBatches = async () => {
+      setError("");
+      setImporting(true);
+      setImportProgress(0);
+
+      let successCount = 0;
+      let supersededCount = superseded.length;
+      let failureCount = 0;
+      const items: WellHistoryBatchImportItem[] = superseded.map((candidate) => ({
+        fileName: candidate.sourceOriginalName,
+        wellNo: candidate.resultWellNo,
+        status: "superseded",
+        message: "已被同批次后续文件覆盖",
+      }));
+
+      try {
+        for (const [batchIndex, batch] of batches.entries()) {
+          setImportStatus(`正在导入第 ${batchIndex + 1}/${batches.length} 批...`);
+          const formData = new FormData();
+          batch.forEach((candidate) => formData.append("files", candidate.file));
+          formData.append("unit", unit);
+          formData.append("block", block.trim());
+
+          try {
+            const { data } = await axios.post<{ successCount: number; supersededCount: number; failureCount: number; items: WellHistoryBatchImportItem[] }>(
+              "/api/uploads/well-history-ppt-batch",
+              formData,
+              {
+                headers: { "Content-Type": "multipart/form-data" },
+                onUploadProgress: (event) => {
+                  if (!event.total) return;
+                  const fraction = event.loaded / event.total;
+                  setImportProgress(Math.round(((batchIndex + fraction) / batches.length) * 100));
+                },
+              },
+            );
+            successCount += data.successCount || 0;
+            supersededCount += data.supersededCount || 0;
+            failureCount += data.failureCount || 0;
+            items.push(...(data.items || []));
+          } catch (err: any) {
+            const message = err?.response?.data?.error || "PPT 批量导入请求失败";
+            failureCount += batch.length;
+            items.push(...batch.map((candidate) => ({
+              fileName: candidate.sourceOriginalName,
+              wellNo: candidate.resultWellNo,
+              status: "batch-request-failed",
+              message,
+            })));
+          }
+        }
+
+        setImportProgress(100);
+        setImportStatus(
+          failureCount === pptFiles.length ? "导入失败" : failureCount ? "导入完成（部分失败）" : "导入完成",
+        );
+        await loadArchives();
+
+        const firstSuccess = items.find((item) => item.status === "success" && item.wellNo);
+        if (firstSuccess?.wellNo) await openWell(firstSuccess.wellNo);
+        requestConfirm(
+          `PPT 导入完成：共 ${pptFiles.length} 个文件，成功 ${successCount} 个，覆盖跳过 ${supersededCount} 个，失败 ${failureCount} 个。`,
+          () => {},
+        );
+      } finally {
+        setImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+
+    const totalBytes = pptFiles.reduce((sum, file) => sum + file.size, 0);
+    if (pptFiles.length > WELL_HISTORY_BATCH_MAX_FILES || totalBytes > WELL_HISTORY_BATCH_MAX_BYTES) {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      requestConfirm(
+        `本次选择 ${pptFiles.length} 个文件，去重后 ${selected.length} 个，将拆分 ${batches.length} 批，是否继续？`,
+        executeBatches,
+      );
+      return;
+    }
+
+    await executeBatches();
   };
 
   const previewUrl = detail?.currentPdf?.fileUrl || "";

@@ -96,3 +96,17 @@ test("well history actions live in the sidebar and import completion reports ove
   assert.match(appSource, /supersededCount:\s*number/);
   assert.match(appSource, /data\.supersededCount/);
 });
+
+test("well history PPT imports are deduplicated and uploaded in automatic batches", () => {
+  assert.match(appSource, /createWellHistoryImportBatches/);
+  assert.match(appSource, /normalizeWellHistoryWellNo/);
+  assert.match(appSource, /parseWellHistoryImportFileName/);
+  assert.match(appSource, /selectLatestWellHistoryImports/);
+  assert.match(appSource, /WELL_HISTORY_BATCH_MAX_BYTES/);
+  assert.match(appSource, /WELL_HISTORY_BATCH_MAX_FILES/);
+  assert.match(appSource, /WELL_HISTORY_MAX_FILE_BYTES/);
+  assert.match(appSource, /batches\.entries\(\)/);
+  assert.match(appSource, /batch-request-failed/);
+  assert.match(appSource, /正在导入第 \$\{batchIndex \+ 1\}\/\$\{batches\.length\} 批/);
+  assert.match(appSource, /supersededCount/);
+});
