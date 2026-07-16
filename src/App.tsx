@@ -7574,7 +7574,7 @@ function WellHistoryPage({
       <div data-well-history-sidebar className="space-y-3">
         <input ref={fileInputRef} type="file" accept=".ppt,.pptx" multiple className="hidden" onChange={(event) => void handleBatchImport(event.target.files)} />
 
-        <div className="border border-shell-border bg-white p-5 shadow-sm">
+        <div className="well-history-side-card border border-shell-border bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">批量导入进度</h2>
             <span className={cn("px-3 py-1 text-xs font-bold", importing ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>{importStatus}</span>
@@ -7583,18 +7583,18 @@ function WellHistoryPage({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="mb-4 inline-flex w-full items-center justify-center gap-2 bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className="well-history-import-button mb-4 inline-flex w-full items-center justify-center gap-2 bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Upload className="h-4 w-4" />
             {importing ? "正在导入 PPT..." : "批量导入 PPT/PPTX"}
           </button>
           <p className="mb-4 text-xs leading-5 text-gray-500">一个 PPT/PPTX 对应一口井，以文件名作为井号归档。可一次选择多个文件导入。</p>
-          <div className="h-3 overflow-hidden bg-gray-100">
-            <div className="h-full bg-orange-500 transition-all duration-300" style={{ width: `${importProgress}%` }} />
+          <div className="well-history-progress-track h-3 overflow-hidden bg-gray-100">
+            <div className="well-history-progress-bar h-full bg-orange-500 transition-all duration-300" style={{ width: `${importProgress}%` }} />
           </div>
         </div>
 
-        <div className="border border-shell-border bg-white p-5 shadow-sm">
+        <div className="well-history-side-card border border-shell-border bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-lg font-bold text-gray-900">当前井与查询</h2>
           <div className="space-y-2 text-sm text-gray-600">
             <div><strong>当前井号：</strong>{detail?.wellNo || "--"}</div>
@@ -7624,14 +7624,14 @@ function WellHistoryPage({
               井号
               <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="输入井号" className="mt-1 h-9 w-full border border-gray-200 px-2 text-sm outline-none focus:border-cnpc-red" />
             </label>
-            <button onClick={() => void handleQuery()} className="inline-flex h-9 w-full items-center justify-center gap-1 bg-cnpc-red px-3 text-sm font-bold text-white hover:bg-red-700">
+            <button onClick={() => void handleQuery()} className="well-history-primary-action inline-flex h-9 w-full items-center justify-center gap-1 bg-cnpc-red px-3 text-sm font-bold text-white hover:bg-red-700">
               <Search className="h-4 w-4" />查询
             </button>
             <button
               type="button"
               onClick={() => void (richTextDocument ? saveRichTextDocument() : pdfSaveHandler?.())}
               disabled={richTextDocument ? !pdfDirty : !pdfSaveHandler}
-              className="inline-flex h-9 w-full items-center justify-center gap-1 bg-cnpc-red px-3 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="well-history-primary-action inline-flex h-9 w-full items-center justify-center gap-1 bg-cnpc-red px-3 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save className="h-4 w-4" />保存编辑结果
             </button>
@@ -7639,14 +7639,14 @@ function WellHistoryPage({
               type="button"
               onClick={() => void (richTextDocument ? handleRichTextPdfDownload() : pdfDownloadHandler?.())}
               disabled={richTextDocument ? false : !pdfDownloadHandler}
-              className="inline-flex h-9 w-full items-center justify-center gap-1 border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="well-history-secondary-action inline-flex h-9 w-full items-center justify-center gap-1 border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="h-4 w-4" />下载 PDF
             </button>
           </div>
         </div>
 
-        <div className="border border-shell-border bg-white p-5 shadow-sm">
+        <div className="well-history-side-card border border-shell-border bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">井史目录</h2>
             {listLoading && <span className="text-xs text-gray-400">加载中...</span>}

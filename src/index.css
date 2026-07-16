@@ -739,4 +739,16 @@
   .shell-app[data-theme="oil-blue"] .shell-content [class*="shadow-["] {
     box-shadow: 0 1px 3px rgb(127 21 21 / 14%) !important;
   }
+
+  .shell-app[data-theme="default"] [data-well-history-sidebar] { --well-side-border: #acc6de; --well-side-surface: #ffffff; --well-side-text: #1a2b3c; --well-side-primary: #e67e22; --well-side-primary-hover: #c96b19; --well-side-secondary: #e6f0f9; }
+  .shell-app[data-theme="oil-blue"] [data-well-history-sidebar] { --well-side-border: #d9b5ab; --well-side-surface: #fffdfb; --well-side-text: #681717; --well-side-primary: #a31b1b; --well-side-primary-hover: #7f1515; --well-side-secondary: #f5e6e1; }
+  .shell-app[data-theme="enterprise-white"] [data-well-history-sidebar] { --well-side-border: #d9e1ea; --well-side-surface: #ffffff; --well-side-text: #17365c; --well-side-primary: #1769aa; --well-side-primary-hover: #0e4f85; --well-side-secondary: #f1f6fb; }
+  .shell-app[data-theme="emerald-gold"] [data-well-history-sidebar] { --well-side-border: #b9c4a5; --well-side-surface: #fffef8; --well-side-text: #254b3d; --well-side-primary: #174b3a; --well-side-primary-hover: #0d3026; --well-side-secondary: #e8ead5; }
+
+  [data-well-history-sidebar] .well-history-side-card { border-color: var(--well-side-border) !important; background-color: var(--well-side-surface) !important; }
+  [data-well-history-sidebar] h2, [data-well-history-sidebar] label { color: var(--well-side-text) !important; }
+  [data-well-history-sidebar] .well-history-import-button, [data-well-history-sidebar] .well-history-primary-action, [data-well-history-sidebar] .well-history-progress-bar { background-color: var(--well-side-primary) !important; }
+  [data-well-history-sidebar] .well-history-import-button:hover, [data-well-history-sidebar] .well-history-primary-action:hover { background-color: var(--well-side-primary-hover) !important; }
+  [data-well-history-sidebar] .well-history-progress-track, [data-well-history-sidebar] .well-history-secondary-action:hover { background-color: var(--well-side-secondary) !important; }
+  [data-well-history-sidebar] .well-history-secondary-action { border-color: var(--well-side-border) !important; background-color: var(--well-side-surface) !important; color: var(--well-side-text) !important; }
 }
