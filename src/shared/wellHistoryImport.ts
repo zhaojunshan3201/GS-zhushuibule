@@ -9,6 +9,43 @@ export type WellHistoryImportPart = {
   partOrder: number | null;
 };
 
+export const WELL_HISTORY_BATCH_MAX_FILES = 20;
+export const WELL_HISTORY_BATCH_MAX_BYTES = 48 * 1024 * 1024;
+export const WELL_HISTORY_MAX_FILE_BYTES = 50 * 1024 * 1024;
+
+export function createWellHistoryImportBatches<T extends { size: number }>(files: T[]) {
+  const batches: T[][] = [];
+  const oversized: T[] = [];
+  let current: T[] = [];
+  let currentBytes = 0;
+
+  for (const file of files) {
+    if (file.size > WELL_HISTORY_MAX_FILE_BYTES) {
+      oversized.push(file);
+      continue;
+    }
+
+    if (
+      current.length > 0
+      && (
+        current.length >= WELL_HISTORY_BATCH_MAX_FILES
+        || currentBytes + file.size > WELL_HISTORY_BATCH_MAX_BYTES
+      )
+    ) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+
+    current.push(file);
+    currentBytes += file.size;
+  }
+
+  if (current.length > 0) batches.push(current);
+
+  return { batches, oversized };
+}
+
 export function normalizeWellHistoryWellNo(value: string) {
   return value.trim().replace(/(\.(?:pptx|ppt|ptx))+$/i, "").trim();
 }

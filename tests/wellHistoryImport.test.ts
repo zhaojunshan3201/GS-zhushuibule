@@ -1,11 +1,63 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createWellHistoryImportBatches,
   getWellHistoryRenameHint,
   parseWellHistoryImportFileName,
   selectLatestWellHistoryImports,
   sortWellHistoryImportParts,
+  WELL_HISTORY_BATCH_MAX_BYTES,
+  WELL_HISTORY_BATCH_MAX_FILES,
+  WELL_HISTORY_MAX_FILE_BYTES,
 } from "../src/shared/wellHistoryImport";
+
+const MB = 1024 * 1024;
+
+test("createWellHistoryImportBatches starts a new batch after 20 files", () => {
+  const files = Array.from({ length: 21 }, (_, index) => ({ index, size: 1 }));
+
+  const result = createWellHistoryImportBatches(files);
+
+  assert.equal(WELL_HISTORY_BATCH_MAX_FILES, 20);
+  assert.deepEqual(result.batches.map((batch) => batch.length), [20, 1]);
+  assert.deepEqual(result.batches.flat(), files);
+  assert.deepEqual(result.oversized, []);
+});
+
+test("createWellHistoryImportBatches starts a new batch before exceeding 48 MB", () => {
+  const files = [
+    { name: "first", size: 48 * MB - 10 },
+    { name: "second", size: 20 },
+  ];
+
+  const result = createWellHistoryImportBatches(files);
+
+  assert.equal(WELL_HISTORY_BATCH_MAX_BYTES, 48 * MB);
+  assert.deepEqual(result.batches, [[files[0]], [files[1]]]);
+  assert.deepEqual(result.oversized, []);
+});
+
+test("createWellHistoryImportBatches keeps files totaling exactly 48 MB together", () => {
+  const files = [
+    { name: "first", size: 24 * MB },
+    { name: "second", size: 24 * MB },
+  ];
+
+  const result = createWellHistoryImportBatches(files);
+
+  assert.deepEqual(result.batches, [files]);
+  assert.deepEqual(result.oversized, []);
+});
+
+test("createWellHistoryImportBatches separates files larger than 50 MB", () => {
+  const oversized = { name: "oversized", size: 50 * MB + 1 };
+
+  const result = createWellHistoryImportBatches([oversized]);
+
+  assert.equal(WELL_HISTORY_MAX_FILE_BYTES, 50 * MB);
+  assert.deepEqual(result.batches, []);
+  assert.deepEqual(result.oversized, [oversized]);
+});
 
 test("parseWellHistoryImportFileName groups numbered files under the same well number", () => {
   assert.deepEqual(parseWellHistoryImportFileName("GS-101-1.pptx"), {
