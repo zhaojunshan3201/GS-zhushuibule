@@ -97,7 +97,7 @@ test("well history actions live in the sidebar and import completion reports ove
   assert.match(sidebarSource, /getFilterBlockOptions\(unit\)/);
   const importIndex = sidebarSource.indexOf("fileInputRef.current?.click()");
   const currentIndex = sidebarSource.indexOf("handleQuery");
-  const archiveIndex = sidebarSource.indexOf("archives.map((item)");
+  const archiveIndex = sidebarSource.indexOf("Object.entries(archivesByUnit)");
   assert.notEqual(importIndex, -1);
   assert.notEqual(currentIndex, -1);
   assert.notEqual(archiveIndex, -1);
@@ -239,4 +239,21 @@ test("opening an already selected well refreshes its rich text document", () => 
   );
   assert.notEqual(setDetailIndex, -1);
   assert.ok(refreshIndex > setDetailIndex, "refresh key must increment after a successful detail load");
+});
+
+test("well history directory groups wells by operating area with collapsible headings", () => {
+  const page = findFunction("WellHistoryPage");
+  assert.ok(page?.body);
+
+  const pageSource = page.getText(appAst);
+  assert.match(pageSource, /const \[collapsedUnits, setCollapsedUnits\] = useState<Record<string, boolean>>\(\{\}\)/);
+  assert.match(pageSource, /const archivesByUnit = useMemo\(\(\) =>[\s\S]*?item\.unit \|\| "未分配作业区"[\s\S]*?\[archives\]\)/);
+  assert.match(pageSource, /Object\.entries\(archivesByUnit\)[\s\S]*?\.map\(\(\[unitName, unitArchives\]\) =>/);
+  assert.match(pageSource, /作业区：\{unitName\}（\{unitArchives\.length\}）/);
+  assert.match(pageSource, /onClick=\{\(\) => setCollapsedUnits\(\(current\) => \(\{ \.\.\.current, \[unitName\]: !current\[unitName\] \}\)\)\}/);
+  assert.match(pageSource, /<ChevronDown[\s\S]*?collapsedUnits\[unitName\] && "-rotate-90"/);
+  assert.match(pageSource, /!collapsedUnits\[unitName\] && \([\s\S]*?unitArchives\.map\(\(item\) =>/);
+  assert.match(pageSource, /onClick=\{\(\) => void openWell\(item\.wellNo\)\}/);
+  assert.match(pageSource, /onClick=\{\(\) => handleDeleteArchive\(item\)\}/);
+  assert.match(pageSource, /selectedWellNo === item\.wellNo/);
 });

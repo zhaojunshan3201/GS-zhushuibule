@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import {
   Activity,
   ChartNoAxesCombined,
+  ChevronDown,
   Download,
   Droplet,
   Droplets,
@@ -7295,6 +7296,7 @@ function WellHistoryPage({
   const [block, setBlock] = useState("");
   const [keyword, setKeyword] = useState("");
   const [archives, setArchives] = useState<WellHistoryArchiveSummary[]>([]);
+  const [collapsedUnits, setCollapsedUnits] = useState<Record<string, boolean>>({});
   const [detail, setDetail] = useState<WellHistoryArchiveDetail | null>(null);
   const [selectedWellNo, setSelectedWellNo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -7649,6 +7651,12 @@ function WellHistoryPage({
     });
   };
 
+  const archivesByUnit = useMemo(() => archives.reduce<Record<string, WellHistoryArchiveSummary[]>>((groups, item) => {
+    const unitName = item.unit || "未分配作业区";
+    (groups[unitName] ||= []).push(item);
+    return groups;
+  }, {}), [archives]);
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
       {confirmDialog}
@@ -7734,18 +7742,34 @@ function WellHistoryPage({
             {listLoading && <span className="text-xs text-gray-400">加载中...</span>}
           </div>
           <div className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1 custom-scrollbar">
-            {archives.map((item) => (
-              <div key={item.wellNo} className={cn("flex items-center justify-between gap-2 border px-3 py-2 transition-all", selectedWellNo === item.wellNo ? "border-cnpc-red bg-red-50/40" : "border-gray-200 bg-gray-50")}>
-                <button onClick={() => void openWell(item.wellNo)} className="min-w-0 flex-1 truncate text-left text-sm font-bold text-gray-900 [&>p]:hidden">
-                  {item.wellNo}
-                  <p className="mt-1 text-[11px] text-gray-400">更新：{formatTime(item.updatedAt)}</p>
-                </button>
+            {(Object.entries(archivesByUnit) as Array<[string, WellHistoryArchiveSummary[]]>).map(([unitName, unitArchives]) => (
+              <div key={unitName} className="space-y-1.5">
                 <button
-                  onClick={() => handleDeleteArchive(item)}
-                  className="shrink-0 text-xs font-bold text-red-600 hover:underline"
+                  type="button"
+                  onClick={() => setCollapsedUnits((current) => ({ ...current, [unitName]: !current[unitName] }))}
+                  className="flex w-full items-center justify-between border border-gray-200 bg-gray-100 px-3 py-2 text-left text-sm font-bold text-gray-800"
                 >
-                  <Trash2 className="mr-1 inline h-3.5 w-3.5" />{deletingWellNo === item.wellNo ? "删除中..." : "删除"}
+                  <span>作业区：{unitName}（{unitArchives.length}）</span>
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", collapsedUnits[unitName] && "-rotate-90")} />
                 </button>
+                {!collapsedUnits[unitName] && (
+                  <div className="space-y-1.5 pl-2">
+                    {unitArchives.map((item) => (
+                      <div key={item.wellNo} className={cn("flex items-center justify-between gap-2 border px-3 py-2 transition-all", selectedWellNo === item.wellNo ? "border-cnpc-red bg-red-50/40" : "border-gray-200 bg-gray-50")}>
+                        <button onClick={() => void openWell(item.wellNo)} className="min-w-0 flex-1 truncate text-left text-sm font-bold text-gray-900 [&>p]:hidden">
+                          {item.wellNo}
+                          <p className="mt-1 text-[11px] text-gray-400">更新：{formatTime(item.updatedAt)}</p>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteArchive(item)}
+                          className="shrink-0 text-xs font-bold text-red-600 hover:underline"
+                        >
+                          <Trash2 className="mr-1 inline h-3.5 w-3.5" />{deletingWellNo === item.wellNo ? "删除中..." : "删除"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {!archives.length && <div className="border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">暂无井史目录</div>}
