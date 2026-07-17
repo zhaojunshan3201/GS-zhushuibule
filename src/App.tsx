@@ -434,7 +434,7 @@ const UNIT_OPTIONS = [
 const FILTER_UNIT_OPTIONS = ["高采采油作业一区", "高采采油作业二区", "高采采油作业三区"];
 const getFilterBlockOptions = (unit: string) => getOilProductionBlocks(unit || undefined);
 const MANAGEMENT_UNIT = "采油管理部";
-const MANAGEMENT_PAGES: PageType[] = ["user-management"];
+const MANAGEMENT_PAGES: PageType[] = ["user-management", "settings"];
 
 function decodeBase64ToUint8Array(base64: string) {
   const binary = atob(base64);

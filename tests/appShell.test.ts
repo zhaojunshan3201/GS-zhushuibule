@@ -121,6 +121,12 @@ test("sidebar logo upload notifies the application shell without a page refresh"
   assert.match(appSource, /window\.removeEventListener\("sidebar-logo-updated", handleSidebarLogoUpdated\)/);
 });
 
+test("only logged-in oil management users can access management navigation", () => {
+  assert.match(appSource, /const MANAGEMENT_PAGES: PageType\[\] = \["user-management", "settings"\]/);
+  assert.match(appSource, /NAV_ITEMS\.filter\(\(item\) => !isManagementPage\(item\.id\) \|\| canManageSystem\)/);
+  assert.match(appSource, /if \(isManagementPage\(activePage\) && !canManageSystem\)/);
+});
+
 test("well history actions live in the sidebar and import completion reports overwritten files", () => {
   const sidebarMarker = appSource.indexOf("data-well-history-sidebar");
   const contentMarker = appSource.indexOf("data-well-history-content");
