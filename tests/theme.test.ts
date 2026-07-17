@@ -16,6 +16,7 @@ test("uses the emerald-gold palette for zonal table pagination links", () => {
   assert.match(css, /\.shell-app\[data-theme="emerald-gold"\] \.zonal-pagination-link\s*\{\s*color: #174b3a !important;/);
   assert.match(css, /\.shell-app\[data-theme="oil-blue"\] \.zonal-pagination-link\s*\{\s*color: var\(--theme-primary\) !important;/);
   assert.match(css, /\.shell-app\[data-theme="default"\] \.zonal-pagination-link\s*\{\s*color: var\(--theme-primary\) !important;/);
+  assert.match(css, /\.shell-app\[data-theme="enterprise-white"\] \.zonal-pagination-link\s*\{\s*color: var\(--theme-primary\) !important;/);
 });
 test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), false); assert.equal(isThemeKey("unknown"), false); });
 test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("industrial-dark"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });

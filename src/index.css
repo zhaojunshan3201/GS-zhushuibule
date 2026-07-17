@@ -446,6 +446,10 @@
     color: var(--theme-primary) !important;
   }
 
+  .shell-app[data-theme="enterprise-white"] .zonal-pagination-link {
+    color: var(--theme-primary) !important;
+  }
+
   .shell-app[data-theme="enterprise-white"] .shell-sidebar {
     border-right: 1px solid #edf0f4;
     background: #ffffff;
