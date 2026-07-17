@@ -2246,10 +2246,10 @@ function AbnormalWellsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
           <span>第{displayPage}页 共{totalPages}页 共{totalItems}条</span>
-          <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(1)}>首页</button>
-          <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
-          <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
-          <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(totalPages)}>尾页</button>
+          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(1)}>首页</button>
+          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
+          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
+          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(totalPages)}>尾页</button>
         </div>
       </div>
       <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">异常水井列表</h1>
@@ -3112,10 +3112,10 @@ function IndicatorCurvePage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
           <span>第{currentPage}页 共{totalPages}页 共{totalRows}条</span>
-          <button type="button" onClick={() => goToPage(1)} className="font-bold text-[#0000ee] hover:underline">首页</button>
-          <button type="button" onClick={() => goToPage(currentPage - 1)} className="font-bold text-[#0000ee] hover:underline">上一页</button>
-          <button type="button" onClick={() => goToPage(currentPage + 1)} className="font-bold text-[#0000ee] hover:underline">下一页</button>
-          <button type="button" onClick={() => goToPage(totalPages)} className="font-bold text-[#0000ee] hover:underline">尾页</button>
+          <button type="button" onClick={() => goToPage(1)} className="zonal-pagination-link font-bold hover:underline">首页</button>
+          <button type="button" onClick={() => goToPage(currentPage - 1)} className="zonal-pagination-link font-bold hover:underline">上一页</button>
+          <button type="button" onClick={() => goToPage(currentPage + 1)} className="zonal-pagination-link font-bold hover:underline">下一页</button>
+          <button type="button" onClick={() => goToPage(totalPages)} className="zonal-pagination-link font-bold hover:underline">尾页</button>
           <span>跳转</span>
           <input
             className="h-6 w-8 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none"
@@ -3338,7 +3338,7 @@ function WellFlushingPage() {
   const selectableCellClass = (baseClass: string, selected: boolean) => cn(baseClass, "group-hover:bg-red-50", selected && "bg-red-50");
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const displayPage = Math.min(currentPage, totalPages);
-  const pageButtonClass = "font-bold text-[#0000ee] hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
+  const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
 
   const loadRecords = async (page = currentPage, nextFilters = filters) => {
     setLoading(true);
@@ -4010,10 +4010,10 @@ function InjectionTechPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
           <span>第{currentPage}页 共{totalPages}页 共{totalRows}条</span>
-          <button type="button" onClick={() => goToPage(1)} className="font-bold text-[#0000ee] hover:underline">首页</button>
-          <button type="button" onClick={() => goToPage(currentPage - 1)} className="font-bold text-[#0000ee] hover:underline">上一页</button>
-          <button type="button" onClick={() => goToPage(currentPage + 1)} className="font-bold text-[#0000ee] hover:underline">下一页</button>
-          <button type="button" onClick={() => goToPage(totalPages)} className="font-bold text-[#0000ee] hover:underline">尾页</button>
+          <button type="button" onClick={() => goToPage(1)} className="zonal-pagination-link font-bold hover:underline">首页</button>
+          <button type="button" onClick={() => goToPage(currentPage - 1)} className="zonal-pagination-link font-bold hover:underline">上一页</button>
+          <button type="button" onClick={() => goToPage(currentPage + 1)} className="zonal-pagination-link font-bold hover:underline">下一页</button>
+          <button type="button" onClick={() => goToPage(totalPages)} className="zonal-pagination-link font-bold hover:underline">尾页</button>
           <span>跳转</span>
           <input
             className="h-5 w-8 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none"
@@ -4808,10 +4808,10 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
 
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
           <span>{`第 ${currentPage} 页 共 ${totalPages} 页 共 ${totalRows} 条`}</span>
-          <button type="button" onClick={() => goToPage(1)} className="font-bold text-[#0000ee] hover:underline">首页</button>
-          <button type="button" onClick={() => goToPage(currentPage - 1)} className="font-bold text-[#0000ee] hover:underline">上一页</button>
-          <button type="button" onClick={() => goToPage(currentPage + 1)} className="font-bold text-[#0000ee] hover:underline">下一页</button>
-          <button type="button" onClick={() => goToPage(totalPages)} className="font-bold text-[#0000ee] hover:underline">尾页</button>
+          <button type="button" onClick={() => goToPage(1)} className="zonal-pagination-link font-bold hover:underline">首页</button>
+          <button type="button" onClick={() => goToPage(currentPage - 1)} className="zonal-pagination-link font-bold hover:underline">上一页</button>
+          <button type="button" onClick={() => goToPage(currentPage + 1)} className="zonal-pagination-link font-bold hover:underline">下一页</button>
+          <button type="button" onClick={() => goToPage(totalPages)} className="zonal-pagination-link font-bold hover:underline">尾页</button>
           <label className="flex items-center gap-1">
             <span>跳转</span>
             <input
@@ -8060,10 +8060,10 @@ function DynamicAdjustmentPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
             <span>第{displayPage}页 共{totalPages}页 共{totalItems}条</span>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(1)}>首页</button>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
-            <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(totalPages)}>尾页</button>
+            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(1)}>首页</button>
+            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
+            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
+            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(totalPages)}>尾页</button>
             <span>跳转</span>
             <input className="h-6 w-9 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none" value={displayPage} readOnly />
             <span>页</span>
