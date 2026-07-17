@@ -7,6 +7,13 @@ test("declares the four selectable themes", () => {
   assert.deepEqual(THEME_OPTIONS.map((theme) => theme.key), ["default", "oil-blue", "enterprise-white", "emerald-gold"]);
   assert.deepEqual(THEME_OPTIONS.map((theme) => theme.label), ["当前默认主题", "中石油红", "极简企业白", "墨绿鎏金"]);
 });
+
+test("uses the emerald-gold palette for zonal table pagination links", () => {
+  const app = fs.readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  assert.match(app, /className="zonal-pagination-link font-bold hover:underline"/);
+  assert.match(css, /\.shell-app\[data-theme="emerald-gold"\] \.zonal-pagination-link\s*\{\s*color: #174b3a !important;/);
+});
 test("accepts only a declared theme key", () => { assert.equal(isThemeKey("industrial-dark"), false); assert.equal(isThemeKey("unknown"), false); });
 test("falls back to the default theme for missing or invalid storage", () => { assert.equal(getStoredTheme(null), DEFAULT_THEME); assert.equal(getStoredTheme("industrial-dark"), DEFAULT_THEME); assert.equal(getStoredTheme("emerald-gold"), "emerald-gold"); });
 

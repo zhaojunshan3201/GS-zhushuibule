@@ -381,6 +381,10 @@
     color: #0000ee;
   }
 
+  .zonal-pagination-link {
+    color: #0000ee;
+  }
+
   .cnpc-table th {
     border-color: var(--theme-table-border);
     background-color: var(--theme-table-head);
@@ -428,6 +432,10 @@
 
   :is([data-theme="oil-blue"], [data-theme="enterprise-white"], [data-theme="emerald-gold"]) .shell-link {
     color: var(--theme-primary);
+  }
+
+  .shell-app[data-theme="emerald-gold"] .zonal-pagination-link {
+    color: #174b3a !important;
   }
 
   .shell-app[data-theme="enterprise-white"] .shell-sidebar {

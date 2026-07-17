@@ -1381,16 +1381,16 @@ function ZonalTableShell({
           {showPagination && (
             <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
               <span>第{displayPage}页 共{totalPages}页 共{displayTotal}条</span>
-              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(1)}>
+              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(1)}>
                 首页
               </button>
-              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage - 1)}>
+              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage - 1)}>
                 上一页
               </button>
-              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(displayPage + 1)}>
+              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage + 1)}>
                 下一页
               </button>
-              <button type="button" className="font-bold text-[#0000ee] hover:underline" onClick={() => goToPage(totalPages)}>
+              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(totalPages)}>
                 尾页
               </button>
               <span>跳转</span>
