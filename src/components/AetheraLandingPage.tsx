@@ -1,9 +1,11 @@
-const navigationItems = [
-  { label: "系统首页", href: "/?page=home" },
-  { label: "动态分析", href: "/?page=dynamic-analysis" },
-  { label: "单井井史", href: "/?page=well-history" },
-  { label: "含水化验", href: "/?page=water-cut" },
-];
+import { ROUTE_CONFIG_BY_ID, type PageType } from "../constants";
+
+const navigationPageIds: PageType[] = ["home", "dynamic-analysis", "well-history", "water-cut"];
+const navigationItems = navigationPageIds.map((page) => ({
+  page,
+  label: ROUTE_CONFIG_BY_ID[page].label,
+  href: `/?page=${page}`,
+}));
 
 export default function AetheraLandingPage() {
   return (
@@ -11,7 +13,7 @@ export default function AetheraLandingPage() {
       <img src="/aethera/oilfield-river.png" alt="油田河流航拍图" className="absolute inset-0 h-full w-full object-cover object-center animate-aethera-image-enter" />
       <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-center px-8 py-6">
         <div className="hidden items-center gap-8 text-sm sm:flex">
-          {navigationItems.map((item) => <a key={item.label} href={item.href} className={item.label === "系统首页" ? "text-black transition-colors hover:text-[#1a5276]" : "text-[#6F6F6F] transition-colors hover:text-[#1a5276]"}>{item.label}</a>)}
+          {navigationItems.map((item) => <a key={item.page} href={item.href} className={item.page === "home" ? "text-black transition-colors hover:text-[#1a5276]" : "text-[#6F6F6F] transition-colors hover:text-[#1a5276]"}>{item.label}</a>)}
         </div>
       </nav>
       <main className="relative z-10 mx-auto max-w-7xl px-6 pb-40 pt-[calc(8rem-75px)]">

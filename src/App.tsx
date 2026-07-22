@@ -81,6 +81,7 @@ import {
   WELL_HISTORY_BATCH_MAX_FILES,
 } from "./shared/wellHistoryImport";
 import { groupWellHistoryArchivesByUnit } from "./shared/wellHistoryDirectory";
+import { getPageFromSearch } from "./shared/systemPage";
 
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -8360,7 +8361,7 @@ function LoginDialog({ theme, onLogin, onCancel }: { theme: ThemeKey; onLogin: (
 }
 
 export default function App() {
-  const [activePage, setActivePage] = useState<PageType>("home");
+  const [activePage, setActivePage] = useState<PageType>(() => getPageFromSearch(window.location.search));
   const [theme, setTheme] = useState<ThemeKey>(getBrowserTheme);
   const [sidebarLogoState, setSidebarLogoState] = useState({ url: "", version: 0 });
   const sidebarLogo = sidebarLogoState.url;
