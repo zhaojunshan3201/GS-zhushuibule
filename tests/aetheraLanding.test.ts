@@ -22,7 +22,8 @@ test("renders Aethera before the business application", () => {
   let rendersAetheraInsteadOfApp = false;
 
   const isComponent = (node: ts.Expression, name: string) =>
-    (ts.isJsxSelfClosingElement(node) || ts.isJsxElement(node)) && node.openingElement.tagName.getText(sourceFile) === name;
+    (ts.isJsxSelfClosingElement(node) && node.tagName.getText(sourceFile) === name) ||
+    (ts.isJsxElement(node) && node.openingElement.tagName.getText(sourceFile) === name);
 
   const visit = (node: ts.Node) => {
     if (ts.isConditionalExpression(node) &&
