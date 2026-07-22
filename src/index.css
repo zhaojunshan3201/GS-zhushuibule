@@ -1,4 +1,6 @@
+@import "./styles/fonts.css";
 @import "tailwindcss";
+@import "./styles/theme.css";
 
 @theme {
   --color-cnpc-red: #a31b1b;

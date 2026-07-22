@@ -1,0 +1,49 @@
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes aethera-image-enter {
+  0% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+
+  6% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.14) translate(-3%, -2%);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.08) translate(3%, 1.5%);
+  }
+}
+
+.animate-fade-rise {
+  animation: fade-rise 0.8s ease-out both;
+}
+
+.animate-fade-rise-delay {
+  animation: fade-rise 0.8s ease-out 0.2s both;
+}
+
+.animate-fade-rise-delay-2 {
+  animation: fade-rise 0.8s ease-out 0.4s both;
+}
+
+.animate-aethera-image-enter {
+  animation: aethera-image-enter 18s ease-in-out infinite alternate;
+}
