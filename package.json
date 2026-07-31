@@ -47,6 +47,7 @@
     "autoprefixer": "^10.4.21",
     "cross-env": "^10.1.0",
     "prisma": "^5.22.0",
+    "react-test-renderer": "19.2.5",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

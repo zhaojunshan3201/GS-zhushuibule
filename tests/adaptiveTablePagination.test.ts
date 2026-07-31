@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { createElement, StrictMode } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { useAdaptiveTablePagination } from "../src/shared/adaptiveTablePagination";
 
 const hookPath = new URL("../src/shared/adaptiveTablePagination.ts", import.meta.url);
 const source = existsSync(hookPath) ? readFileSync(hookPath, "utf8") : "";
@@ -65,4 +68,113 @@ test("uses deterministic atomic initial state and only synchronizes refs after c
     /useEffect\(\(\) => \{\s*currentPageRef\.current = pagination\.currentPage;\s*pageSizeRef\.current = pagination\.pageSize;\s*\}, \[pagination\]\)/,
   );
   assert.equal(source.match(/(?:currentPageRef|pageSizeRef)\.current\s*=/g)?.length, 2);
+});
+
+test("measures, coalesces resize frames, and cleans up its real lifecycle", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const actEnvironment = globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT?: boolean;
+  };
+  const originalActEnvironment = Object.getOwnPropertyDescriptor(
+    actEnvironment,
+    "IS_REACT_ACT_ENVIRONMENT",
+  );
+  let viewportHeight = 900;
+  let nextFrameId = 1;
+  const listeners = new Set<EventListenerOrEventListenerObject>();
+  const addedHandlers: Array<EventListenerOrEventListenerObject> = [];
+  const removedHandlers: Array<EventListenerOrEventListenerObject> = [];
+  const frames = new Map<number, FrameRequestCallback>();
+  const cancelledFrames: number[] = [];
+  const fakeWindow = {
+    get innerHeight() {
+      return viewportHeight;
+    },
+    addEventListener(type: string, handler: EventListenerOrEventListenerObject) {
+      if (type !== "resize") return;
+      listeners.add(handler);
+      addedHandlers.push(handler);
+    },
+    removeEventListener(type: string, handler: EventListenerOrEventListenerObject) {
+      if (type !== "resize") return;
+      listeners.delete(handler);
+      removedHandlers.push(handler);
+    },
+    requestAnimationFrame(callback: FrameRequestCallback) {
+      const frameId = nextFrameId++;
+      frames.set(frameId, callback);
+      return frameId;
+    },
+    cancelAnimationFrame(frameId: number) {
+      cancelledFrames.push(frameId);
+      frames.delete(frameId);
+    },
+  };
+
+  let pagination: ReturnType<typeof useAdaptiveTablePagination> | undefined;
+  let renderer: ReactTestRenderer | undefined;
+  const Harness = () => {
+    pagination = useAdaptiveTablePagination({ initialPage: 19 });
+    return createElement("div", { ref: pagination.tablePageRef });
+  };
+  const runFrame = (frameId: number) => {
+    const callback = frames.get(frameId);
+    assert.ok(callback);
+    frames.delete(frameId);
+    callback(0);
+  };
+
+  try {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+    act(() => {
+      renderer = create(createElement(StrictMode, null, createElement(Harness)), {
+        createNodeMock: () => ({
+          getBoundingClientRect: () => ({ top: 80 }),
+        }),
+      });
+    });
+
+    assert.equal(pagination?.pageSize, 15);
+    assert.equal(pagination?.currentPage, 13);
+    assert.equal(listeners.size, 1);
+
+    const activeHandler = [...listeners][0] as EventListener;
+    viewportHeight = 1080;
+    act(() => {
+      activeHandler(new Event("resize"));
+      activeHandler(new Event("resize"));
+    });
+    assert.equal(frames.size, 1);
+
+    const resizeFrame = [...frames.keys()][0];
+    act(() => runFrame(resizeFrame));
+    assert.equal(pagination?.pageSize, 19);
+    assert.equal(pagination?.currentPage, 10);
+
+    act(() => activeHandler(new Event("resize")));
+    const pendingFrame = [...frames.keys()][0];
+    assert.ok(pendingFrame);
+    act(() => renderer?.unmount());
+
+    assert.equal(removedHandlers.at(-1), activeHandler);
+    assert.deepEqual(cancelledFrames, [pendingFrame]);
+    assert.equal(listeners.size, 0);
+    assert.equal(frames.size, 0);
+    assert.ok(addedHandlers.length >= 2);
+    assert.equal(removedHandlers.length, addedHandlers.length);
+  } finally {
+    if (renderer) act(() => renderer?.unmount());
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+    if (originalActEnvironment) {
+      Object.defineProperty(
+        actEnvironment,
+        "IS_REACT_ACT_ENVIRONMENT",
+        originalActEnvironment,
+      );
+    } else {
+      Reflect.deleteProperty(actEnvironment, "IS_REACT_ACT_ENVIRONMENT");
+    }
+  }
 });
