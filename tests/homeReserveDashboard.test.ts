@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import ts from "typescript";
 import {
   formatChartTooltipValue,
   HomeReserveAnalysisDashboard,
@@ -15,18 +16,98 @@ import {
 const componentUrl = new URL("../src/components/HomeReserveAnalysisDashboard.tsx", import.meta.url);
 const appUrl = new URL("../src/App.tsx", import.meta.url);
 
-test("home page places the reserve dashboard above the unchanged overview table", async () => {
-  const source = await readFile(appUrl, "utf8");
-  const homePage = source.slice(source.indexOf("function HomePage()"), source.indexOf("function PlaceholderPage"));
+function descendants(node: ts.Node) {
+  const nodes: ts.Node[] = [];
+  const visit = (child: ts.Node) => {
+    nodes.push(child);
+    child.forEachChild(visit);
+  };
+  node.forEachChild(visit);
+  return nodes;
+}
 
-  assert.match(source, /import \{ HomeReserveAnalysisDashboard \} from "\.\/components\/HomeReserveAnalysisDashboard";/);
-  assert.ok(homePage.indexOf("<HomeReserveAnalysisDashboard rows={rows} />") < homePage.indexOf("储量概览列表"));
-  assert.match(homePage, /<section[^>]*aria-labelledby="reserve-table-title"[^>]*>/);
-  assert.match(homePage, /<h2 id="reserve-table-title"/);
-  assert.match(homePage, /"\/api\/home-reserve-overview"/);
-  for (const header of ["单位", "区块", "含油面积", "动用储量", "可采储量", "标定采收率", "上年度产油"]) {
-    assert.match(homePage, new RegExp(`"${header}"`));
-  }
+function getJsxAttribute(opening: ts.JsxOpeningLikeElement, name: string) {
+  return opening.attributes.properties.find(
+    (property): property is ts.JsxAttribute => ts.isJsxAttribute(property) && property.name.getText() === name,
+  );
+}
+
+function inspectHomePageIntegration(source: string) {
+  const ast = ts.createSourceFile("App.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const homePage = ast.statements.find(
+    (statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === "HomePage",
+  );
+  assert.ok(homePage?.body, "HomePage function must exist");
+  const homeNodes = descendants(homePage);
+
+  const hasDashboardImport = ast.statements.some((statement) =>
+    ts.isImportDeclaration(statement) &&
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === "./components/HomeReserveAnalysisDashboard" &&
+    statement.importClause?.namedBindings &&
+    ts.isNamedImports(statement.importClause.namedBindings) &&
+    statement.importClause.namedBindings.elements.some((element) => element.name.text === "HomeReserveAnalysisDashboard"),
+  );
+  const dashboard = homeNodes.find(
+    (node): node is ts.JsxSelfClosingElement =>
+      ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === "HomeReserveAnalysisDashboard",
+  );
+  const dashboardRows = dashboard && getJsxAttribute(dashboard, "rows");
+  const section = homeNodes.find(
+    (node): node is ts.JsxElement => ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === "section",
+  );
+  const heading = homeNodes.find(
+    (node): node is ts.JsxElement => ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === "h2",
+  );
+  const sectionLabel = section && getJsxAttribute(section.openingElement, "aria-labelledby");
+  const headingId = heading && getJsxAttribute(heading.openingElement, "id");
+  const tableHead = homeNodes.find(
+    (node): node is ts.JsxElement => ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === "thead",
+  );
+  const headers = tableHead && descendants(tableHead).find(
+    (node): node is ts.ArrayLiteralExpression =>
+      ts.isArrayLiteralExpression(node) && node.elements.length === 7 && node.elements.every(ts.isStringLiteral),
+  );
+
+  return {
+    dashboard,
+    dashboardRows,
+    hasDashboardImport,
+    hasApiPath: homeNodes.some((node) => ts.isStringLiteral(node) && node.text === "/api/home-reserve-overview"),
+    heading,
+    headingId,
+    headingText: heading?.children.filter(ts.isJsxText).map((node) => node.text.trim()).join(""),
+    headers: headers?.elements.map((element) => (element as ts.StringLiteral).text),
+    sectionLabel,
+  };
+}
+
+test("home page integration inspection rejects a missing dashboard node", async () => {
+  const source = await readFile(appUrl, "utf8");
+  const contract = inspectHomePageIntegration(source);
+  assert.ok(contract.dashboard);
+  const withoutDashboard = `${source.slice(0, contract.dashboard.getStart())}${source.slice(contract.dashboard.getEnd())}`;
+
+  assert.equal(inspectHomePageIntegration(withoutDashboard).dashboard, undefined);
+});
+
+test("home page places the reserve dashboard above the unchanged overview table", async () => {
+  const contract = inspectHomePageIntegration(await readFile(appUrl, "utf8"));
+
+  assert.equal(contract.hasDashboardImport, true);
+  assert.ok(contract.dashboard, "HomePage must render HomeReserveAnalysisDashboard");
+  assert.ok(contract.heading, "HomePage must render the reserve table heading");
+  assert.ok(contract.dashboard.getStart() < contract.heading.getStart(), "dashboard must precede the reserve table heading");
+  assert.ok(contract.dashboardRows?.initializer && ts.isJsxExpression(contract.dashboardRows.initializer));
+  assert.equal(contract.dashboardRows.initializer.expression?.getText(), "rows");
+  assert.ok(contract.sectionLabel?.initializer && ts.isStringLiteral(contract.sectionLabel.initializer));
+  assert.equal(contract.sectionLabel.initializer.text, "reserve-table-title");
+  assert.ok(contract.headingId?.initializer && ts.isStringLiteral(contract.headingId.initializer));
+  assert.equal(contract.headingId.initializer.text, "reserve-table-title");
+  assert.equal(contract.headingText, "储量概览列表");
+  assert.equal(contract.hasApiPath, true);
+  assert.deepEqual(contract.headers, ["单位", "区块", "含油面积", "动用储量", "可采储量", "标定采收率", "上年度产油"]);
 });
 
 test("home reserve analysis dashboard exposes the requested analytics content", async () => {
