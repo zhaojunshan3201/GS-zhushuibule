@@ -14,6 +14,9 @@ const mapAdaptiveTablePaginationState = (
 const getAdaptivePaginationView = (
   hookModule as Record<string, unknown>
 ).getAdaptivePaginationView;
+const buildPinnedAdaptivePage = (
+  hookModule as Record<string, unknown>
+).buildPinnedAdaptivePage;
 
 test("exports the shared adaptive table pagination hook and its options", () => {
   assert.match(source, /export type AdaptiveTablePaginationOptions/);
@@ -78,6 +81,23 @@ test("keeps pending and rejected page controls on one committed boundary", () =>
 
   assert.equal(getView(1, 73, 15).canGoPrevious, false);
   assert.equal(getView(5, 73, 15).canGoNext, false);
+});
+
+test("builds a pinned page from the records and capacity current when create completes", () => {
+  assert.equal(typeof buildPinnedAdaptivePage, "function");
+  const buildPage = buildPinnedAdaptivePage as <T extends { id: string }>(
+    pinnedRecord: T,
+    currentRecords: T[],
+    pageSize: number,
+  ) => T[];
+  const pinnedRecord = { id: "created" };
+  const recordsAfterResize = Array.from({ length: 25 }, (_, index) => ({ id: `latest-${index + 1}` }));
+
+  const page = buildPage(pinnedRecord, recordsAfterResize, 25);
+
+  assert.equal(page.length, 25);
+  assert.equal(page[0], pinnedRecord);
+  assert.deepEqual(page.slice(1).map((record) => record.id), recordsAfterResize.slice(0, 24).map((record) => record.id));
 });
 
 test("coalesces resize measurement and cleans up browser resources", () => {

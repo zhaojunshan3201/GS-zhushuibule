@@ -60,7 +60,7 @@ import {
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
 import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
-import { getAdaptivePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
+import { buildPinnedAdaptivePage, getAdaptivePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -4033,6 +4033,7 @@ function InjectionTechPage() {
         },
       });
       if (requestId !== loadRequestIdRef.current) return;
+      recordsRef.current = data.rows;
       setRecords(data.rows);
       setTotalRows(data.total);
       setCurrentPage(data.page);
@@ -4089,7 +4090,13 @@ function InjectionTechPage() {
       setCurrentPage(1);
       setJumpPage("1");
       setPinnedRecord(createdRecord);
-      setRecords((current) => [createdRecord, ...current.filter((row) => row.id !== createdRecord.id)].slice(0, pageSize));
+      const nextRecords = buildPinnedAdaptivePage(
+        createdRecord,
+        recordsRef.current,
+        pageSizeRef.current,
+      );
+      recordsRef.current = nextRecords;
+      setRecords(nextRecords);
       setTotalRows((current) => current + 1);
     } catch (err: any) {
       setError(err?.response?.data?.error || "注水工艺记录新增失败");

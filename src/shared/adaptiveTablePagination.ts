@@ -45,6 +45,17 @@ export function getAdaptivePaginationView(
   };
 }
 
+export function buildPinnedAdaptivePage<T extends { id: string }>(
+  pinnedRecord: T,
+  currentRecords: T[],
+  pageSize: number,
+) {
+  return [
+    pinnedRecord,
+    ...currentRecords.filter((record) => record.id !== pinnedRecord.id),
+  ].slice(0, pageSize);
+}
+
 export function useAdaptiveTablePagination({
   initialPage = 1,
   fallbackTableTop = 80,

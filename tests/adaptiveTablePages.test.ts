@@ -276,6 +276,11 @@ function assertAdaptiveOperationsPageContract(pageSource: string, pageKind: "inj
     assert.match(pageSource, /\.slice\(0,\s*pageSize\)/, "the pinned-first-page view respects adaptive capacity");
     assert.match(pageSource, /\(displayPage\s*-\s*1\)\s*\*\s*pageSize\s*\+\s*index\s*\+\s*1/, "row numbering uses adaptive capacity");
     assert.match(pageSource, /setPinnedRecord\(null\)/, "pending requests clear the pinned row from the old view");
+    assert.match(
+      pageSource,
+      /buildPinnedAdaptivePage\(\s*createdRecord,\s*recordsRef\.current,\s*pageSizeRef\.current,?\s*\)/,
+      "create completion pins against the records and capacity current after any resize",
+    );
   } else {
     assert.match(pageSource, /\(displayPage\s*-\s*1\)\s*\*\s*pageSize\s*\+\s*index\s*\+\s*1/, "row numbering uses adaptive capacity");
     assert.match(pageSource, /pageSize:\s*50/, "the independent water-cut trend query keeps its larger history limit");
