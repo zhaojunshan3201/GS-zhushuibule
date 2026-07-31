@@ -1,0 +1,221 @@
+import { useMemo, type ReactNode } from "react";
+import { Activity, Database, Gauge, TrendingUp, type LucideIcon } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  buildHomeReserveDashboardData,
+  type HomeReserveOverviewRow,
+} from "../shared/homeReserveOverview";
+
+type HomeReserveAnalysisDashboardProps = {
+  rows: HomeReserveOverviewRow[];
+};
+
+type MetricCardProps = {
+  key?: string;
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  unit: string;
+  accent: string;
+};
+
+const CHART_COLORS = {
+  producing: "#0f766e",
+  recoverable: "#d99545",
+  oil: "#486581",
+};
+
+const numberFormatter = new Intl.NumberFormat("zh-CN", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+function formatMetric(value: number) {
+  return numberFormatter.format(value);
+}
+
+function MetricCard({ icon: Icon, label, value, unit, accent }: MetricCardProps) {
+  return (
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="truncate text-sm font-medium text-slate-500">{label}</p>
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          style={{ backgroundColor: `${accent}14`, color: accent }}
+          aria-hidden="true"
+        >
+          <Icon size={18} strokeWidth={1.8} />
+        </span>
+      </div>
+      <p className="mt-5 flex min-w-0 items-baseline gap-2">
+        <span className="truncate text-3xl font-semibold tracking-tight text-slate-900">
+          {formatMetric(value)}
+        </span>
+        <span className="shrink-0 text-xs font-medium text-slate-400">{unit}</span>
+      </p>
+    </article>
+  );
+}
+
+function ChartPanel({ title, description, ariaLabel, children }: {
+  title: string;
+  description: string;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <article
+      className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-6"
+      aria-label={ariaLabel}
+    >
+      <div className="mb-5">
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      </div>
+      {children}
+    </article>
+  );
+}
+
+export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashboardProps) {
+  const dashboard = useMemo(() => buildHomeReserveDashboardData(rows), [rows]);
+
+  if (rows.length === 0) return null;
+
+  const metrics = [
+    { label: "动用储量", value: dashboard.total.producingReserve, unit: "万吨", icon: Database, accent: CHART_COLORS.producing },
+    { label: "可采储量", value: dashboard.total.recoverableReserve, unit: "万吨", icon: TrendingUp, accent: CHART_COLORS.recoverable },
+    { label: "标定采收率", value: dashboard.total.recoveryRate, unit: "%", icon: Gauge, accent: CHART_COLORS.oil },
+    { label: "上年度产油", value: dashboard.total.lastYearOil, unit: "万吨/年", icon: Activity, accent: "#64748b" },
+  ];
+
+  return (
+    <section
+      className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6 lg:p-8"
+      aria-labelledby="home-reserve-dashboard-title"
+    >
+      <header className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-[0.2em] text-teal-700">RESERVE ANALYTICS</p>
+          <h2 id="home-reserve-dashboard-title" className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+            储量分析看板
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">区块储量、采收能力与年度产油综合分析</p>
+        </div>
+        <span className="w-fit shrink-0 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-800">
+          数据口径：年度汇总
+        </span>
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
+      </div>
+
+      <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
+        <ChartPanel
+          title="区块储量与产油表现"
+          description="储量使用左轴，年度产油使用右轴"
+          ariaLabel="各区块动用储量、可采储量与上年度产油组合图"
+        >
+          <div className="h-[360px] min-w-0" role="img" aria-label="六个区块储量及年度产油数据对比">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={dashboard.blocks} margin={{ top: 8, right: 12, bottom: 42, left: 0 }}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="block"
+                  interval={0}
+                  angle={-24}
+                  textAnchor="end"
+                  height={68}
+                  tick={{ fill: "#64748b", fontSize: 12 }}
+                />
+                <YAxis yAxisId="reserve" width={46} tick={{ fill: "#64748b", fontSize: 12 }} unit=" 万吨" />
+                <YAxis yAxisId="oil" orientation="right" width={60} tick={{ fill: "#64748b", fontSize: 12 }} unit=" 万吨/年" />
+                <Tooltip
+                  cursor={{ fill: "#f1f5f9" }}
+                  formatter={(value, name) => [
+                    `${formatMetric(Number(value))}${name === "上年度产油" ? " 万吨/年" : " 万吨"}`,
+                    name,
+                  ]}
+                  contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
+                />
+                <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 12 }} />
+                <Bar yAxisId="reserve" dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="reserve" dataKey="recoverableReserve" name="可采储量" fill={CHART_COLORS.recoverable} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="oil" dataKey="lastYearOil" name="上年度产油" stroke={CHART_COLORS.oil} strokeWidth={2.5} dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartPanel>
+
+        <ChartPanel
+          title="区块动用储量排名"
+          description="按动用储量由高到低排列"
+          ariaLabel="区块动用储量排名水平条形图"
+        >
+          <div className="h-[300px] min-w-0" role="img" aria-label="区块动用储量排名及总体贡献占比">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dashboard.ranking} layout="vertical" margin={{ top: 0, right: 18, bottom: 8, left: 10 }}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={{ fill: "#64748b", fontSize: 12 }} unit=" 万吨" />
+                <YAxis type="category" dataKey="block" width={84} tick={{ fill: "#475569", fontSize: 12 }} />
+                <Tooltip
+                  cursor={{ fill: "#f1f5f9" }}
+                  formatter={(value, _name, item) => [
+                    `${formatMetric(Number(value))} 万吨 · 占总体 ${formatMetric(Number(item.payload?.contributionRate ?? 0))}%`,
+                    "动用储量",
+                  ]}
+                  contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
+                />
+                <Bar dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[0, 5, 5, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <ol className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs sm:grid-cols-3 xl:grid-cols-2">
+            {dashboard.ranking.map((row, index) => (
+              <li key={`${row.unit}-${row.block}`} className="flex min-w-0 items-center justify-between gap-2 text-slate-600">
+                <span className="truncate"><b className="mr-1 text-slate-400">{index + 1}</b>{row.block}</span>
+                <span className="shrink-0 font-medium text-slate-800">{formatMetric(row.contributionRate)}%</span>
+              </li>
+            ))}
+          </ol>
+        </ChartPanel>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2" aria-label="采一与采二单位储量对比">
+        {dashboard.units.map((unit) => (
+          <article key={unit.unit} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold text-slate-900">{unit.unit}</h3>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                总体贡献 {formatMetric(unit.contributionRate)}%
+              </span>
+            </div>
+            <dl className="mt-5 grid grid-cols-3 gap-3">
+              <div><dt className="text-xs text-slate-500">动用储量</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatMetric(unit.producingReserve)} <small className="font-normal text-slate-400">万吨</small></dd></div>
+              <div><dt className="text-xs text-slate-500">可采储量</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatMetric(unit.recoverableReserve)} <small className="font-normal text-slate-400">万吨</small></dd></div>
+              <div><dt className="text-xs text-slate-500">采收率</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatMetric(unit.recoveryRate)}%</dd></div>
+            </dl>
+            <div className="mt-5" aria-label={`${unit.unit}总体贡献率 ${formatMetric(unit.contributionRate)}%`}>
+              <div className="mb-2 flex justify-between text-xs text-slate-500"><span>总体贡献</span><span>{formatMetric(unit.contributionRate)}%</span></div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-teal-700" style={{ width: `${Math.min(100, Math.max(0, unit.contributionRate))}%` }} />
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}

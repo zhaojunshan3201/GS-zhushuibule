@@ -74,3 +74,12 @@ test("home reserve dashboard data derives blocks, ranking, totals, and unit cont
   assert.equal(dashboard.ranking[0].contributionRate, 27.92);
   assert.deepEqual(dashboard.units.map((row) => row.contributionRate), [44.72, 55.28]);
 });
+
+test("home reserve dashboard data keeps empty input totals and contribution rates finite", () => {
+  const dashboard = buildHomeReserveDashboardData([]);
+
+  assert.equal(dashboard.total.producingReserve, 0);
+  assert.equal(dashboard.total.recoveryRate, 0);
+  assert.deepEqual(dashboard.ranking, []);
+  assert.ok(dashboard.units.every((row) => Number.isFinite(row.contributionRate)));
+});
