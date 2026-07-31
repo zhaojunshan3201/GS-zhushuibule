@@ -79,7 +79,7 @@ test("measures, coalesces resize frames, and cleans up its real lifecycle", () =
     actEnvironment,
     "IS_REACT_ACT_ENVIRONMENT",
   );
-  let viewportHeight = 900;
+  let viewportHeight = 650;
   let nextFrameId = 1;
   const listeners = new Set<EventListenerOrEventListenerObject>();
   const addedHandlers: Array<EventListenerOrEventListenerObject> = [];
@@ -112,9 +112,11 @@ test("measures, coalesces resize frames, and cleans up its real lifecycle", () =
   };
 
   let pagination: ReturnType<typeof useAdaptiveTablePagination> | undefined;
+  const renderHistory: Array<ReturnType<typeof useAdaptiveTablePagination>> = [];
   let renderer: ReactTestRenderer | undefined;
   const Harness = () => {
     pagination = useAdaptiveTablePagination({ initialPage: 19 });
+    renderHistory.push(pagination);
     return createElement("div", { ref: pagination.tablePageRef });
   };
   const runFrame = (frameId: number) => {
@@ -135,22 +137,23 @@ test("measures, coalesces resize frames, and cleans up its real lifecycle", () =
       });
     });
 
-    assert.equal(pagination?.pageSize, 15);
-    assert.equal(pagination?.currentPage, 13);
+    assert.equal(renderHistory[0]?.isMeasured, false);
+    assert.equal(pagination?.isMeasured, true);
+    assert.equal(pagination?.pageSize, 10);
+    assert.equal(pagination?.currentPage, 19);
     assert.equal(listeners.size, 1);
 
     const activeHandler = [...listeners][0] as EventListener;
-    viewportHeight = 1080;
+    viewportHeight = 900;
     act(() => {
+      pagination?.setCurrentPage(2);
       activeHandler(new Event("resize"));
       activeHandler(new Event("resize"));
+      assert.equal(frames.size, 1);
+      runFrame([...frames.keys()][0]);
     });
-    assert.equal(frames.size, 1);
-
-    const resizeFrame = [...frames.keys()][0];
-    act(() => runFrame(resizeFrame));
-    assert.equal(pagination?.pageSize, 19);
-    assert.equal(pagination?.currentPage, 10);
+    assert.equal(pagination?.pageSize, 15);
+    assert.equal(pagination?.currentPage, 1);
 
     act(() => activeHandler(new Event("resize")));
     const pendingFrame = [...frames.keys()][0];

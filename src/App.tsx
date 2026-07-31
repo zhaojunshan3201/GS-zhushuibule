@@ -1442,9 +1442,10 @@ function ConcentricTestHistoryPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const [records, setRecords] = useState<ConcentricTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
-  const filtersRef = useRef(filters);
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<ConcentricTestForm>(() => createEmptyConcentricTestForm());
   const [showForm, setShowForm] = useState(false);
@@ -1453,13 +1454,16 @@ function ConcentricTestHistoryPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  filtersRef.current = filters;
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
 
   const loadRecords = useCallback(async (
     page = currentPageRef.current,
-    nextFilters = filtersRef.current,
+    nextFilters = appliedFiltersRef.current,
     requestedPageSize = pageSizeRef.current,
   ) => {
+    setCurrentPage(page);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -1477,8 +1481,9 @@ function ConcentricTestHistoryPage() {
   }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
-  }, [loadRecords, pageSize]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateForm = (key: keyof ConcentricTestForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1523,7 +1528,11 @@ function ConcentricTestHistoryPage() {
       try {
         await axios.delete(`/api/concentric-test-records/${record.id}`);
         setSelectedId(null);
-        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
         await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "同心测调记录删除失败");
@@ -1537,7 +1546,7 @@ function ConcentricTestHistoryPage() {
       <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>日期</span><input type="date" className="h-6 border px-1" value={filters.fromDate} onChange={(event) => setFilters({ ...filters, fromDate: event.target.value })} />
       <span>至</span><input type="date" className="h-6 border px-1" value={filters.toDate} onChange={(event) => setFilters({ ...filters, toDate: event.target.value })} />
-      <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
+      <button className={toolButtonClass} onClick={() => { appliedFiltersRef.current = filters; void loadRecords(1, filters); }}>确定</button>
       <button className={toolButtonClass} onClick={openCreateForm}>新增</button>
       <button className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`} disabled={!selectedId} onClick={handleDelete}>删除</button>
       {error && <span className="text-red-600">{error}</span>}
@@ -1704,9 +1713,10 @@ function SmartTestHistoryPage() {
   const layers = ["1层", "2层", "3层", "4层", "5层"];
   const [records, setRecords] = useState<SmartTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
-  const filtersRef = useRef(filters);
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SmartTestForm>(() => createEmptySmartTestForm());
   const [showForm, setShowForm] = useState(false);
@@ -1715,13 +1725,16 @@ function SmartTestHistoryPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  filtersRef.current = filters;
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
 
   const loadRecords = useCallback(async (
     page = currentPageRef.current,
-    nextFilters = filtersRef.current,
+    nextFilters = appliedFiltersRef.current,
     requestedPageSize = pageSizeRef.current,
   ) => {
+    setCurrentPage(page);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -1739,8 +1752,9 @@ function SmartTestHistoryPage() {
   }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
-  }, [loadRecords, pageSize]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateForm = (key: keyof SmartTestForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1789,7 +1803,12 @@ function SmartTestHistoryPage() {
       try {
         await axios.delete(`/api/smart-test-records/${record.id}`);
         setSelectedId(null);
-        await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
+        await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "智能测调记录删除失败");
       }
@@ -1802,7 +1821,7 @@ function SmartTestHistoryPage() {
       <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>日期</span><input type="date" className="h-6 border px-1" value={filters.fromDate} onChange={(event) => setFilters({ ...filters, fromDate: event.target.value })} />
       <span>至</span><input type="date" className="h-6 border px-1" value={filters.toDate} onChange={(event) => setFilters({ ...filters, toDate: event.target.value })} />
-      <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
+      <button className={toolButtonClass} onClick={() => { appliedFiltersRef.current = filters; void loadRecords(1, filters); }}>确定</button>
       <button className={toolButtonClass} onClick={openCreateForm}>新增</button>
       <button className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`} disabled={!selectedId} onClick={handleDelete}>删除</button>
       {error && <span className="text-red-600">{error}</span>}
@@ -1942,9 +1961,10 @@ function SingleWellInjectionEvaluationPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const [records, setRecords] = useState<SingleWellInjectionEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
-  const filtersRef = useRef(filters);
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SingleWellInjectionEvaluationForm>(() => createEmptySingleWellInjectionEvaluationForm());
   const [showForm, setShowForm] = useState(false);
@@ -1953,13 +1973,16 @@ function SingleWellInjectionEvaluationPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  filtersRef.current = filters;
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
 
   const loadRecords = useCallback(async (
     page = currentPageRef.current,
-    nextFilters = filtersRef.current,
+    nextFilters = appliedFiltersRef.current,
     requestedPageSize = pageSizeRef.current,
   ) => {
+    setCurrentPage(page);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -1977,8 +2000,9 @@ function SingleWellInjectionEvaluationPage() {
   }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
-  }, [loadRecords, pageSize]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateForm = (key: keyof SingleWellInjectionEvaluationForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -2023,7 +2047,12 @@ function SingleWellInjectionEvaluationPage() {
       try {
         await axios.delete(`/api/single-well-injection-evaluations/${record.id}`);
         setSelectedId(null);
-        await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
+        await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "单井注入评价删除失败");
       }
@@ -2035,7 +2064,7 @@ function SingleWellInjectionEvaluationPage() {
       <span>作业区</span><select className="h-6 w-36 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value, block: "" })}><option value="">请选择</option>{FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>工艺</span><input className="h-6 w-24 border px-1" value={filters.process} onChange={(event) => setFilters({ ...filters, process: event.target.value })} />
-      <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
+      <button className={toolButtonClass} onClick={() => { appliedFiltersRef.current = filters; void loadRecords(1, filters); }}>确定</button>
       <button className={toolButtonClass} onClick={openCreateForm}>新增</button>
       <button className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`} disabled={!selectedId} onClick={handleDelete}>删除</button>
       {error && <span className="text-red-600">{error}</span>}
@@ -2438,9 +2467,10 @@ function SingleWellSealEvaluationPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const [records, setRecords] = useState<SingleWellSealEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
-  const filtersRef = useRef(filters);
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SingleWellSealEvaluationForm>(() => createEmptySingleWellSealEvaluationForm());
   const [showForm, setShowForm] = useState(false);
@@ -2449,13 +2479,16 @@ function SingleWellSealEvaluationPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  filtersRef.current = filters;
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
 
   const loadRecords = useCallback(async (
     page = currentPageRef.current,
-    nextFilters = filtersRef.current,
+    nextFilters = appliedFiltersRef.current,
     requestedPageSize = pageSizeRef.current,
   ) => {
+    setCurrentPage(page);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -2473,8 +2506,9 @@ function SingleWellSealEvaluationPage() {
   }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
-  }, [loadRecords, pageSize]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateForm = (key: keyof SingleWellSealEvaluationForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -2519,7 +2553,12 @@ function SingleWellSealEvaluationPage() {
       try {
         await axios.delete(`/api/single-well-seal-evaluations/${record.id}`);
         setSelectedId(null);
-        await loadRecords(records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
+        await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "单井密封评价删除失败");
       }
@@ -2531,7 +2570,7 @@ function SingleWellSealEvaluationPage() {
       <span>作业区</span><select className="h-6 w-36 border px-1" value={filters.unit} onChange={(event) => setFilters({ ...filters, unit: event.target.value, block: "" })}><option value="">请选择</option>{FILTER_UNIT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>区块</span><select className="h-6 w-28 border px-1" value={filters.block} onChange={(event) => setFilters({ ...filters, block: event.target.value })}><option value="">请选择</option>{getFilterBlockOptions(filters.unit).map((option) => <option key={option} value={option}>{option}</option>)}</select>
       <span>工艺</span><input className="h-6 w-24 border px-1" value={filters.process} onChange={(event) => setFilters({ ...filters, process: event.target.value })} />
-      <button className={toolButtonClass} onClick={() => loadRecords(1)}>确定</button>
+      <button className={toolButtonClass} onClick={() => { appliedFiltersRef.current = filters; void loadRecords(1, filters); }}>确定</button>
       <button className={toolButtonClass} onClick={openCreateForm}>新增</button>
       <button className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`} disabled={!selectedId} onClick={handleDelete}>删除</button>
       {error && <span className="text-red-600">{error}</span>}

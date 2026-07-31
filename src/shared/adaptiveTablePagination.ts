@@ -35,6 +35,7 @@ export function useAdaptiveTablePagination({
     currentPage: initialPage,
     pageSize: minRows,
   });
+  const [isMeasured, setIsMeasured] = useState(false);
   const currentPageRef = useRef(pagination.currentPage);
   const pageSizeRef = useRef(pagination.pageSize);
 
@@ -71,6 +72,7 @@ export function useAdaptiveTablePagination({
         nextPageSize,
       );
     });
+    setIsMeasured(true);
   }, [fallbackTableTop, maxRows, minRows, reservedHeight, rowHeight]);
 
   useEffect(() => {
@@ -99,6 +101,7 @@ export function useAdaptiveTablePagination({
     currentPage,
     setCurrentPage,
     pageSize,
+    isMeasured,
     tablePageRef,
     currentPageRef,
     pageSizeRef,
