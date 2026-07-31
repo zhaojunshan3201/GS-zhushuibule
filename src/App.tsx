@@ -3295,7 +3295,7 @@ function IndicatorCurvePage() {
         </div>
       </div>
 
-      <div className="max-h-[540px] overflow-auto border-t border-[#99c7f3] bg-white custom-scrollbar">
+      <div className="overflow-x-auto border-t border-[#99c7f3] bg-white custom-scrollbar">
         <table className="w-full min-w-[1170px] table-fixed border-collapse bg-white">
           <colgroup>
             {headers.map((header) => (

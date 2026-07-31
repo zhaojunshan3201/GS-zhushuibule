@@ -342,6 +342,13 @@ test("indicator curve uses adaptive race-safe server pagination without changing
   assert.match(pageSource, /aria-hidden="true"/);
   assert.match(pageSource, />\u52a0\u8f7d\u4e2d<\/td>/, "pending state has readable loading text");
   assert.match(pageSource, /ref=\{tablePageRef\}/);
+  assert.doesNotMatch(pageSource, /max-h-\[540px\]/, "the adaptive table is not capped at the former fixed height");
+  assert.doesNotMatch(
+    pageSource,
+    /className="[^"]*\boverflow-auto\b[^"]*"/,
+    "the main table does not create a fixed vertical scrolling viewport",
+  );
+  assert.match(pageSource, /className="[^"]*\boverflow-x-auto\b[^"]*"/, "wide columns still scroll horizontally");
   assert.ok((pageSource.match(/pageSize:\s*200/g) ?? []).length >= 2, "option and chart requests keep their 200-row limits");
   assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*15/);
 });
