@@ -198,6 +198,28 @@ for (const pageName of [
   });
 }
 
+for (const [pageName, totalSetter] of [
+  ["AbnormalWellsPage", "setTotalItems"],
+  ["WellFlushingPage", "setTotalRows"],
+] as const) {
+  test(`${pageName} uses shared adaptive server pagination`, async () => {
+    const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), pageName);
+    const normalizedPageSource = pageSource.replaceAll(totalSetter, "setTotalItems");
+
+    assertAdaptivePageContract(normalizedPageSource);
+    assert.doesNotMatch(
+      pageSource,
+      /WELL_FLUSHING_PAGE_SIZE/,
+      "well-flushing no longer uses its fixed main-table page size",
+    );
+    assert.match(
+      pageSource,
+      /const\s+displayPage\s*=\s*loading\s*\|\|\s*error\s*\?\s*currentPage\s*:\s*Math\.min\(currentPage,\s*totalPages\)/,
+      "pending and failed requests keep showing their target page instead of clamping to the cleared total",
+    );
+  });
+}
+
 test("a rejected adaptive request never combines its target page with stale records", () => {
   const existingPage = {
     currentPage: 4,

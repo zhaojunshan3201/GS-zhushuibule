@@ -2198,11 +2198,13 @@ function AbnormalWellsPage() {
   const selectableCellClass = (selected: boolean) => cn(cellClass, "group-hover:bg-red-50", selected && "bg-red-50");
   const filterClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:cursor-not-allowed disabled:opacity-50";
-  const pageSize = 15;
   const [records, setRecords] = useState<AbnormalWellRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", category: "", process: "" });
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
+  const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<AbnormalWellForm>(() => createEmptyAbnormalWellForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2211,37 +2213,50 @@ function AbnormalWellsPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const displayPage = Math.min(currentPage, totalPages);
+  const displayPage = loading || error ? currentPage : Math.min(currentPage, totalPages);
 
-  const loadRecords = async (page = currentPage, nextFilters = filters) => {
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = appliedFiltersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    setCurrentPage(page);
+    setRecords([]);
+    setTotalItems(0);
+    setSelectedId(null);
     setLoading(true);
-    setError("");
+    const requestId = ++loadRequestIdRef.current;
     try {
+      setError("");
       const params = Object.fromEntries(
-        Object.entries({ ...nextFilters, page, pageSize }).filter(([, value]) => String(value).trim()),
+        Object.entries({ ...nextFilters, page, pageSize: requestedPageSize }).filter(([, value]) => String(value).trim()),
       );
       const { data } = await axios.get<PaginatedApiResponse<AbnormalWellRecord>>("/api/abnormal-well-records", { params });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalItems(data.total);
       setCurrentPage(data.page);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "异常水井记录加载失败");
     } finally {
+      if (requestId !== loadRequestIdRef.current) return;
       setLoading(false);
     }
-  };
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(1);
-  }, []);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
-  };
-
-  const applyFilters = () => {
-    void loadRecords(1);
   };
 
   const goToPage = (page: number) => {
@@ -2291,7 +2306,11 @@ function AbnormalWellsPage() {
       try {
         await axios.delete(`/api/abnormal-well-records/${record.id}`);
         setSelectedId(null);
-        const nextPage = records.length === 1 && displayPage > 1 ? displayPage - 1 : displayPage;
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
         await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "异常水井记录删除失败");
@@ -2300,7 +2319,7 @@ function AbnormalWellsPage() {
   };
 
   return (
-    <div className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
+    <div ref={tablePageRef} className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
       {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-2">
@@ -2339,7 +2358,7 @@ function AbnormalWellsPage() {
               <option>智能分注</option>
             </select>
           </label>
-          <button type="button" onClick={applyFilters} className={toolButtonClass}>确定</button>
+          <button type="button" className={toolButtonClass} onClick={() => { appliedFiltersRef.current = filters; void loadRecords(1, filters); }}>确定</button>
           <button type="button" onClick={openCreateForm} className={toolButtonClass}>新增</button>
           <button type="button" disabled={!selectedId} onClick={handleDelete} className={toolButtonClass}>删除</button>
         </div>
@@ -2387,9 +2406,7 @@ function AbnormalWellsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={14} className={cellClass}>正在加载...</td></tr>
-            ) : records.map((row) => (
+            {records.map((row) => (
               <tr key={row.id} onClick={() => setSelectedId(row.id)} className="group cursor-pointer">
                 <td className={selectableCellClass(row.id === selectedId)}>{row.category}</td>
                 <td className={selectableCellClass(row.id === selectedId)}>{row.wellNo}</td>
@@ -2407,9 +2424,8 @@ function AbnormalWellsPage() {
                 <td className={selectableCellClass(row.id === selectedId)}>{row.suggestion}</td>
               </tr>
             ))}
-            {!loading && !records.length && (
-              <tr><td colSpan={14} className={cellClass}>暂无符合条件的数据</td></tr>
-            )}
+            {loading && <tr><td colSpan={14} className={cellClass}>加载中</td></tr>}
+            {!loading && !error && !records.length && <tr><td colSpan={14} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
       </div>
@@ -3440,16 +3456,16 @@ function IndicatorCurvePage() {
   );
 }
 
-const WELL_FLUSHING_PAGE_SIZE = 15;
-
 function WellFlushingPage() {
-  const pageSize = WELL_FLUSHING_PAGE_SIZE;
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [records, setRecords] = useState<WellFlushingRecord[]>([]);
   const [totalRows, setTotalRows] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [jumpPage, setJumpPage] = useState("1");
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
+  const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<WellFlushingForm>(() => createEmptyWellFlushingForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -3467,32 +3483,50 @@ function WellFlushingPage() {
   const nowrapCellClass = `${cellClass} whitespace-nowrap`;
   const selectableCellClass = (baseClass: string, selected: boolean) => cn(baseClass, "group-hover:bg-red-50", selected && "bg-red-50");
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const displayPage = Math.min(currentPage, totalPages);
+  const displayPage = loading || error ? currentPage : Math.min(currentPage, totalPages);
   const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
 
-  const loadRecords = async (page = currentPage, nextFilters = filters) => {
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = appliedFiltersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    setCurrentPage(page);
+    setRecords([]);
+    setTotalRows(0);
+    setSelectedId(null);
     setLoading(true);
-    setError("");
+    const requestId = ++loadRequestIdRef.current;
+    setJumpPage(String(page));
     try {
+      setError("");
       const params = Object.fromEntries(
-        Object.entries({ ...nextFilters, page, pageSize }).filter(([, value]) => String(value).trim()),
+        Object.entries({ ...nextFilters, page, pageSize: requestedPageSize }).filter(([, value]) => String(value).trim()),
       );
       const { data } = await axios.get<PaginatedApiResponse<WellFlushingRecord>>("/api/well-flushing-records", { params });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalRows(data.total);
       setCurrentPage(data.page);
       setJumpPage(String(data.page));
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "水井洗井记录加载失败");
     } finally {
+      if (requestId !== loadRequestIdRef.current) return;
       setLoading(false);
     }
-  };
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(1);
-  }, []);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -3501,10 +3535,6 @@ function WellFlushingPage() {
   const goToPage = (page: number) => {
     const nextPage = Math.min(Math.max(page, 1), totalPages);
     void loadRecords(nextPage);
-  };
-
-  const applyFilters = () => {
-    void loadRecords(1);
   };
 
   const formatCell = (value?: string | number | null) => (value === null || value === undefined ? "" : String(value));
@@ -3557,7 +3587,11 @@ function WellFlushingPage() {
       try {
         await axios.delete(`/api/well-flushing-records/${record.id}`);
         setSelectedId(null);
-        const nextPage = records.length === 1 && displayPage > 1 ? displayPage - 1 : displayPage;
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
         await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "水井洗井记录删除失败");
@@ -3697,7 +3731,7 @@ function WellFlushingPage() {
   };
 
   return (
-    <div className="rounded-sm border border-[#8dbcf0] bg-white shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
+    <div ref={tablePageRef} className="rounded-sm border border-[#8dbcf0] bg-white shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
       {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -3725,9 +3759,7 @@ function WellFlushingPage() {
             <span>至</span>
             <input type="date" className={`${filterClass} w-32`} value={filters.toDate} onChange={(event) => updateFilter("toDate", event.target.value)} />
           </label>
-          <button type="button" onClick={applyFilters} className="h-6 rounded border border-[#8aaed3] bg-[#d8e7f5] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#cfe1f2]">
-            确定
-          </button>
+          <button type="button" className="h-6 rounded border border-[#8aaed3] bg-[#d8e7f5] px-4 text-[12px] font-bold text-[#001a33] hover:bg-[#cfe1f2]" onClick={() => { appliedFiltersRef.current = filters; void loadRecords(1, filters); }}>确定</button>
           <button type="button" onClick={openCreateForm} className="h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]">
             新增
           </button>
@@ -3820,9 +3852,7 @@ function WellFlushingPage() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={23} className={cellClass}>正在加载...</td></tr>
-            ) : records.map((row) => (
+            {records.map((row) => (
               <tr key={row.id} onClick={() => setSelectedId(row.id)} className="group cursor-pointer">
                 <td className={selectableCellClass(cellClass, row.id === selectedId)}>{row.wellNo}</td>
                 <td className={selectableCellClass(nowrapCellClass, row.id === selectedId)}>{row.unit}</td>
@@ -3839,9 +3869,8 @@ function WellFlushingPage() {
                 <td className={selectableCellClass(nowrapCellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!loading && !records.length && (
-              <tr><td colSpan={23} className={cellClass}>暂无符合条件的数据</td></tr>
-            )}
+            {loading && <tr><td colSpan={23} className={cellClass}>加载中</td></tr>}
+            {!loading && !error && !records.length && <tr><td colSpan={23} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
       </div>
