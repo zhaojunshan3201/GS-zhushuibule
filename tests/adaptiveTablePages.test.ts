@@ -30,7 +30,6 @@ function beginAdaptiveRequest(state: AdaptiveRequestVisualState, targetPage: num
     ...state,
     currentPage: targetPage,
     records: [],
-    totalItems: 0,
     selectedId: null,
     loading: true,
     error: "",
@@ -41,7 +40,7 @@ function rejectAdaptiveRequest(state: AdaptiveRequestVisualState, error: string)
   return { ...state, loading: false, error };
 }
 
-function assertAdaptivePageContract(pageSource: string) {
+function assertAdaptivePageContract(pageSource: string, clearsCommittedTotal = true) {
   assert.match(pageSource, /useAdaptiveTablePagination\s*\(/, "page uses the shared adaptive pagination hook");
   assert.match(
     pageSource,
@@ -79,11 +78,10 @@ function assertAdaptivePageContract(pageSource: string) {
     /const\s+loadRecords\s*=\s*useCallback\s*\(\s*async\s*\([\s\S]*?nextFilters\s*=\s*appliedFiltersRef\.current[\s\S]*?requestedPageSize\s*=\s*pageSizeRef\.current/,
     "loadRecords is stable and defaults requestedPageSize from pageSizeRef.current",
   );
-  assert.match(
-    pageSource,
-    /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setTotalItems\(0\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/,
-    "loadRecords clears stale visuals after recording the target page and before requesting",
-  );
+  const requestStartPattern = clearsCommittedTotal
+    ? /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setTotalItems\(0\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/
+    : /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/;
+  assert.match(pageSource, requestStartPattern, "loadRecords clears stale rows but preserves committed pagination metadata");
   assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/, "API request explicitly uses requestedPageSize");
   assert.match(pageSource, /const\s+loadRequestIdRef\s*=\s*useRef\(0\)/, "page tracks the latest load request");
   assert.match(
@@ -206,16 +204,16 @@ for (const [pageName, totalSetter] of [
     const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), pageName);
     const normalizedPageSource = pageSource.replaceAll(totalSetter, "setTotalItems");
 
-    assertAdaptivePageContract(normalizedPageSource);
+    assertAdaptivePageContract(normalizedPageSource, false);
+    assert.match(pageSource, /getAdaptivePaginationView\s*\(/, "page derives all controls from one pagination view");
+    assert.match(pageSource, /void\s+loadRecords\(clampPage\(page\)\)/, "page navigation uses the shared displayed boundary");
+    assert.match(pageSource, /disabled=\{!canGoPrevious\}/, "previous controls use the shared displayed boundary");
+    assert.match(pageSource, /disabled=\{!canGoNext\}/, "next controls use the shared displayed boundary");
+    assert.doesNotMatch(pageSource, new RegExp(`${totalSetter}\\(0\\)`), "pending keeps the last committed total");
     assert.doesNotMatch(
       pageSource,
       /WELL_FLUSHING_PAGE_SIZE/,
       "well-flushing no longer uses its fixed main-table page size",
-    );
-    assert.match(
-      pageSource,
-      /const\s+displayPage\s*=\s*loading\s*\|\|\s*error\s*\?\s*currentPage\s*:\s*Math\.min\(currentPage,\s*totalPages\)/,
-      "pending and failed requests keep showing their target page instead of clamping to the cleared total",
     );
   });
 }
@@ -224,17 +222,17 @@ test("a rejected adaptive request never combines its target page with stale reco
   const existingPage = {
     currentPage: 4,
     records: [{ id: "old-page-record" }],
-    totalItems: 31,
+    totalItems: 73,
     selectedId: "old-page-record",
     loading: false,
     error: "",
   };
 
-  const pending = beginAdaptiveRequest(existingPage, 7);
+  const pending = beginAdaptiveRequest(existingPage, 4);
   assert.deepEqual(pending, {
-    currentPage: 7,
+    currentPage: 4,
     records: [],
-    totalItems: 0,
+    totalItems: 73,
     selectedId: null,
     loading: true,
     error: "",
@@ -242,9 +240,9 @@ test("a rejected adaptive request never combines its target page with stale reco
 
   const failed = rejectAdaptiveRequest(pending, "request rejected");
   assert.deepEqual(failed, {
-    currentPage: 7,
+    currentPage: 4,
     records: [],
-    totalItems: 0,
+    totalItems: 73,
     selectedId: null,
     loading: false,
     error: "request rejected",

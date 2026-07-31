@@ -60,7 +60,7 @@ import {
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
 import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
-import { useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
+import { getAdaptivePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -2212,8 +2212,7 @@ function AbnormalWellsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const displayPage = loading || error ? currentPage : Math.min(currentPage, totalPages);
+  const { totalPages, displayPage, canGoPrevious, canGoNext, clampPage } = getAdaptivePaginationView(currentPage, totalItems, pageSize);
 
   useEffect(() => {
     recordsRef.current = records;
@@ -2226,7 +2225,6 @@ function AbnormalWellsPage() {
   ) => {
     setCurrentPage(page);
     setRecords([]);
-    setTotalItems(0);
     setSelectedId(null);
     setLoading(true);
     const requestId = ++loadRequestIdRef.current;
@@ -2260,7 +2258,7 @@ function AbnormalWellsPage() {
   };
 
   const goToPage = (page: number) => {
-    void loadRecords(Math.min(Math.max(page, 1), totalPages));
+    void loadRecords(clampPage(page));
   };
 
   const updateForm = (key: keyof AbnormalWellForm, value: string) => {
@@ -2364,10 +2362,10 @@ function AbnormalWellsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
           <span>第{displayPage}页 共{totalPages}页 共{totalItems}条</span>
-          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(1)}>首页</button>
-          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
-          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
-          <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(totalPages)}>尾页</button>
+          <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(1)}>首页</button>
+          <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
+          <button type="button" disabled={!canGoNext} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
+          <button type="button" disabled={!canGoNext} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(totalPages)}>尾页</button>
         </div>
       </div>
       <h1 className="py-2 text-center text-[22px] font-bold leading-none text-[#cc0000]">异常水井列表</h1>
@@ -3482,8 +3480,7 @@ function WellFlushingPage() {
   const compactNumberHeadClass = `${narrowHeadClass} w-12`;
   const nowrapCellClass = `${cellClass} whitespace-nowrap`;
   const selectableCellClass = (baseClass: string, selected: boolean) => cn(baseClass, "group-hover:bg-red-50", selected && "bg-red-50");
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const displayPage = loading || error ? currentPage : Math.min(currentPage, totalPages);
+  const { totalPages, displayPage, canGoPrevious, canGoNext, clampPage } = getAdaptivePaginationView(currentPage, totalRows, pageSize);
   const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
 
   useEffect(() => {
@@ -3497,7 +3494,6 @@ function WellFlushingPage() {
   ) => {
     setCurrentPage(page);
     setRecords([]);
-    setTotalRows(0);
     setSelectedId(null);
     setLoading(true);
     const requestId = ++loadRequestIdRef.current;
@@ -3533,8 +3529,7 @@ function WellFlushingPage() {
   };
 
   const goToPage = (page: number) => {
-    const nextPage = Math.min(Math.max(page, 1), totalPages);
-    void loadRecords(nextPage);
+    void loadRecords(clampPage(page));
   };
 
   const formatCell = (value?: string | number | null) => (value === null || value === undefined ? "" : String(value));
@@ -3788,10 +3783,10 @@ function WellFlushingPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
           <span>第 {displayPage} 页 共 {totalPages} 页 共 {totalRows} 条</span>
-          <button type="button" className={pageButtonClass} disabled={displayPage === 1} onClick={() => goToPage(1)}>首页</button>
-          <button type="button" className={pageButtonClass} disabled={displayPage === 1} onClick={() => goToPage(displayPage - 1)}>上一页</button>
-          <button type="button" className={pageButtonClass} disabled={displayPage === totalPages} onClick={() => goToPage(displayPage + 1)}>下一页</button>
-          <button type="button" className={pageButtonClass} disabled={displayPage === totalPages} onClick={() => goToPage(totalPages)}>尾页</button>
+          <button type="button" className={pageButtonClass} disabled={!canGoPrevious} onClick={() => goToPage(1)}>首页</button>
+          <button type="button" className={pageButtonClass} disabled={!canGoPrevious} onClick={() => goToPage(displayPage - 1)}>上一页</button>
+          <button type="button" className={pageButtonClass} disabled={!canGoNext} onClick={() => goToPage(displayPage + 1)}>下一页</button>
+          <button type="button" className={pageButtonClass} disabled={!canGoNext} onClick={() => goToPage(totalPages)}>尾页</button>
           <span>跳转</span>
           <input
             className="h-6 w-8 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none"

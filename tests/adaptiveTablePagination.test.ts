@@ -11,6 +11,9 @@ const hookModule = await import("../src/shared/adaptiveTablePagination");
 const mapAdaptiveTablePaginationState = (
   hookModule as Record<string, unknown>
 ).mapAdaptiveTablePaginationState;
+const getAdaptivePaginationView = (
+  hookModule as Record<string, unknown>
+).getAdaptivePaginationView;
 
 test("exports the shared adaptive table pagination hook and its options", () => {
   assert.match(source, /export type AdaptiveTablePaginationOptions/);
@@ -40,6 +43,41 @@ test("maps pagination state without relying on React state or refs", () => {
 
   assert.deepEqual(mapState(19, 10, 15), { currentPage: 13, pageSize: 15 });
   assert.deepEqual(mapState(7, 15, 15), { currentPage: 7, pageSize: 15 });
+});
+
+test("keeps pending and rejected page controls on one committed boundary", () => {
+  assert.equal(typeof getAdaptivePaginationView, "function");
+  const getView = getAdaptivePaginationView as (
+    currentPage: number,
+    totalItems: number,
+    pageSize: number,
+  ) => {
+    totalPages: number;
+    displayPage: number;
+    canGoPrevious: boolean;
+    canGoNext: boolean;
+    clampPage: (page: number) => number;
+  };
+
+  const committed = { currentPage: 4, totalItems: 73, records: [{ id: "committed" }], loading: false, error: "" };
+  const pending = { ...committed, records: [], loading: true };
+  const rejected = { ...pending, loading: false, error: "request rejected" };
+
+  for (const requestState of [pending, rejected]) {
+    const view = getView(requestState.currentPage, requestState.totalItems, 15);
+    assert.equal(view.displayPage <= view.totalPages, true, requestState.error || "pending");
+    assert.equal(view.displayPage, 4);
+    assert.equal(view.totalPages, 5);
+    assert.equal(view.canGoPrevious, true);
+    assert.equal(view.canGoNext, true);
+    assert.equal(view.clampPage(view.displayPage - 1), 3);
+    assert.equal(view.clampPage(view.displayPage + 1), 5);
+    assert.equal(view.clampPage(99), 5);
+    assert.equal(view.clampPage(0), 1);
+  }
+
+  assert.equal(getView(1, 73, 15).canGoPrevious, false);
+  assert.equal(getView(5, 73, 15).canGoNext, false);
 });
 
 test("coalesces resize measurement and cleans up browser resources", () => {

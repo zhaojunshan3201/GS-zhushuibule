@@ -22,6 +22,29 @@ export function mapAdaptiveTablePaginationState(
   };
 }
 
+export function getAdaptivePaginationView(
+  currentPage: number,
+  totalItems: number,
+  pageSize: number,
+) {
+  const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 1;
+  const safeTotalItems = Number.isFinite(totalItems) && totalItems > 0 ? Math.floor(totalItems) : 0;
+  const totalPages = Math.max(1, Math.ceil(safeTotalItems / safePageSize));
+  const clampPage = (page: number) => {
+    const safePage = Number.isFinite(page) ? Math.floor(page) : 1;
+    return Math.min(Math.max(safePage, 1), totalPages);
+  };
+  const displayPage = clampPage(currentPage);
+
+  return {
+    totalPages,
+    displayPage,
+    canGoPrevious: displayPage > 1,
+    canGoNext: displayPage < totalPages,
+    clampPage,
+  };
+}
+
 export function useAdaptiveTablePagination({
   initialPage = 1,
   fallbackTableTop = 80,
