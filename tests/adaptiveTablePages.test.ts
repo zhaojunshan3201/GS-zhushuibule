@@ -41,7 +41,7 @@ function rejectAdaptiveRequest(state: AdaptiveRequestVisualState, error: string)
   return { ...state, loading: false, error };
 }
 
-function assertAdaptivePageContract(pageSource: string, clearsCommittedTotal = true) {
+function assertAdaptivePageContract(pageSource: string) {
   assert.match(pageSource, /useAdaptiveTablePagination\s*\(/, "page uses the shared adaptive pagination hook");
   assert.match(
     pageSource,
@@ -79,10 +79,9 @@ function assertAdaptivePageContract(pageSource: string, clearsCommittedTotal = t
     /const\s+loadRecords\s*=\s*useCallback\s*\(\s*async\s*\([\s\S]*?nextFilters\s*=\s*appliedFiltersRef\.current[\s\S]*?requestedPageSize\s*=\s*pageSizeRef\.current/,
     "loadRecords is stable and defaults requestedPageSize from pageSizeRef.current",
   );
-  const requestStartPattern = clearsCommittedTotal
-    ? /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setTotalItems\(0\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/
-    : /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/;
+  const requestStartPattern = /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/;
   assert.match(pageSource, requestStartPattern, "loadRecords clears stale rows but preserves committed pagination metadata");
+  assert.doesNotMatch(pageSource, /setTotalItems\(0\)/, "pending and failure preserve the committed total boundary");
   assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/, "API request explicitly uses requestedPageSize");
   assert.match(pageSource, /const\s+loadRequestIdRef\s*=\s*useRef\(0\)/, "page tracks the latest load request");
   assert.match(
@@ -174,7 +173,7 @@ for (const pageName of [
     for (const [description, mutated] of [
       ["target-page intent", pageSource.replace("setCurrentPage(page);", "")],
       ["pending records clear", pageSource.replace("setRecords([]);", "")],
-      ["pending total clear", pageSource.replace("setTotalItems(0);", "")],
+      ["pending total reset", pageSource.replace("setRecords([]);", "setRecords([]);\n    setTotalItems(0);")],
       ["pending selection clear", pageSource.replace("setSelectedId(null);", "")],
       ["pending loading state", pageSource.replace("setLoading(true);", "")],
       ["applied filters", pageSource.replace("appliedFiltersRef.current = filters;", "")],
@@ -205,7 +204,7 @@ for (const [pageName, totalSetter] of [
     const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), pageName);
     const normalizedPageSource = pageSource.replaceAll(totalSetter, "setTotalItems");
 
-    assertAdaptivePageContract(normalizedPageSource, false);
+    assertAdaptivePageContract(normalizedPageSource);
     assert.match(pageSource, /getAdaptivePaginationView\s*\(/, "page derives all controls from one pagination view");
     assert.match(pageSource, /void\s+loadRecords\(clampPage\(page\)\)/, "page navigation uses the shared displayed boundary");
     assert.match(pageSource, /disabled=\{!canGoPrevious\}/, "previous controls use the shared displayed boundary");
@@ -218,6 +217,17 @@ for (const [pageName, totalSetter] of [
     );
   });
 }
+
+test("ZonalTableShell uses one explicit-zero-safe pagination boundary", async () => {
+  const shellSource = getFunctionSource(await readFile(appUrl, "utf8"), "ZonalTableShell");
+
+  assert.match(shellSource, /getZonalTablePaginationView\s*\(/);
+  assert.match(shellSource, /const\s+goToPage\s*=\s*\(page:\s*number\)\s*=>\s*onPageChange\?\.\(clampPage\(page\)\)/);
+  assert.match(shellSource, /disabled=\{!canGoPrevious\}/);
+  assert.match(shellSource, /disabled=\{!canGoNext\}/);
+  assert.doesNotMatch(shellSource, /totalItems\s*\|\|/);
+  assert.doesNotMatch(shellSource, /currentPage\s*\|\|/);
+});
 
 function assertAdaptiveOperationsPageContract(pageSource: string, pageKind: "injection" | "water-cut") {
   assert.match(pageSource, /useAdaptiveTablePagination\s*\(/, "page uses the shared adaptive pagination hook");

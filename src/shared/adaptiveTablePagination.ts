@@ -45,6 +45,24 @@ export function getAdaptivePaginationView(
   };
 }
 
+export function getZonalTablePaginationView(
+  currentPage?: number,
+  totalItems?: number,
+  pageSize?: number,
+) {
+  const hasExplicitBoundary = totalItems !== undefined && pageSize !== undefined;
+  const pagination = hasExplicitBoundary
+    ? getAdaptivePaginationView(currentPage ?? 1, totalItems, pageSize)
+    : getAdaptivePaginationView(currentPage ?? 1, 45, 1);
+  const displayTotal = totalItems === undefined
+    ? 568
+    : Number.isFinite(totalItems) && totalItems > 0
+      ? Math.floor(totalItems)
+      : 0;
+
+  return { ...pagination, displayTotal };
+}
+
 export function buildPinnedAdaptivePage<T extends { id: string }>(
   pinnedRecord: T,
   currentRecords: T[],

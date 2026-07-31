@@ -60,7 +60,7 @@ import {
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
 import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
-import { buildPinnedAdaptivePage, getAdaptivePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
+import { buildPinnedAdaptivePage, getAdaptivePaginationView, getZonalTablePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -1200,10 +1200,8 @@ function ZonalTableShell({
   children: React.ReactNode;
 }) {
   const filterClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
-  const totalPages = totalItems && pageSize ? Math.max(1, Math.ceil(totalItems / pageSize)) : 45;
-  const displayPage = currentPage || 1;
-  const displayTotal = totalItems || 568;
-  const goToPage = (page: number) => onPageChange?.(Math.min(totalPages, Math.max(1, page)));
+  const { totalPages, displayPage, displayTotal, canGoPrevious, canGoNext, clampPage } = getZonalTablePaginationView(currentPage, totalItems, pageSize);
+  const goToPage = (page: number) => onPageChange?.(clampPage(page));
   const showTopBar = Boolean(toolbar) || showFilters || showPagination;
 
   return (
@@ -1388,16 +1386,16 @@ function ZonalTableShell({
           {showPagination && (
             <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
               <span>第{displayPage}页 共{totalPages}页 共{displayTotal}条</span>
-              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(1)}>
+              <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(1)}>
                 首页
               </button>
-              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage - 1)}>
+              <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(displayPage - 1)}>
                 上一页
               </button>
-              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage + 1)}>
+              <button type="button" disabled={!canGoNext} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(displayPage + 1)}>
                 下一页
               </button>
-              <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(totalPages)}>
+              <button type="button" disabled={!canGoNext} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(totalPages)}>
                 尾页
               </button>
               <span>跳转</span>
@@ -1466,7 +1464,6 @@ function ConcentricTestHistoryPage() {
   ) => {
     setCurrentPage(page);
     setRecords([]);
-    setTotalItems(0);
     setSelectedId(null);
     setLoading(true);
     const requestId = ++loadRequestIdRef.current;
@@ -1746,7 +1743,6 @@ function SmartTestHistoryPage() {
   ) => {
     setCurrentPage(page);
     setRecords([]);
-    setTotalItems(0);
     setSelectedId(null);
     setLoading(true);
     const requestId = ++loadRequestIdRef.current;
@@ -2003,7 +1999,6 @@ function SingleWellInjectionEvaluationPage() {
   ) => {
     setCurrentPage(page);
     setRecords([]);
-    setTotalItems(0);
     setSelectedId(null);
     setLoading(true);
     const requestId = ++loadRequestIdRef.current;
@@ -2532,7 +2527,6 @@ function SingleWellSealEvaluationPage() {
   ) => {
     setCurrentPage(page);
     setRecords([]);
-    setTotalItems(0);
     setSelectedId(null);
     setLoading(true);
     const requestId = ++loadRequestIdRef.current;

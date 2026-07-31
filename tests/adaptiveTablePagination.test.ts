@@ -14,6 +14,9 @@ const mapAdaptiveTablePaginationState = (
 const getAdaptivePaginationView = (
   hookModule as Record<string, unknown>
 ).getAdaptivePaginationView;
+const getZonalTablePaginationView = (
+  hookModule as Record<string, unknown>
+).getZonalTablePaginationView;
 const buildPinnedAdaptivePage = (
   hookModule as Record<string, unknown>
 ).buildPinnedAdaptivePage;
@@ -81,6 +84,41 @@ test("keeps pending and rejected page controls on one committed boundary", () =>
 
   assert.equal(getView(1, 73, 15).canGoPrevious, false);
   assert.equal(getView(5, 73, 15).canGoNext, false);
+});
+
+test("zonal pagination distinguishes explicit zero totals from missing demo props", () => {
+  assert.equal(typeof getZonalTablePaginationView, "function");
+  const getView = getZonalTablePaginationView as (
+    currentPage?: number,
+    totalItems?: number,
+    pageSize?: number,
+  ) => {
+    totalPages: number;
+    displayPage: number;
+    displayTotal: number;
+    canGoPrevious: boolean;
+    canGoNext: boolean;
+    clampPage: (page: number) => number;
+  };
+
+  const emptySuccess = getView(7, 0, 15);
+  assert.equal(emptySuccess.displayTotal, 0);
+  assert.equal(emptySuccess.totalPages, 1);
+  assert.equal(emptySuccess.displayPage, 1);
+  assert.equal(emptySuccess.canGoPrevious, false);
+  assert.equal(emptySuccess.canGoNext, false);
+  assert.equal(emptySuccess.clampPage(99), 1);
+
+  const pendingOrRejected = getView(4, 73, 15);
+  assert.equal(pendingOrRejected.displayTotal, 73);
+  assert.equal(pendingOrRejected.totalPages, 5);
+  assert.equal(pendingOrRejected.displayPage, 4);
+  assert.equal(pendingOrRejected.clampPage(99), 5);
+
+  const demo = getView(undefined, undefined, undefined);
+  assert.equal(demo.displayTotal, 568);
+  assert.equal(demo.totalPages, 45);
+  assert.equal(demo.displayPage, 1);
 });
 
 test("builds a pinned page from the records and capacity current when create completes", () => {
