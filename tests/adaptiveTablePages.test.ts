@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
+import { getAdaptivePaginationView } from "../src/shared/adaptiveTablePagination";
 
 const appUrl = new URL("../src/App.tsx", import.meta.url);
 
@@ -301,6 +302,74 @@ test("injection-tech and water-cut main tables no longer define fixed capacities
   const source = await readFile(appUrl, "utf8");
   assert.doesNotMatch(source, /INJECTION_TECH_PAGE_SIZE/);
   assert.doesNotMatch(source, /WATER_CUT_PAGE_SIZE/);
+});
+
+test("indicator curve uses adaptive race-safe server pagination without changing auxiliary limits", async () => {
+  const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), "IndicatorCurvePage");
+
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\)/);
+  assert.match(pageSource, /\bcurrentPageRef\b/);
+  assert.match(pageSource, /\bpageSizeRef\b/);
+  assert.match(pageSource, /\bisMeasured\b/);
+  assert.match(pageSource, /const\s+appliedFiltersRef\s*=\s*useRef\(filters\)/);
+  assert.match(pageSource, /const\s+recordsRef\s*=\s*useRef\(records\)/);
+  assert.match(pageSource, /const\s+loadRequestIdRef\s*=\s*useRef\(0\)/);
+  assert.match(pageSource, /const\s+\[loading,\s*setLoading\]\s*=\s*useState\(false\)/);
+  assert.match(pageSource, /getAdaptivePaginationView\s*\(/);
+  assert.match(
+    pageSource,
+    /const\s+loadRecords\s*=\s*useCallback\s*\(\s*async\s*\([\s\S]*?page\s*=\s*currentPageRef\.current[\s\S]*?nextFilters\s*=\s*appliedFiltersRef\.current[\s\S]*?requestedPageSize\s*=\s*pageSizeRef\.current/,
+  );
+  assert.match(
+    pageSource,
+    /setCurrentPage\(page\);\s*setJumpPage\(String\(page\)\);\s*setRecords\(\[\]\);\s*setSelectedCurveIds\(\[\]\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current/,
+  );
+  assert.doesNotMatch(pageSource, /setTotalRows\(0\)/, "pending and failure preserve the committed total boundary");
+  assert.match(pageSource, /pageSize:\s*requestedPageSize/);
+  assert.match(pageSource, /if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;/);
+  assert.match(
+    pageSource,
+    /if\s*\(!isMeasured\)\s*return;\s*void\s+loadRecords\(currentPageRef\.current,\s*appliedFiltersRef\.current,\s*pageSize\)/,
+  );
+  assert.match(pageSource, /appliedFiltersRef\.current\s*=\s*filters;\s*setAppliedFilters\(filters\);\s*void\s+loadRecords\(1,\s*filters\)/);
+  assert.match(pageSource, /void\s+loadRecords\(clampPage\(page\)\)/);
+  assert.match(pageSource, /setJumpPage\(String\(page\)\)/, "pending navigation keeps the jump control on the target page");
+  assert.match(pageSource, /<span>\u7b2c\{displayPage\}\u9875/, "pagination text uses the shared displayed page");
+  assert.match(pageSource, /disabled=\{!canGoPrevious\}/);
+  assert.match(pageSource, /disabled=\{!canGoNext\}/);
+  assert.match(pageSource, /const\s+latestRecords\s*=\s*recordsRef\.current;\s*const\s+latestPage\s*=\s*currentPageRef\.current;/);
+  assert.match(pageSource, /length:\s*Math\.max\(0,\s*pageSize\s*-\s*records\.length\)/);
+  assert.match(pageSource, /aria-hidden="true"/);
+  assert.match(pageSource, />\u52a0\u8f7d\u4e2d<\/td>/, "pending state has readable loading text");
+  assert.match(pageSource, /ref=\{tablePageRef\}/);
+  assert.ok((pageSource.match(/pageSize:\s*200/g) ?? []).length >= 2, "option and chart requests keep their 200-row limits");
+  assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*15/);
+});
+
+test("dynamic adjustment uses adaptive client slicing without resize requests", async () => {
+  const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), "DynamicAdjustmentPage");
+
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\)/);
+  assert.match(pageSource, /getAdaptivePaginationView\s*\(currentPage,\s*totalItems,\s*pageSize\)/);
+  assert.match(
+    pageSource,
+    /visibleRows\.slice\(\s*\(displayPage\s*-\s*1\)\s*\*\s*pageSize,\s*displayPage\s*\*\s*pageSize,?\s*\)/,
+  );
+  assert.match(pageSource, /ref=\{tablePageRef\}/);
+  assert.match(pageSource, /setCurrentPage\(displayPage\)/, "the owned current page is clamped after client data changes");
+  assert.match(pageSource, /disabled=\{!canGoPrevious\}/);
+  assert.match(pageSource, /disabled=\{!canGoNext\}/);
+  assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*15/);
+  assert.doesNotMatch(pageSource, /pageSize\s*:/, "client-only adaptive resizing does not alter server requests");
+});
+
+test("shared pagination view clamps dynamic-adjustment pages after filtering", () => {
+  const view = getAdaptivePaginationView(4, 8, 10);
+  assert.equal(view.totalPages, 1);
+  assert.equal(view.displayPage, 1);
+  assert.equal(view.canGoPrevious, false);
+  assert.equal(view.canGoNext, false);
+  assert.equal(view.clampPage(99), 1);
 });
 
 test("a rejected adaptive request never combines its target page with stale records", () => {

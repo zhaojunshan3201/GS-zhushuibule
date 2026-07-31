@@ -2836,7 +2836,6 @@ function ZonalIndicatorSummaryPage() {
 
 function IndicatorCurvePage() {
   const headers = ["单位", "区块", "井号", "测试日期", "测试井段", "日注1", "压力1", "日注2", "压力2", "日注3", "压力3", "日注4", "压力4", "日注5", "压力5"];
-  const pageSize = 15;
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const createEmptyIndicatorCurveForm = (): IndicatorCurveForm => ({
     unit: FILTER_UNIT_OPTIONS[0],
@@ -2859,28 +2858,33 @@ function IndicatorCurvePage() {
   const [chartRecords, setChartRecords] = useState<IndicatorCurveRecord[]>([]);
   const [optionRecords, setOptionRecords] = useState<IndicatorCurveRecord[]>([]);
   const [totalRows, setTotalRows] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("1");
   const [filters, setFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
   const [appliedFilters, setAppliedFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
+  const loadRequestIdRef = useRef(0);
   const [selectedCurveIds, setSelectedCurveIds] = useState<string[]>([]);
   const [curveDialogPosition, setCurveDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const curveDragOffsetRef = useRef<{ x: number; y: number } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState<IndicatorCurveForm>(() => createEmptyIndicatorCurveForm());
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const queryParams = (page: number, size: number) => ({
+  const { totalPages, displayPage, canGoPrevious, canGoNext, clampPage } = getAdaptivePaginationView(currentPage, totalRows, pageSize);
+  const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
+  const queryParams = (page: number, size: number, nextFilters = appliedFiltersRef.current) => ({
     page,
     pageSize: size,
-    wellNo: appliedFilters.wellNo || undefined,
-    testInterval: appliedFilters.testInterval || undefined,
-    fromDate: appliedFilters.testDate || undefined,
-    toDate: appliedFilters.testDate || undefined,
+    wellNo: nextFilters.wellNo || undefined,
+    testInterval: nextFilters.testInterval || undefined,
+    fromDate: nextFilters.testDate || undefined,
+    toDate: nextFilters.testDate || undefined,
   });
   const wellOptions = useMemo(() => Array.from(new Set(optionRecords.map((row) => row.wellNo))).sort(), [optionRecords]);
   const dateOptions = useMemo(() => Array.from(new Set(optionRecords.map((row) => String(row.testDate).slice(0, 10)))).sort().reverse(), [optionRecords]);
@@ -2941,16 +2945,49 @@ function IndicatorCurvePage() {
     row.injection5.toFixed(1),
     row.pressure5.toFixed(1),
   ];
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = appliedFiltersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    setCurrentPage(page);
+    setJumpPage(String(page));
+    setRecords([]);
+    setSelectedCurveIds([]);
+    setLoading(true);
+    const requestId = ++loadRequestIdRef.current;
+    try {
+      setFormError("");
+      const { data } = await axios.get<PaginatedApiResponse<IndicatorCurveRecord>>("/api/indicator-curve-records", {
+        params: {
+          ...queryParams(page, requestedPageSize, nextFilters),
+          pageSize: requestedPageSize,
+        },
+      });
+      if (requestId !== loadRequestIdRef.current) return;
+      recordsRef.current = data.rows;
+      setRecords(data.rows);
+      setTotalRows(data.total);
+      setCurrentPage(data.page);
+      setJumpPage(String(data.page));
+    } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
+      setFormError(err?.response?.data?.error || "指示曲线记录加载失败");
+    } finally {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoading(false);
+    }
+  }, [setCurrentPage]);
   const goToPage = (page: number) => {
-    const nextPage = Math.min(totalPages, Math.max(1, page));
-    setCurrentPage(nextPage);
-    setJumpPage(String(nextPage));
+    void loadRecords(clampPage(page));
   };
   const applyFilters = () => {
+    appliedFiltersRef.current = filters;
     setAppliedFilters(filters);
-    setSelectedCurveIds([]);
-    setCurrentPage(1);
-    setJumpPage("1");
+    void loadRecords(1, filters);
   };
   const handleCurveRowClick = (recordId: string) => {
     setSelectedCurveIds((current) => (current.includes(recordId) ? current.filter((id) => id !== recordId) : [...current, recordId]));
@@ -3023,28 +3060,21 @@ function IndicatorCurvePage() {
       setSelectedCurveIds([]);
       setCurrentPage(1);
       setJumpPage("1");
-      const optionResponse = await axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: { page: 1, pageSize: 200 } });
-      const pageResponse = await axios.get<{ rows: IndicatorCurveRecord[]; total: number }>("/api/indicator-curve-records", { params: queryParams(1, pageSize) });
-      const chartResponse = await axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: queryParams(1, 200) });
-      setOptionRecords(optionResponse.data.rows);
-      setRecords(pageResponse.data.rows);
-      setTotalRows(pageResponse.data.total);
-      setChartRecords(chartResponse.data.rows);
+      await refreshIndicatorCurveData(1);
     } catch (err: any) {
       setFormError(err?.response?.data?.error || "指示曲线记录新增失败");
     } finally {
       setSaving(false);
     }
   };
-  const refreshIndicatorCurveData = async (page = currentPage) => {
-    const [optionResponse, pageResponse, chartResponse] = await Promise.all([
+  const refreshIndicatorCurveData = async (page = currentPageRef.current) => {
+    const nextFilters = appliedFiltersRef.current;
+    const [optionResponse, chartResponse] = await Promise.all([
       axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: { page: 1, pageSize: 200 } }),
-      axios.get<{ rows: IndicatorCurveRecord[]; total: number }>("/api/indicator-curve-records", { params: queryParams(page, pageSize) }),
-      axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: queryParams(1, 200) }),
+      axios.get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", { params: queryParams(1, 200, nextFilters) }),
+      loadRecords(page, nextFilters),
     ]);
     setOptionRecords(optionResponse.data.rows);
-    setRecords(pageResponse.data.rows);
-    setTotalRows(pageResponse.data.total);
     setChartRecords(chartResponse.data.rows);
   };
   const handleDelete = (record: IndicatorCurveRecord) => {
@@ -3053,9 +3083,11 @@ function IndicatorCurvePage() {
       try {
         await axios.delete(`/api/indicator-curve-records/${record.id}`);
         setSelectedCurveIds([]);
-        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-        setCurrentPage(nextPage);
-        setJumpPage(String(nextPage));
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
         await refreshIndicatorCurveData(nextPage);
       } catch (err: any) {
         setFormError(err?.response?.data?.error || "指示曲线记录删除失败");
@@ -3169,26 +3201,16 @@ function IndicatorCurvePage() {
       .catch(() => setOptionRecords([]));
   }, []);
   useEffect(() => {
-    axios
-      .get<{ rows: IndicatorCurveRecord[]; total: number }>("/api/indicator-curve-records", {
-        params: queryParams(currentPage, pageSize),
-      })
-      .then(({ data }) => {
-        setRecords(data.rows);
-        setTotalRows(data.total);
-      })
-      .catch(() => {
-        setRecords([]);
-        setTotalRows(0);
-      });
-  }, [currentPage, appliedFilters]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
   useEffect(() => {
     setSelectedCurveIds((current) => current.filter((id) => records.some((row) => row.id === id)));
   }, [records]);
   useEffect(() => {
     axios
       .get<{ rows: IndicatorCurveRecord[] }>("/api/indicator-curve-records", {
-        params: queryParams(1, 200),
+        params: queryParams(1, 200, appliedFilters),
       })
       .then(({ data }) => setChartRecords(data.rows))
       .catch(() => setChartRecords([]));
@@ -3199,7 +3221,7 @@ function IndicatorCurvePage() {
   const selectableCellClass = (selected: boolean) => cn(cellClass, "group-hover:!bg-red-50", selected && "!bg-red-50 text-red-700");
 
   return (
-    <div className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
+    <div ref={tablePageRef} className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
       {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-1 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -3255,11 +3277,11 @@ function IndicatorCurvePage() {
           {formError && !showForm && <span className="text-[12px] font-bold text-red-600">{formError}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
-          <span>第{currentPage}页 共{totalPages}页 共{totalRows}条</span>
-          <button type="button" onClick={() => goToPage(1)} className="zonal-pagination-link font-bold hover:underline">首页</button>
-          <button type="button" onClick={() => goToPage(currentPage - 1)} className="zonal-pagination-link font-bold hover:underline">上一页</button>
-          <button type="button" onClick={() => goToPage(currentPage + 1)} className="zonal-pagination-link font-bold hover:underline">下一页</button>
-          <button type="button" onClick={() => goToPage(totalPages)} className="zonal-pagination-link font-bold hover:underline">尾页</button>
+          <span>第{displayPage}页 共{totalPages}页 共{totalRows}条</span>
+          <button type="button" disabled={!canGoPrevious} onClick={() => goToPage(1)} className={pageButtonClass}>首页</button>
+          <button type="button" disabled={!canGoPrevious} onClick={() => goToPage(displayPage - 1)} className={pageButtonClass}>上一页</button>
+          <button type="button" disabled={!canGoNext} onClick={() => goToPage(displayPage + 1)} className={pageButtonClass}>下一页</button>
+          <button type="button" disabled={!canGoNext} onClick={() => goToPage(totalPages)} className={pageButtonClass}>尾页</button>
           <span>跳转</span>
           <input
             className="h-6 w-8 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none"
@@ -3288,7 +3310,10 @@ function IndicatorCurvePage() {
             </tr>
           </thead>
           <tbody>
-            {records.map((record) => {
+            {loading && (
+              <tr><td colSpan={headers.length} className={cellClass}>加载中</td></tr>
+            )}
+            {!loading && records.map((record) => {
               const row = toVisibleRow(record);
               const selected = selectedCurveIds.includes(record.id);
 
@@ -3300,10 +3325,10 @@ function IndicatorCurvePage() {
                 </tr>
               );
             })}
-            {Array.from({ length: pageSize - records.length }, (_, index) => (
-              <tr key={`empty-${index}`}>
+            {!loading && Array.from({ length: Math.max(0, pageSize - records.length) }, (_, index) => (
+              <tr key={`empty-${index}`} aria-hidden="true">
                 {headers.map((header) => (
-                  <td key={header} className={cellClass} />
+                  <td key={`${header}-${index}`} className={cellClass}>&nbsp;</td>
                 ))}
               </tr>
             ))}
@@ -8107,7 +8132,7 @@ function DynamicAdjustmentPage() {
   const [form, setForm] = useState<DynamicAdjustmentForm>(() => createEmptyDynamicAdjustmentForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, tablePageRef } = useAdaptiveTablePagination();
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -8120,7 +8145,6 @@ function DynamicAdjustmentPage() {
   const inputClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const selectedRecord = records.find((record) => record.id === selectedId) ?? null;
-  const pageSize = 15;
   const previewDiffs = calculateDynamicAdjustmentDiffs({
     beforeDailyLiquid: form.beforeDailyLiquid === "" ? null : Number(form.beforeDailyLiquid),
     beforeDailyOil: form.beforeDailyOil === "" ? null : Number(form.beforeDailyOil),
@@ -8218,15 +8242,21 @@ function DynamicAdjustmentPage() {
 
   const visibleRows = records;
   const totalItems = visibleRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const displayPage = Math.min(currentPage, totalPages);
-  const pagedRows = visibleRows.slice((displayPage - 1) * pageSize, displayPage * pageSize);
-  const goToPage = (page: number) => setCurrentPage(Math.min(totalPages, Math.max(1, page)));
+  const { totalPages, displayPage, canGoPrevious, canGoNext, clampPage } = getAdaptivePaginationView(currentPage, totalItems, pageSize);
+  const pagedRows = visibleRows.slice(
+    (displayPage - 1) * pageSize,
+    displayPage * pageSize,
+  );
+  useEffect(() => {
+    if (currentPage !== displayPage) setCurrentPage(displayPage);
+  }, [currentPage, displayPage, setCurrentPage]);
+  const goToPage = (page: number) => setCurrentPage(clampPage(page));
+  const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
 
   return (
     <>
       {confirmDialog}
-      <div className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
+      <div ref={tablePageRef} className="rounded-sm border border-[#9fc4e8] bg-[#f4f8fc] shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#9fc4e8] bg-[#f7fbff] px-0 py-2 text-[12px] text-[#001a33]">
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1">
@@ -8265,10 +8295,10 @@ function DynamicAdjustmentPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
             <span>第{displayPage}页 共{totalPages}页 共{totalItems}条</span>
-            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(1)}>首页</button>
-            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
-            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(displayPage + 1)}>下一页</button>
-            <button type="button" className="zonal-pagination-link font-bold hover:underline" onClick={() => goToPage(totalPages)}>尾页</button>
+            <button type="button" disabled={!canGoPrevious} className={pageButtonClass} onClick={() => goToPage(1)}>首页</button>
+            <button type="button" disabled={!canGoPrevious} className={pageButtonClass} onClick={() => goToPage(displayPage - 1)}>上一页</button>
+            <button type="button" disabled={!canGoNext} className={pageButtonClass} onClick={() => goToPage(displayPage + 1)}>下一页</button>
+            <button type="button" disabled={!canGoNext} className={pageButtonClass} onClick={() => goToPage(totalPages)}>尾页</button>
             <span>跳转</span>
             <input className="h-6 w-9 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none" value={displayPage} readOnly />
             <span>页</span>
