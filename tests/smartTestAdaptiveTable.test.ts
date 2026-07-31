@@ -1,0 +1,28 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import ts from "typescript";
+
+const appUrl = new URL("../src/App.tsx", import.meta.url);
+
+function getSmartTestHistoryPageSource(source: string) {
+  const ast = ts.createSourceFile("App.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const page = ast.statements.find(
+    (statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === "SmartTestHistoryPage",
+  );
+
+  assert.ok(page, "SmartTestHistoryPage function must exist");
+  return source.slice(page.getStart(ast), page.getEnd());
+}
+
+test("SmartTestHistoryPage uses viewport-adaptive server pagination", async () => {
+  const pageSource = getSmartTestHistoryPageSource(await readFile(appUrl, "utf8"));
+
+  assert.match(pageSource, /calculateAdaptiveTablePageSize\s*\(/);
+  assert.match(pageSource, /mapPageForPageSizeChange\s*\(/);
+  assert.match(pageSource, /addEventListener\(\s*["']resize["']/);
+  assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/);
+  assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*10\b/);
+  assert.match(pageSource, /min-w-\[1820px\]/);
+});
