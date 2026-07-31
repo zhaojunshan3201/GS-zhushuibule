@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildConcentricTestWhere,
+  calculateAdaptiveTablePageSize,
   buildDynamicAnalysisWhere,
   buildSecondBatchSeedRows,
   buildSingleWellEvaluationWhere,
@@ -12,11 +13,32 @@ import {
   getDynamicAnalysisDeleteMessage,
   filterDynamicAnalysisRowsByDiffThresholds,
   getDynamicAnalysisEmptyQueryMessage,
+  mapPageForPageSizeChange,
   normalizeConcentricTestPayload,
   normalizeSingleWellInjectionEvaluationPayload,
   normalizeSingleWellSealEvaluationPayload,
   normalizeSmartTestPayload,
 } from "../src/shared/secondBatchRecords";
+
+test("calculateAdaptiveTablePageSize uses available viewport height within row limits", () => {
+  assert.equal(calculateAdaptiveTablePageSize({ viewportHeight: 900, tableTop: 80 }), 15);
+  assert.equal(calculateAdaptiveTablePageSize({ viewportHeight: 1080, tableTop: 80 }), 19);
+  assert.equal(calculateAdaptiveTablePageSize({ viewportHeight: 500, tableTop: 80 }), 10);
+  assert.equal(calculateAdaptiveTablePageSize({ viewportHeight: 2000, tableTop: 80 }), 25);
+});
+
+test("calculateAdaptiveTablePageSize falls back for non-finite dimensions", () => {
+  assert.equal(calculateAdaptiveTablePageSize({ viewportHeight: Number.NaN, tableTop: 80 }), 10);
+});
+
+test("mapPageForPageSizeChange keeps the old page's first record visible", () => {
+  assert.equal(mapPageForPageSizeChange(3, 10, 15), 2);
+  assert.equal(mapPageForPageSizeChange(2, 15, 10), 2);
+});
+
+test("mapPageForPageSizeChange falls back for invalid or zero parameters", () => {
+  assert.equal(mapPageForPageSizeChange(Number.NaN, 0, Number.POSITIVE_INFINITY), 1);
+});
 
 test("buildSecondBatchSeedRows provides second-batch page data", () => {
   const seeds = buildSecondBatchSeedRows();

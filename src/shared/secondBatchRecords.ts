@@ -1,6 +1,49 @@
 import { buildDateRange } from "./coreTableRecords";
 import { getAllRawBlocksForConsolidated } from "./oilProductionBlocks";
 
+export type AdaptiveTablePageSizeInput = {
+  viewportHeight: number;
+  tableTop: number;
+  reservedHeight?: number;
+  rowHeight?: number;
+  minRows?: number;
+  maxRows?: number;
+};
+
+export function calculateAdaptiveTablePageSize({
+  viewportHeight,
+  tableTop,
+  reservedHeight = 184,
+  rowHeight = 41,
+  minRows = 10,
+  maxRows = 25,
+}: AdaptiveTablePageSizeInput): number {
+  if (
+    !Number.isFinite(viewportHeight)
+    || !Number.isFinite(tableTop)
+    || !Number.isFinite(reservedHeight)
+    || !Number.isFinite(rowHeight)
+    || rowHeight <= 0
+  ) {
+    return minRows;
+  }
+
+  const rows = Math.floor((viewportHeight - tableTop - reservedHeight) / rowHeight);
+  return Math.min(maxRows, Math.max(minRows, rows));
+}
+
+export function mapPageForPageSizeChange(
+  currentPage: number,
+  currentPageSize: number,
+  nextPageSize: number,
+): number {
+  const safePage = Number.isFinite(currentPage) && currentPage > 0 ? Math.floor(currentPage) : 1;
+  const safeCurrentSize = Number.isFinite(currentPageSize) && currentPageSize > 0 ? Math.floor(currentPageSize) : 10;
+  const safeNextSize = Number.isFinite(nextPageSize) && nextPageSize > 0 ? Math.floor(nextPageSize) : 10;
+  const firstRecordIndex = (safePage - 1) * safeCurrentSize;
+  return Math.floor(firstRecordIndex / safeNextSize) + 1;
+}
+
 export type ConcentricTestSeedRow = {
   unit: string;
   block: string;
