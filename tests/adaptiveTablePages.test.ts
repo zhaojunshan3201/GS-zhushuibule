@@ -218,6 +218,86 @@ for (const [pageName, totalSetter] of [
   });
 }
 
+function assertAdaptiveOperationsPageContract(pageSource: string, pageKind: "injection" | "water-cut") {
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(/, "page uses the shared adaptive pagination hook");
+  assert.match(pageSource, /\bcurrentPageRef\b/, "page gets currentPageRef from the shared hook");
+  assert.match(pageSource, /\bpageSizeRef\b/, "page gets pageSizeRef from the shared hook");
+  assert.match(pageSource, /\bisMeasured\b/, "page waits for the first viewport measurement");
+  assert.match(pageSource, /const\s+appliedFiltersRef\s*=\s*useRef\(filters\)/, "draft and applied filters are separate");
+  assert.match(pageSource, /const\s+recordsRef\s*=\s*useRef\(records\)/, "delete reads the latest committed rows");
+  assert.match(pageSource, /const\s+loadRequestIdRef\s*=\s*useRef\(0\)/, "page tracks the latest list request");
+  assert.match(
+    pageSource,
+    /const\s+loadRecords\s*=\s*useCallback\s*\(\s*async\s*\([\s\S]*?page\s*=\s*currentPageRef\.current[\s\S]*?nextFilters\s*=\s*appliedFiltersRef\.current[\s\S]*?requestedPageSize\s*=\s*pageSizeRef\.current/,
+    "list loading takes stable page, applied filters, and adaptive size defaults",
+  );
+  assert.match(
+    pageSource,
+    /setCurrentPage\(page\);\s*setRecords\(\[\]\);[\s\S]*?setLoading\(true\);[\s\S]*?const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current/,
+    "a pending request records target-page intent and clears stale rows",
+  );
+  assert.doesNotMatch(pageSource, /setTotalRows\(0\)/, "a pending or failed request preserves the committed total boundary");
+  assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/, "main-table requests use the measured page size");
+  assert.match(
+    pageSource,
+    /await\s+axios\.get[\s\S]*?if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;[\s\S]*?setRecords\(/,
+    "only the latest successful list request commits rows",
+  );
+  assert.match(
+    pageSource,
+    /catch\s*\([^)]*\)\s*\{\s*if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;\s*setError\(/,
+    "only the latest failed list request commits an error",
+  );
+  assert.match(
+    pageSource,
+    /finally\s*\{\s*if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;\s*setLoading\(false\);\s*\}/,
+    "only the latest list request clears pending state",
+  );
+  assert.match(
+    pageSource,
+    /useEffect\s*\(\s*\(\)\s*=>\s*\{\s*if\s*\(!isMeasured\)\s*return;\s*void\s+loadRecords\(currentPageRef\.current,\s*appliedFiltersRef\.current,\s*pageSize\);\s*\},\s*\[isMeasured,\s*loadRecords,\s*pageSize\]\s*\)/,
+    "capacity changes reload the intended page with applied filters",
+  );
+  assert.match(pageSource, /getAdaptivePaginationView\s*\(/, "all controls share one committed pagination boundary");
+  assert.match(pageSource, /void\s+loadRecords\(clampPage\(page\)\)/, "navigation clamps against that shared boundary");
+  assert.match(pageSource, /disabled=\{!canGoPrevious\}/, "previous control uses the shared boundary");
+  assert.match(pageSource, /disabled=\{!canGoNext\}/, "next control uses the shared boundary");
+  assert.match(pageSource, /ref=\{tablePageRef\}/, "the page shell is measurable");
+  assert.match(pageSource, /\{loading\s*&&\s*\(/, "the table renders an explicit pending row");
+  assert.match(pageSource, /\{!loading\s*&&\s*!error\s*&&/, "no-data appears only outside pending and error states");
+  assert.match(
+    pageSource,
+    /await\s+axios\.delete[\s\S]*?const\s+latestRecords\s*=\s*recordsRef\.current;\s*const\s+latestPage\s*=\s*currentPageRef\.current;/,
+    "delete refreshes from latest refs instead of stale closures",
+  );
+  assert.doesNotMatch(pageSource, /const\s+\[appliedFilters,\s*setAppliedFilters\]/, "applied filters are not render state");
+
+  if (pageKind === "injection") {
+    assert.match(pageSource, /\.slice\(0,\s*pageSize\)/, "the pinned-first-page view respects adaptive capacity");
+    assert.match(pageSource, /\(displayPage\s*-\s*1\)\s*\*\s*pageSize\s*\+\s*index\s*\+\s*1/, "row numbering uses adaptive capacity");
+    assert.match(pageSource, /setPinnedRecord\(null\)/, "pending requests clear the pinned row from the old view");
+  } else {
+    assert.match(pageSource, /\(displayPage\s*-\s*1\)\s*\*\s*pageSize\s*\+\s*index\s*\+\s*1/, "row numbering uses adaptive capacity");
+    assert.match(pageSource, /pageSize:\s*50/, "the independent water-cut trend query keeps its larger history limit");
+  }
+}
+
+for (const [pageName, pageKind] of [
+  ["InjectionTechPage", "injection"],
+  ["WaterCutPage", "water-cut"],
+] as const) {
+  test(`${pageName} uses shared adaptive server pagination`, async () => {
+    const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), pageName);
+    assertAdaptiveOperationsPageContract(pageSource, pageKind);
+  });
+}
+
+test("injection-tech and water-cut main tables no longer define fixed capacities", async () => {
+  const source = await readFile(appUrl, "utf8");
+  assert.doesNotMatch(source, /INJECTION_TECH_PAGE_SIZE/);
+  assert.doesNotMatch(source, /WATER_CUT_PAGE_SIZE/);
+});
+
 test("a rejected adaptive request never combines its target page with stale records", () => {
   const existingPage = {
     currentPage: 4,

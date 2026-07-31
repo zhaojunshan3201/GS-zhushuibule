@@ -3930,9 +3930,6 @@ function WellFlushingPage() {
   );
 }
 
-const INJECTION_TECH_PAGE_SIZE = 15;
-const WATER_CUT_PAGE_SIZE = 30;
-
 const todayDateInput = () => new Date().toISOString().slice(0, 10);
 
 const apiDateOnly = (value?: string | null) => (value ? String(value).slice(0, 10) : "");
@@ -3978,8 +3975,10 @@ function InjectionTechPage() {
     runningMonths: "",
     wellNo: "",
   });
-  const [appliedFilters, setAppliedFilters] = useState(filters);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
+  const loadRequestIdRef = useRef(0);
   const [jumpPage, setJumpPage] = useState("1");
   const [totalRows, setTotalRows] = useState(0);
   const [pinnedRecord, setPinnedRecord] = useState<InjectionTechRecord | null>(null);
@@ -3993,8 +3992,9 @@ function InjectionTechPage() {
   const headerClass = "border border-[#99c7f3] bg-[#dceefc] px-2 py-2 text-center text-[13px] font-bold leading-tight text-[#001a33]";
   const cellClass = "h-10 border border-[#99c7f3] bg-white px-2 py-1 text-center text-[13px] leading-tight text-black";
 
-  const totalPages = Math.max(1, Math.ceil(totalRows / INJECTION_TECH_PAGE_SIZE));
-  const recordMatchesFilters = (record: InjectionTechRecord, nextFilters = appliedFilters) => {
+  const { totalPages, displayPage, canGoPrevious, canGoNext, clampPage } = getAdaptivePaginationView(currentPage, totalRows, pageSize);
+  const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
+  const recordMatchesFilters = (record: InjectionTechRecord, nextFilters = appliedFiltersRef.current) => {
     if (nextFilters.workArea && record.workArea !== nextFilters.workArea) return false;
     if (nextFilters.block && !record.block.includes(nextFilters.block)) return false;
     if (nextFilters.process && !record.process.includes(nextFilters.process)) return false;
@@ -4004,50 +4004,63 @@ function InjectionTechPage() {
     return true;
   };
   const visibleRecords =
-    currentPage === 1 && pinnedRecord && recordMatchesFilters(pinnedRecord)
-      ? [pinnedRecord, ...records.filter((row) => row.id !== pinnedRecord.id)].slice(0, INJECTION_TECH_PAGE_SIZE)
+    displayPage === 1 && pinnedRecord && recordMatchesFilters(pinnedRecord)
+      ? [pinnedRecord, ...records.filter((row) => row.id !== pinnedRecord.id)].slice(0, pageSize)
       : records;
 
-  const loadRecords = async (page = currentPage, nextFilters = appliedFilters) => {
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = appliedFiltersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    setCurrentPage(page);
+    setRecords([]);
+    setPinnedRecord(null);
     setLoading(true);
-    setError("");
+    setJumpPage(String(page));
+    const requestId = ++loadRequestIdRef.current;
     try {
+      setError("");
       const { data } = await axios.get<PaginatedApiResponse<InjectionTechRecord>>("/api/injection-tech-records", {
         params: {
           ...compactQueryParams(nextFilters),
           page,
-          pageSize: INJECTION_TECH_PAGE_SIZE,
+          pageSize: requestedPageSize,
         },
       });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalRows(data.total);
+      setCurrentPage(data.page);
       setJumpPage(String(data.page));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "注水工艺记录加载失败");
-      setRecords([]);
-      setTotalRows(0);
     } finally {
+      if (requestId !== loadRequestIdRef.current) return;
       setLoading(false);
     }
-  };
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(currentPage, appliedFilters);
-  }, [currentPage, appliedFilters]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
   const goToPage = (page: number) => {
-    const nextPage = Math.min(Math.max(page, 1), totalPages);
-    setCurrentPage(nextPage);
-    setJumpPage(String(nextPage));
+    void loadRecords(clampPage(page));
   };
   const applyCurrentFilters = () => {
-    setAppliedFilters(filters);
+    appliedFiltersRef.current = filters;
     setPinnedRecord(null);
-    setCurrentPage(1);
-    setJumpPage("1");
+    void loadRecords(1, filters);
   };
   const updateForm = (key: keyof ReturnType<typeof createEmptyInjectionTechForm>, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -4076,7 +4089,7 @@ function InjectionTechPage() {
       setCurrentPage(1);
       setJumpPage("1");
       setPinnedRecord(createdRecord);
-      setRecords((current) => [createdRecord, ...current.filter((row) => row.id !== createdRecord.id)].slice(0, INJECTION_TECH_PAGE_SIZE));
+      setRecords((current) => [createdRecord, ...current.filter((row) => row.id !== createdRecord.id)].slice(0, pageSize));
       setTotalRows((current) => current + 1);
     } catch (err: any) {
       setError(err?.response?.data?.error || "注水工艺记录新增失败");
@@ -4092,9 +4105,12 @@ function InjectionTechPage() {
         setPinnedRecord((current) => (current?.id === record.id ? null : current));
         setRecords((current) => current.filter((row) => row.id !== record.id));
         setTotalRows((current) => Math.max(0, current - 1));
-        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-        setCurrentPage(nextPage);
-        await loadRecords(nextPage, appliedFilters);
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
+        await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "注水工艺记录删除失败");
       }
@@ -4106,7 +4122,7 @@ function InjectionTechPage() {
   };
 
   return (
-    <div className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
+    <div ref={tablePageRef} className="rounded border border-[#9fc3e7] bg-[#f8fbff] shadow-[0_1px_3px_rgba(64,128,191,0.25)]">
       {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2 py-2 text-[12px] text-[#001a33]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -4163,11 +4179,11 @@ function InjectionTechPage() {
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
-          <span>第{currentPage}页 共{totalPages}页 共{totalRows}条</span>
-          <button type="button" onClick={() => goToPage(1)} className="zonal-pagination-link font-bold hover:underline">首页</button>
-          <button type="button" onClick={() => goToPage(currentPage - 1)} className="zonal-pagination-link font-bold hover:underline">上一页</button>
-          <button type="button" onClick={() => goToPage(currentPage + 1)} className="zonal-pagination-link font-bold hover:underline">下一页</button>
-          <button type="button" onClick={() => goToPage(totalPages)} className="zonal-pagination-link font-bold hover:underline">尾页</button>
+          <span>第{displayPage}页 共{totalPages}页 共{totalRows}条</span>
+          <button type="button" onClick={() => goToPage(1)} disabled={!canGoPrevious} className={pageButtonClass}>首页</button>
+          <button type="button" onClick={() => goToPage(displayPage - 1)} disabled={!canGoPrevious} className={pageButtonClass}>上一页</button>
+          <button type="button" onClick={() => goToPage(displayPage + 1)} disabled={!canGoNext} className={pageButtonClass}>下一页</button>
+          <button type="button" onClick={() => goToPage(totalPages)} disabled={!canGoNext} className={pageButtonClass}>尾页</button>
           <span>跳转</span>
           <input
             className="h-5 w-8 rounded border border-[#9bbfe5] bg-white px-1 text-center text-[12px] outline-none"
@@ -4301,7 +4317,7 @@ function InjectionTechPage() {
           <tbody>
             {visibleRecords.map((row, index) => (
               <tr key={row.id}>
-                <td className={cellClass}>{(currentPage - 1) * INJECTION_TECH_PAGE_SIZE + index + 1}</td>
+                <td className={cellClass}>{(displayPage - 1) * pageSize + index + 1}</td>
                 <td className={cellClass}>{row.wellNo}</td>
                 <td className={cellClass}>{row.workArea}</td>
                 <td className={cellClass}>{row.block}</td>
@@ -4321,9 +4337,14 @@ function InjectionTechPage() {
                 </td>
               </tr>
             ))}
-            {!visibleRecords.length && (
+            {loading && (
               <tr>
-                <td className={cellClass} colSpan={19}>{loading ? "加载中..." : "暂无符合条件的数据"}</td>
+                <td className={cellClass} colSpan={19}>加载中...</td>
+              </tr>
+            )}
+            {!loading && !error && !visibleRecords.length && (
+              <tr>
+                <td className={cellClass} colSpan={19}>暂无符合条件的数据</td>
               </tr>
             )}
           </tbody>
@@ -4544,8 +4565,10 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [records, setRecords] = useState<WaterCutRecord[]>([]);
   const [filters, setFilters] = useState(() => createEmptyWaterCutFilters());
-  const [appliedFilters, setAppliedFilters] = useState(filters);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const appliedFiltersRef = useRef(filters);
+  const recordsRef = useRef(records);
+  const loadRequestIdRef = useRef(0);
   const [jumpPage, setJumpPage] = useState("1");
   const [totalRows, setTotalRows] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
@@ -4568,44 +4591,58 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
   const [opinionError, setOpinionError] = useState("");
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
-  const totalPages = Math.max(1, Math.ceil(totalRows / WATER_CUT_PAGE_SIZE));
-  const loadRecords = async (page = currentPage, nextFilters = appliedFilters) => {
+  const { totalPages, displayPage, canGoPrevious, canGoNext, clampPage } = getAdaptivePaginationView(currentPage, totalRows, pageSize);
+  const pageButtonClass = "zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline";
+
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = appliedFiltersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    setCurrentPage(page);
+    setRecords([]);
     setLoading(true);
-    setError("");
+    setJumpPage(String(page));
+    const requestId = ++loadRequestIdRef.current;
     try {
+      setError("");
       const { data } = await axios.get<PaginatedApiResponse<WaterCutRecord>>("/api/water-cuts", {
         params: {
           ...compactQueryParams(nextFilters),
           page,
-          pageSize: WATER_CUT_PAGE_SIZE,
+          pageSize: requestedPageSize,
         },
       });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalRows(data.total);
+      setCurrentPage(data.page);
       setJumpPage(String(data.page));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "含水化验记录加载失败");
-      setRecords([]);
-      setTotalRows(0);
     } finally {
+      if (requestId !== loadRequestIdRef.current) return;
       setLoading(false);
     }
-  };
+  }, [setCurrentPage]);
   useEffect(() => {
-    void loadRecords(currentPage, appliedFilters);
-  }, [currentPage, appliedFilters]);
+    if (!isMeasured) return;
+    void loadRecords(currentPageRef.current, appliedFiltersRef.current, pageSize);
+  }, [isMeasured, loadRecords, pageSize]);
   const updateFilter = (key: keyof typeof filters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
   const goToPage = (page: number) => {
-    const nextPage = Math.min(totalPages, Math.max(1, page));
-    setCurrentPage(nextPage);
-    setJumpPage(String(nextPage));
+    void loadRecords(clampPage(page));
   };
   const applyCurrentFilters = () => {
-    setAppliedFilters(filters);
-    setCurrentPage(1);
-    setJumpPage("1");
+    appliedFiltersRef.current = filters;
+    void loadRecords(1, filters);
   };
   const updateForm = (key: keyof ReturnType<typeof createEmptyWaterCutForm>, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -4623,8 +4660,7 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
       setShowCreate(false);
       const clearedFilters = createEmptyWaterCutFilters();
       setFilters(clearedFilters);
-      setAppliedFilters(clearedFilters);
-      setCurrentPage(1);
+      appliedFiltersRef.current = clearedFilters;
       await loadRecords(1, clearedFilters);
     } catch (err: any) {
       setError(err?.response?.data?.error || "含水化验记录新增失败");
@@ -4637,9 +4673,12 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
       setError("");
       try {
         await axios.delete(`/api/water-cuts/${record.id}`);
-        const nextPage = records.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-        setCurrentPage(nextPage);
-        await loadRecords(nextPage, appliedFilters);
+        const latestRecords = recordsRef.current;
+        const latestPage = currentPageRef.current;
+        const nextPage = latestRecords.length === 1 && latestRecords[0]?.id === record.id && latestPage > 1
+          ? latestPage - 1
+          : latestPage;
+        await loadRecords(nextPage);
       } catch (err: any) {
         setError(err?.response?.data?.error || "含水化验记录删除失败");
       }
@@ -4791,7 +4830,7 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
       const { data } = await axios.post<{ imported: number }>("/api/water-cuts/import", { rows: parsedRows });
       setImportStatus(`已导入 ${data.imported} 条`);
       setCurrentPage(1);
-      await loadRecords(1, appliedFilters);
+      await loadRecords(1, appliedFiltersRef.current);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || "Excel 导入失败");
     } finally {
@@ -4803,7 +4842,7 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
   };
 
   return (
-    <div className="rounded-md border border-[#9fc3e7] bg-white shadow-[0_0_0_1px_rgba(159,195,231,0.25)]">
+    <div ref={tablePageRef} className="rounded-md border border-[#9fc3e7] bg-white shadow-[0_0_0_1px_rgba(159,195,231,0.25)]">
       {confirmDialog}
       {curveWellNo && (
         <div className="fixed z-[80] w-[820px] border border-[#8fb7df] bg-white shadow-2xl" style={{ left: curvePosition.left, top: curvePosition.top }}>
@@ -4961,11 +5000,11 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
-          <span>{`第 ${currentPage} 页 共 ${totalPages} 页 共 ${totalRows} 条`}</span>
-          <button type="button" onClick={() => goToPage(1)} className="zonal-pagination-link font-bold hover:underline">首页</button>
-          <button type="button" onClick={() => goToPage(currentPage - 1)} className="zonal-pagination-link font-bold hover:underline">上一页</button>
-          <button type="button" onClick={() => goToPage(currentPage + 1)} className="zonal-pagination-link font-bold hover:underline">下一页</button>
-          <button type="button" onClick={() => goToPage(totalPages)} className="zonal-pagination-link font-bold hover:underline">尾页</button>
+          <span>{`第 ${displayPage} 页 共 ${totalPages} 页 共 ${totalRows} 条`}</span>
+          <button type="button" onClick={() => goToPage(1)} disabled={!canGoPrevious} className={pageButtonClass}>首页</button>
+          <button type="button" onClick={() => goToPage(displayPage - 1)} disabled={!canGoPrevious} className={pageButtonClass}>上一页</button>
+          <button type="button" onClick={() => goToPage(displayPage + 1)} disabled={!canGoNext} className={pageButtonClass}>下一页</button>
+          <button type="button" onClick={() => goToPage(totalPages)} disabled={!canGoNext} className={pageButtonClass}>尾页</button>
           <label className="flex items-center gap-1">
             <span>跳转</span>
             <input
@@ -5014,7 +5053,7 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
           <tbody>
             {records.map((row, index) => (
               <tr key={row.id}>
-                <td>{(currentPage - 1) * WATER_CUT_PAGE_SIZE + index + 1}</td>
+                <td>{(displayPage - 1) * pageSize + index + 1}</td>
                 <td>{row.unit}</td>
                 <td>{row.block}</td>
                 <td className="font-bold text-[#213047]">{row.wellNo}</td>
@@ -5030,9 +5069,14 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
                 </td>
               </tr>
             ))}
-            {!records.length && (
+            {loading && (
               <tr>
-                <td colSpan={8}>{loading ? "加载中..." : "暂无符合条件的数据"}</td>
+                <td colSpan={8}>加载中...</td>
+              </tr>
+            )}
+            {!loading && !error && !records.length && (
+              <tr>
+                <td colSpan={8}>暂无符合条件的数据</td>
               </tr>
             )}
           </tbody>
