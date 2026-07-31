@@ -1703,6 +1703,7 @@ function SmartTestHistoryPage() {
   const currentPageRef = useRef(currentPage);
   const pageSizeRef = useRef(pageSize);
   const filtersRef = useRef(filters);
+  const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SmartTestForm>(() => createEmptySmartTestForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1719,16 +1720,19 @@ function SmartTestHistoryPage() {
     nextFilters = filtersRef.current,
     requestedPageSize = pageSizeRef.current,
   ) => {
+    const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
       const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize: requestedPageSize }).filter(([, value]) => String(value).trim()));
       const { data } = await axios.get<PaginatedApiResponse<SmartTestRecord>>("/api/smart-test-records", { params });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalItems(data.total);
       setCurrentPage(data.page);
       currentPageRef.current = data.page;
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "智能测调记录加载失败");
     }
   }, []);

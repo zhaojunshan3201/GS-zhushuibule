@@ -26,3 +26,18 @@ test("SmartTestHistoryPage uses viewport-adaptive server pagination", async () =
   assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*10\b/);
   assert.match(pageSource, /min-w-\[1820px\]/);
 });
+
+test("SmartTestHistoryPage only lets the latest records request commit state", async () => {
+  const pageSource = getSmartTestHistoryPageSource(await readFile(appUrl, "utf8"));
+
+  assert.match(pageSource, /const\s+loadRequestIdRef\s*=\s*useRef\(0\)/);
+  assert.match(pageSource, /const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current/);
+  assert.match(
+    pageSource,
+    /await\s+axios\.get[\s\S]*?if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;[\s\S]*?setRecords\(/,
+  );
+  assert.match(
+    pageSource,
+    /catch\s*\([^)]*\)\s*{\s*if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;\s*setError\(/,
+  );
+});
