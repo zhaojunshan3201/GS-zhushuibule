@@ -13,6 +13,21 @@ import {
 } from "../src/shared/homeReserveOverview";
 
 const componentUrl = new URL("../src/components/HomeReserveAnalysisDashboard.tsx", import.meta.url);
+const appUrl = new URL("../src/App.tsx", import.meta.url);
+
+test("home page places the reserve dashboard above the unchanged overview table", async () => {
+  const source = await readFile(appUrl, "utf8");
+  const homePage = source.slice(source.indexOf("function HomePage()"), source.indexOf("function PlaceholderPage"));
+
+  assert.match(source, /import \{ HomeReserveAnalysisDashboard \} from "\.\/components\/HomeReserveAnalysisDashboard";/);
+  assert.ok(homePage.indexOf("<HomeReserveAnalysisDashboard rows={rows} />") < homePage.indexOf("储量概览列表"));
+  assert.match(homePage, /<section[^>]*aria-labelledby="reserve-table-title"[^>]*>/);
+  assert.match(homePage, /<h2 id="reserve-table-title"/);
+  assert.match(homePage, /"\/api\/home-reserve-overview"/);
+  for (const header of ["单位", "区块", "含油面积", "动用储量", "可采储量", "标定采收率", "上年度产油"]) {
+    assert.match(homePage, new RegExp(`"${header}"`));
+  }
+});
 
 test("home reserve analysis dashboard exposes the requested analytics content", async () => {
   const source = await readFile(componentUrl, "utf8");

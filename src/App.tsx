@@ -43,6 +43,7 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "./lib/utils";
+import { HomeReserveAnalysisDashboard } from "./components/HomeReserveAnalysisDashboard";
 import { PptxWellHistoryEditor } from "./components/PptxWellHistoryEditor";
 import { WellHistoryRichTextEditor } from "./components/WellHistoryRichTextEditor";
 import {
@@ -567,12 +568,14 @@ function HomePage() {
   const bodyCellClass = `${tableBorder} bg-white px-2 py-2 text-center text-[13px] leading-tight text-black`;
 
   return (
-    <div className="home-reserve-overview border border-[#8ebdff] bg-white">
-      <h1 className="border-b border-[#8ebdff] bg-[#f8fbff] py-1 text-center text-[22px] font-bold leading-tight text-[#d40000]">
-        储量概览列表
-      </h1>
-      <div className="overflow-x-auto bg-white">
-        <table className="w-full min-w-[980px] table-fixed border-collapse text-center">
+    <div className="space-y-5">
+      <HomeReserveAnalysisDashboard rows={rows} />
+      <section className="home-reserve-overview border border-[#8ebdff] bg-white" aria-labelledby="reserve-table-title">
+        <h2 id="reserve-table-title" className="border-b border-[#8ebdff] bg-[#f8fbff] py-1 text-center text-[22px] font-bold leading-tight text-[#d40000]">
+          储量概览列表
+        </h2>
+        <div className="overflow-x-auto bg-white">
+          <table className="w-full min-w-[980px] table-fixed border-collapse text-center">
           <colgroup>
             <col className="w-[90px]" />
             <col className="w-[150px]" />
@@ -622,9 +625,10 @@ function HomePage() {
               );
             })}
           </tbody>
-        </table>
-        {error && rows.length > 0 && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      </div>
+          </table>
+          {error && rows.length > 0 && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        </div>
+      </section>
     </div>
   );
 }
