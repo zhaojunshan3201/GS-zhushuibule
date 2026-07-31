@@ -10,6 +10,18 @@ export type AdaptiveTablePaginationOptions = {
   maxRows?: number;
 };
 
+export function mapAdaptiveTablePaginationState(
+  currentPage: number,
+  pageSize: number,
+  nextPageSize: number,
+) {
+  if (nextPageSize === pageSize) return { currentPage, pageSize };
+  return {
+    currentPage: mapPageForPageSizeChange(currentPage, pageSize, nextPageSize),
+    pageSize: nextPageSize,
+  };
+}
+
 export function useAdaptiveTablePagination({
   initialPage = 1,
   fallbackTableTop = 80,
@@ -19,28 +31,27 @@ export function useAdaptiveTablePagination({
   maxRows = 25,
 }: AdaptiveTablePaginationOptions = {}) {
   const tablePageRef = useRef<HTMLDivElement>(null);
-  const [currentPage, setCurrentPageState] = useState(initialPage);
-  const [pageSize, setPageSize] = useState(() => calculateAdaptiveTablePageSize({
-    viewportHeight: typeof window === "undefined" ? 0 : window.innerHeight,
-    tableTop: fallbackTableTop,
-    reservedHeight,
-    rowHeight,
-    minRows,
-    maxRows,
-  }));
-  const currentPageRef = useRef(currentPage);
-  const pageSizeRef = useRef(pageSize);
-
-  currentPageRef.current = currentPage;
-  pageSizeRef.current = pageSize;
+  const [pagination, setPagination] = useState({
+    currentPage: initialPage,
+    pageSize: minRows,
+  });
+  const currentPageRef = useRef(pagination.currentPage);
+  const pageSizeRef = useRef(pagination.pageSize);
 
   const setCurrentPage = useCallback((nextPage: SetStateAction<number>) => {
-    setCurrentPageState((previousPage) => {
-      const resolvedPage = typeof nextPage === "function" ? nextPage(previousPage) : nextPage;
-      currentPageRef.current = resolvedPage;
-      return resolvedPage;
+    setPagination((current) => {
+      const resolvedPage = typeof nextPage === "function"
+        ? nextPage(current.currentPage)
+        : nextPage;
+      if (resolvedPage === current.currentPage) return current;
+      return { ...current, currentPage: resolvedPage };
     });
   }, []);
+
+  useEffect(() => {
+    currentPageRef.current = pagination.currentPage;
+    pageSizeRef.current = pagination.pageSize;
+  }, [pagination]);
 
   const measurePageSize = useCallback(() => {
     const nextPageSize = calculateAdaptiveTablePageSize({
@@ -52,17 +63,15 @@ export function useAdaptiveTablePagination({
       maxRows,
     });
 
-    if (nextPageSize === pageSizeRef.current) return;
-
-    const nextPage = mapPageForPageSizeChange(
-      currentPageRef.current,
-      pageSizeRef.current,
-      nextPageSize,
-    );
-    pageSizeRef.current = nextPageSize;
-    setPageSize(nextPageSize);
-    setCurrentPage(nextPage);
-  }, [fallbackTableTop, maxRows, minRows, reservedHeight, rowHeight, setCurrentPage]);
+    setPagination((current) => {
+      if (nextPageSize === current.pageSize) return current;
+      return mapAdaptiveTablePaginationState(
+        current.currentPage,
+        current.pageSize,
+        nextPageSize,
+      );
+    });
+  }, [fallbackTableTop, maxRows, minRows, reservedHeight, rowHeight]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -83,6 +92,8 @@ export function useAdaptiveTablePagination({
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
     };
   }, [measurePageSize]);
+
+  const { currentPage, pageSize } = pagination;
 
   return {
     currentPage,
