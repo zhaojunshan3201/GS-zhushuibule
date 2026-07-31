@@ -367,6 +367,10 @@ test("dynamic adjustment uses adaptive client slicing without resize requests", 
   const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), "DynamicAdjustmentPage");
 
   assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\)/);
+  assert.match(pageSource, /const\s+appliedFiltersRef\s*=\s*useRef\(filters\)/);
+  assert.match(pageSource, /const\s+loadRequestCoordinatorRef\s*=\s*useRef\(createLatestRequestCoordinator\(\)\)/);
+  assert.match(pageSource, /loadRequestCoordinatorRef\.current\.run\s*\(/);
+  assert.match(pageSource, /appliedFiltersRef\.current\s*=\s*filters;\s*void\s+loadRecords\(filters\)/);
   assert.match(pageSource, /getAdaptivePaginationView\s*\(currentPage,\s*totalItems,\s*pageSize\)/);
   assert.match(
     pageSource,

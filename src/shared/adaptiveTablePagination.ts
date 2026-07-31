@@ -74,6 +74,35 @@ export function buildPinnedAdaptivePage<T extends { id: string }>(
   ].slice(0, pageSize);
 }
 
+export function createLatestRequestCoordinator() {
+  let latestRequestId = 0;
+
+  return {
+    async run<T>(
+      request: () => Promise<T>,
+      handlers: {
+        onStart: () => void;
+        onSuccess: (value: T) => void;
+        onError: (error: unknown) => void;
+        onFinish: () => void;
+      },
+    ) {
+      const requestId = ++latestRequestId;
+      handlers.onStart();
+      try {
+        const value = await request();
+        if (requestId !== latestRequestId) return;
+        handlers.onSuccess(value);
+      } catch (error) {
+        if (requestId !== latestRequestId) return;
+        handlers.onError(error);
+      } finally {
+        if (requestId === latestRequestId) handlers.onFinish();
+      }
+    },
+  };
+}
+
 export function useAdaptiveTablePagination({
   initialPage = 1,
   fallbackTableTop = 80,

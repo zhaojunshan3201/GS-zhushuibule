@@ -20,6 +20,9 @@ const getZonalTablePaginationView = (
 const buildPinnedAdaptivePage = (
   hookModule as Record<string, unknown>
 ).buildPinnedAdaptivePage;
+const createLatestRequestCoordinator = (
+  hookModule as Record<string, unknown>
+).createLatestRequestCoordinator;
 
 test("exports the shared adaptive table pagination hook and its options", () => {
   assert.match(source, /export type AdaptiveTablePaginationOptions/);
@@ -136,6 +139,68 @@ test("builds a pinned page from the records and capacity current when create com
   assert.equal(page.length, 25);
   assert.equal(page[0], pinnedRecord);
   assert.deepEqual(page.slice(1).map((record) => record.id), recordsAfterResize.slice(0, 24).map((record) => record.id));
+});
+
+test("latest request coordinator ignores stale success and failure completion", async () => {
+  assert.equal(typeof createLatestRequestCoordinator, "function");
+  type Coordinator = {
+    run<T>(
+      request: () => Promise<T>,
+      handlers: {
+        onStart: () => void;
+        onSuccess: (value: T) => void;
+        onError: (error: unknown) => void;
+        onFinish: () => void;
+      },
+    ): Promise<void>;
+  };
+  const createCoordinator = createLatestRequestCoordinator as () => Coordinator;
+
+  for (const staleOutcome of ["success", "failure"] as const) {
+    const coordinator = createCoordinator();
+    const state = { records: [] as string[], error: "", loading: false };
+    const deferred = () => {
+      let resolve!: (value: string[]) => void;
+      let reject!: (error: Error) => void;
+      const promise = new Promise<string[]>((nextResolve, nextReject) => {
+        resolve = nextResolve;
+        reject = nextReject;
+      });
+      return { promise, resolve, reject };
+    };
+    const requestA = deferred();
+    const requestB = deferred();
+    const run = (request: Promise<string[]>) => coordinator.run(
+      () => request,
+      {
+        onStart: () => {
+          state.records = [];
+          state.error = "";
+          state.loading = true;
+        },
+        onSuccess: (records) => {
+          state.records = records;
+        },
+        onError: (error) => {
+          state.error = error instanceof Error ? error.message : "failed";
+        },
+        onFinish: () => {
+          state.loading = false;
+        },
+      },
+    );
+
+    const pendingA = run(requestA.promise);
+    const pendingB = run(requestB.promise);
+    requestB.resolve(["B"]);
+    await pendingB;
+    assert.deepEqual(state, { records: ["B"], error: "", loading: false });
+
+    if (staleOutcome === "success") requestA.resolve(["A"]);
+    else requestA.reject(new Error("stale A failed"));
+    await pendingA;
+    assert.deepEqual(state, { records: ["B"], error: "", loading: false });
+  }
 });
 
 test("coalesces resize measurement and cleans up browser resources", () => {

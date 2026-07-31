@@ -60,7 +60,7 @@ import {
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
 import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
-import { buildPinnedAdaptivePage, getAdaptivePaginationView, getZonalTablePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
+import { buildPinnedAdaptivePage, createLatestRequestCoordinator, getAdaptivePaginationView, getZonalTablePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -8123,6 +8123,8 @@ function DynamicAdjustmentPage() {
     fromDate: "",
     toDate: "",
   });
+  const appliedFiltersRef = useRef(filters);
+  const loadRequestCoordinatorRef = useRef(createLatestRequestCoordinator());
   const [form, setForm] = useState<DynamicAdjustmentForm>(() => createEmptyDynamicAdjustmentForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -8148,21 +8150,29 @@ function DynamicAdjustmentPage() {
     afterWaterCut: form.afterWaterCut === "" ? null : Number(form.afterWaterCut),
   });
 
-  const loadRecords = async (nextFilters = filters) => {
-    setLoading(true);
-    setError("");
-    try {
-      const { data } = await axios.get<DynamicAdjustmentRecord[]>("/api/dynamic-adjustments", {
+  const loadRecords = async (nextFilters = appliedFiltersRef.current) => {
+    await loadRequestCoordinatorRef.current.run(
+      () => axios.get<DynamicAdjustmentRecord[]>("/api/dynamic-adjustments", {
         params: Object.fromEntries(Object.entries(nextFilters).filter(([, value]) => typeof value === "string" && value.trim())),
-      });
-      setRecords(data);
-      setCurrentPage(1);
-      setSelectedId((current) => (data.some((record) => record.id === current) ? current : null));
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "动态调配记录加载失败");
-    } finally {
-      setLoading(false);
-    }
+      }),
+      {
+        onStart: () => {
+          setLoading(true);
+          setError("");
+        },
+        onSuccess: ({ data }) => {
+          setRecords(data);
+          setCurrentPage(1);
+          setSelectedId((current) => (data.some((record) => record.id === current) ? current : null));
+        },
+        onError: (err: any) => {
+          setError(err?.response?.data?.error || "动态调配记录加载失败");
+        },
+        onFinish: () => {
+          setLoading(false);
+        },
+      },
+    );
   };
 
   useEffect(() => {
@@ -8190,6 +8200,7 @@ function DynamicAdjustmentPage() {
   const resetFilters = () => {
     const emptyFilters = { adjustmentWaterWell: "", trackedOilWell: "", adjustmentPurpose: "", fromDate: "", toDate: "" };
     setFilters(emptyFilters);
+    appliedFiltersRef.current = emptyFilters;
     void loadRecords(emptyFilters);
   };
 
@@ -8281,7 +8292,7 @@ function DynamicAdjustmentPage() {
               <span>调配水井</span>
               <input className={`${inputClass} w-24`} value={filters.adjustmentWaterWell} onChange={(event) => setFilters({ ...filters, adjustmentWaterWell: event.target.value })} />
             </label>
-            <button type="button" onClick={() => loadRecords()} className={toolButtonClass}>确定</button>
+            <button type="button" onClick={() => { appliedFiltersRef.current = filters; void loadRecords(filters); }} className={toolButtonClass}>确定</button>
             <button type="button" onClick={resetFilters} className={toolButtonClass}>重置</button>
             <button type="button" onClick={() => openCreateForm()} className={toolButtonClass}>新增</button>
             <button type="button" disabled={!selectedRecord} onClick={() => selectedRecord && openEditForm(selectedRecord)} className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}>编辑</button>
