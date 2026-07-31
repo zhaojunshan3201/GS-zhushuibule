@@ -22,7 +22,6 @@ type HomeReserveAnalysisDashboardProps = {
 };
 
 type MetricCardProps = {
-  key?: string;
   icon: LucideIcon;
   label: string;
   value: number;
@@ -43,6 +42,11 @@ const numberFormatter = new Intl.NumberFormat("zh-CN", {
 
 function formatMetric(value: number) {
   return numberFormatter.format(value);
+}
+
+export function formatChartTooltipValue(value: number, kind: "reserve" | "oil" | "percent") {
+  const suffix = kind === "reserve" ? " 万吨" : kind === "oil" ? " 万吨/年" : "%";
+  return `${formatMetric(value)}${suffix}`;
 }
 
 function MetricCard({ icon: Icon, label, value, unit, accent }: MetricCardProps) {
@@ -119,7 +123,11 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
+        {metrics.map((metric) => (
+          <div key={metric.label} className="contents">
+            <MetricCard {...metric} />
+          </div>
+        ))}
       </div>
 
       <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
@@ -128,34 +136,47 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
           description="储量使用左轴，年度产油使用右轴"
           ariaLabel="各区块动用储量、可采储量与上年度产油组合图"
         >
-          <div className="h-[360px] min-w-0" role="img" aria-label="六个区块储量及年度产油数据对比">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dashboard.blocks} margin={{ top: 8, right: 12, bottom: 42, left: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="block"
-                  interval={0}
-                  angle={-24}
-                  textAnchor="end"
-                  height={68}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
-                />
-                <YAxis yAxisId="reserve" width={46} tick={{ fill: "#64748b", fontSize: 12 }} unit=" 万吨" />
-                <YAxis yAxisId="oil" orientation="right" width={60} tick={{ fill: "#64748b", fontSize: 12 }} unit=" 万吨/年" />
-                <Tooltip
-                  cursor={{ fill: "#f1f5f9" }}
-                  formatter={(value, name) => [
-                    `${formatMetric(Number(value))}${name === "上年度产油" ? " 万吨/年" : " 万吨"}`,
-                    name,
-                  ]}
-                  contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
-                />
-                <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 12 }} />
-                <Bar yAxisId="reserve" dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="reserve" dataKey="recoverableReserve" name="可采储量" fill={CHART_COLORS.recoverable} radius={[4, 4, 0, 0]} />
-                <Line yAxisId="oil" dataKey="lastYearOil" name="上年度产油" stroke={CHART_COLORS.oil} strokeWidth={2.5} dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
+          <div className="min-w-0 overflow-x-auto" role="img" aria-label="六个区块储量及年度产油数据对比">
+            <div className="h-[360px] min-w-[720px]">
+              <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 720, height: 360 }}>
+                <ComposedChart data={dashboard.blocks} margin={{ top: 8, right: 24, bottom: 42, left: 18 }}>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="block"
+                    interval={0}
+                    angle={-24}
+                    textAnchor="end"
+                    height={68}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                  />
+                  <YAxis
+                    yAxisId="reserve"
+                    width={66}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    label={{ value: "储量（万吨）", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 12 }}
+                  />
+                  <YAxis
+                    yAxisId="oil"
+                    orientation="right"
+                    width={78}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    label={{ value: "产油（万吨/年）", angle: 90, position: "insideRight", fill: "#64748b", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "#f1f5f9" }}
+                    formatter={(value, name) => [
+                      formatChartTooltipValue(Number(value), name === "上年度产油" ? "oil" : "reserve"),
+                      name,
+                    ]}
+                    contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
+                  />
+                  <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 12 }} />
+                  <Bar yAxisId="reserve" dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="reserve" dataKey="recoverableReserve" name="可采储量" fill={CHART_COLORS.recoverable} radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="oil" dataKey="lastYearOil" name="上年度产油" stroke={CHART_COLORS.oil} strokeWidth={2.5} dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </ChartPanel>
 
@@ -165,15 +186,20 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
           ariaLabel="区块动用储量排名水平条形图"
         >
           <div className="h-[300px] min-w-0" role="img" aria-label="区块动用储量排名及总体贡献占比">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dashboard.ranking} layout="vertical" margin={{ top: 0, right: 18, bottom: 8, left: 10 }}>
+            <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 400, height: 300 }}>
+              <BarChart data={dashboard.ranking} layout="vertical" margin={{ top: 0, right: 18, bottom: 24, left: 10 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fill: "#64748b", fontSize: 12 }} unit=" 万吨" />
+                <XAxis
+                  type="number"
+                  height={44}
+                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  label={{ value: "动用储量（万吨）", position: "insideBottom", fill: "#64748b", fontSize: 12 }}
+                />
                 <YAxis type="category" dataKey="block" width={84} tick={{ fill: "#475569", fontSize: 12 }} />
                 <Tooltip
                   cursor={{ fill: "#f1f5f9" }}
                   formatter={(value, _name, item) => [
-                    `${formatMetric(Number(value))} 万吨 · 占总体 ${formatMetric(Number(item.payload?.contributionRate ?? 0))}%`,
+                    `${formatChartTooltipValue(Number(value), "reserve")} · 占总体 ${formatChartTooltipValue(Number(item.payload?.contributionRate ?? 0), "percent")}`,
                     "动用储量",
                   ]}
                   contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
