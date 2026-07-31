@@ -19,9 +19,7 @@ function getSmartTestHistoryPageSource(source: string) {
 test("SmartTestHistoryPage uses viewport-adaptive server pagination", async () => {
   const pageSource = getSmartTestHistoryPageSource(await readFile(appUrl, "utf8"));
 
-  assert.match(pageSource, /calculateAdaptiveTablePageSize\s*\(/);
-  assert.match(pageSource, /mapPageForPageSizeChange\s*\(/);
-  assert.match(pageSource, /addEventListener\(\s*["']resize["']/);
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(/);
   assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/);
   assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*10\b/);
   assert.match(pageSource, /min-w-\[1820px\]/);

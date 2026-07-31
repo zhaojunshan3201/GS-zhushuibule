@@ -60,15 +60,14 @@ import {
   type WellFlushingForm,
 } from "./shared/coreTableRecords";
 import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
+import { useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
 import {
-  calculateAdaptiveTablePageSize,
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
   createEmptySingleWellSealEvaluationForm,
   createEmptySmartTestForm,
   getDynamicAnalysisDeleteMessage,
   getDynamicAnalysisEmptyQueryMessage,
-  mapPageForPageSizeChange,
   type ConcentricTestForm,
   type SingleWellInjectionEvaluationForm,
   type SingleWellSealEvaluationForm,
@@ -1441,11 +1440,12 @@ function ConcentricTestHistoryPage() {
   const cellClass = "border border-[#9fc4e8] bg-white px-2 py-2 text-center text-sm text-[#001a33]";
   const inputClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
-  const pageSize = 10;
   const [records, setRecords] = useState<ConcentricTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
+  const filtersRef = useRef(filters);
+  const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<ConcentricTestForm>(() => createEmptyConcentricTestForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1453,23 +1453,32 @@ function ConcentricTestHistoryPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  const loadRecords = async (page = currentPage, nextFilters = filters) => {
+  filtersRef.current = filters;
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = filtersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
-      const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize }).filter(([, value]) => String(value).trim()));
+      const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize: requestedPageSize }).filter(([, value]) => String(value).trim()));
       const { data } = await axios.get<PaginatedApiResponse<ConcentricTestRecord>>("/api/concentric-test-records", { params });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalItems(data.total);
       setCurrentPage(data.page);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "同心测调记录加载失败");
     }
-  };
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(1);
-  }, []);
+    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
+  }, [loadRecords, pageSize]);
 
   const updateForm = (key: keyof ConcentricTestForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1538,7 +1547,8 @@ function ConcentricTestHistoryPage() {
   return (
     <div>
       {confirmDialog}
-      <ZonalTableShell title="同心测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+      <div ref={tablePageRef}>
+        <ZonalTableShell title="同心测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1320px] border-collapse bg-white">
           <thead>
             <tr>
@@ -1583,7 +1593,8 @@ function ConcentricTestHistoryPage() {
             {!records.length && <tr><td colSpan={18} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
-      </ZonalTableShell>
+        </ZonalTableShell>
+      </div>
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto border border-shell-border bg-white p-5 shadow-xl">
@@ -1691,17 +1702,10 @@ function SmartTestHistoryPage() {
   const inputClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const layers = ["1层", "2层", "3层", "4层", "5层"];
-  const tablePageRef = useRef<HTMLDivElement>(null);
   const [records, setRecords] = useState<SmartTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => calculateAdaptiveTablePageSize({
-    viewportHeight: typeof window === "undefined" ? 0 : window.innerHeight,
-    tableTop: 80,
-  }));
+  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
-  const currentPageRef = useRef(currentPage);
-  const pageSizeRef = useRef(pageSize);
   const filtersRef = useRef(filters);
   const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SmartTestForm>(() => createEmptySmartTestForm());
@@ -1711,8 +1715,6 @@ function SmartTestHistoryPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  currentPageRef.current = currentPage;
-  pageSizeRef.current = pageSize;
   filtersRef.current = filters;
 
   const loadRecords = useCallback(async (
@@ -1729,50 +1731,16 @@ function SmartTestHistoryPage() {
       setRecords(data.rows);
       setTotalItems(data.total);
       setCurrentPage(data.page);
-      currentPageRef.current = data.page;
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
       if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "智能测调记录加载失败");
     }
-  }, []);
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(1);
-  }, [loadRecords]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let resizeFrame: number | null = null;
-    const updatePageSize = () => {
-      resizeFrame = null;
-      const nextPageSize = calculateAdaptiveTablePageSize({
-        viewportHeight: window.innerHeight,
-        tableTop: tablePageRef.current?.getBoundingClientRect().top ?? 80,
-      });
-      const previousPageSize = pageSizeRef.current;
-      if (nextPageSize === previousPageSize) return;
-
-      const nextPage = mapPageForPageSizeChange(currentPageRef.current, previousPageSize, nextPageSize);
-      currentPageRef.current = nextPage;
-      pageSizeRef.current = nextPageSize;
-      setCurrentPage(nextPage);
-      setPageSize(nextPageSize);
-      void loadRecords(nextPage, filtersRef.current, nextPageSize);
-    };
-    const handleResize = () => {
-      if (resizeFrame !== null) return;
-      resizeFrame = window.requestAnimationFrame(updatePageSize);
-    };
-
-    window.addEventListener("resize", handleResize);
-    handleResize();
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
-    };
-  }, [loadRecords]);
+    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
+  }, [loadRecords, pageSize]);
 
   const updateForm = (key: keyof SmartTestForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1972,11 +1940,12 @@ function SingleWellInjectionEvaluationPage() {
   const cellClass = "border border-[#9fc4e8] bg-white px-2 py-2 text-center text-sm text-[#001a33]";
   const inputClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
-  const pageSize = 15;
   const [records, setRecords] = useState<SingleWellInjectionEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
+  const filtersRef = useRef(filters);
+  const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SingleWellInjectionEvaluationForm>(() => createEmptySingleWellInjectionEvaluationForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1984,23 +1953,32 @@ function SingleWellInjectionEvaluationPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  const loadRecords = async (page = currentPage, nextFilters = filters) => {
+  filtersRef.current = filters;
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = filtersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
-      const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize }).filter(([, value]) => String(value).trim()));
+      const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize: requestedPageSize }).filter(([, value]) => String(value).trim()));
       const { data } = await axios.get<PaginatedApiResponse<SingleWellInjectionEvaluationRecord>>("/api/single-well-injection-evaluations", { params });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalItems(data.total);
       setCurrentPage(data.page);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "单井注入评价加载失败");
     }
-  };
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(1);
-  }, []);
+    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
+  }, [loadRecords, pageSize]);
 
   const updateForm = (key: keyof SingleWellInjectionEvaluationForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -2067,7 +2045,8 @@ function SingleWellInjectionEvaluationPage() {
   return (
     <div>
       {confirmDialog}
-      <ZonalTableShell title="单井注入评价" filterMode="single-injection" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+      <div ref={tablePageRef}>
+        <ZonalTableShell title="单井注入评价" filterMode="single-injection" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1320px] border-collapse bg-white">
           <thead>
             <tr>
@@ -2112,7 +2091,8 @@ function SingleWellInjectionEvaluationPage() {
             {!records.length && <tr><td colSpan={17} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
-      </ZonalTableShell>
+        </ZonalTableShell>
+      </div>
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto border border-shell-border bg-white p-5 shadow-xl">
@@ -2456,11 +2436,12 @@ function SingleWellSealEvaluationPage() {
   const cellClass = "border border-[#9fc4e8] bg-white px-2 py-2 text-center text-sm text-[#001a33]";
   const inputClass = "h-6 rounded border border-[#8fb7df] bg-white px-2 text-[12px] text-[#001a33] outline-none";
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
-  const pageSize = 15;
   const [records, setRecords] = useState<SingleWellSealEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, setCurrentPage, pageSize, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
   const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
+  const filtersRef = useRef(filters);
+  const loadRequestIdRef = useRef(0);
   const [form, setForm] = useState<SingleWellSealEvaluationForm>(() => createEmptySingleWellSealEvaluationForm());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2468,23 +2449,32 @@ function SingleWellSealEvaluationPage() {
   const [error, setError] = useState("");
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
-  const loadRecords = async (page = currentPage, nextFilters = filters) => {
+  filtersRef.current = filters;
+
+  const loadRecords = useCallback(async (
+    page = currentPageRef.current,
+    nextFilters = filtersRef.current,
+    requestedPageSize = pageSizeRef.current,
+  ) => {
+    const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
-      const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize }).filter(([, value]) => String(value).trim()));
+      const params = Object.fromEntries(Object.entries({ ...nextFilters, page, pageSize: requestedPageSize }).filter(([, value]) => String(value).trim()));
       const { data } = await axios.get<PaginatedApiResponse<SingleWellSealEvaluationRecord>>("/api/single-well-seal-evaluations", { params });
+      if (requestId !== loadRequestIdRef.current) return;
       setRecords(data.rows);
       setTotalItems(data.total);
       setCurrentPage(data.page);
       setSelectedId((current) => (data.rows.some((row) => row.id === current) ? current : null));
     } catch (err: any) {
+      if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "单井密封评价加载失败");
     }
-  };
+  }, [setCurrentPage]);
 
   useEffect(() => {
-    void loadRecords(1);
-  }, []);
+    void loadRecords(currentPageRef.current, filtersRef.current, pageSize);
+  }, [loadRecords, pageSize]);
 
   const updateForm = (key: keyof SingleWellSealEvaluationForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -2551,7 +2541,8 @@ function SingleWellSealEvaluationPage() {
   return (
     <div>
       {confirmDialog}
-      <ZonalTableShell title="单井密封评价" filterMode="single-seal" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+      <div ref={tablePageRef}>
+        <ZonalTableShell title="单井密封评价" filterMode="single-seal" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1160px] border-collapse bg-white">
           <thead>
             <tr>
@@ -2587,7 +2578,8 @@ function SingleWellSealEvaluationPage() {
             {!records.length && <tr><td colSpan={14} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
-      </ZonalTableShell>
+        </ZonalTableShell>
+      </div>
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto border border-shell-border bg-white p-5 shadow-xl">
