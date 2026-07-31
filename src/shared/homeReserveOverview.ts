@@ -33,6 +33,12 @@ const HOME_RESERVE_OVERVIEW_ORDER = [
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+export function formatHomeReserveValue(value: number, suffix = "") {
+  if (!Number.isFinite(value)) return "";
+  const formatted = Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}${suffix}`;
+}
+
 const calculateRecoveryRate = (recoverableReserve: number, producingReserve: number) =>
   producingReserve > 0 ? round2((recoverableReserve / producingReserve) * 100) : 0;
 

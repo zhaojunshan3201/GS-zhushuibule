@@ -44,6 +44,7 @@ import {
 } from "recharts";
 import { cn } from "./lib/utils";
 import { HomeReserveAnalysisDashboard } from "./components/HomeReserveAnalysisDashboard";
+import { formatHomeReserveValue } from "./shared/homeReserveOverview";
 import { PptxWellHistoryEditor } from "./components/PptxWellHistoryEditor";
 import { WellHistoryRichTextEditor } from "./components/WellHistoryRichTextEditor";
 import {
@@ -541,6 +542,7 @@ function useStyledConfirmDialog() {
 function HomePage() {
   const [rows, setRows] = useState<HomeReserveOverviewRow[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -553,23 +555,22 @@ function HomePage() {
       })
       .catch((err) => {
         if (active) setError(err?.response?.data?.error || "主页储量概览加载失败");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
   }, []);
 
-  const formatValue = (value: number, suffix = "") => {
-    if (!Number.isFinite(value)) return "";
-    return `${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.?0+$/, "")}${suffix}`;
-  };
   const tableBorder = "border border-[#8ebdff]";
   const headCellClass = `${tableBorder} bg-[#dceefc] px-2 py-2 text-center text-[13px] font-bold leading-tight text-[#001a33]`;
   const bodyCellClass = `${tableBorder} bg-white px-2 py-2 text-center text-[13px] leading-tight text-black`;
 
   return (
     <div className="space-y-5">
-      <HomeReserveAnalysisDashboard rows={rows} />
+      <HomeReserveAnalysisDashboard rows={rows} loading={loading} />
       <section className="home-reserve-overview border border-[#8ebdff] bg-white" aria-labelledby="reserve-table-title">
         <h2 id="reserve-table-title" className="border-b border-[#8ebdff] bg-[#f8fbff] py-1 text-center text-[22px] font-bold leading-tight text-[#d40000]">
           储量概览列表
@@ -616,11 +617,11 @@ function HomePage() {
                   ) : (
                     <td className={bodyCellClass}>{row.block}</td>
                   )}
-                  <td className={bodyCellClass}>{formatValue(row.oilArea)}</td>
-                  <td className={bodyCellClass}>{formatValue(row.producingReserve)}</td>
-                  <td className={bodyCellClass}>{formatValue(row.recoverableReserve)}</td>
-                  <td className={bodyCellClass}>{formatValue(row.recoveryRate, "%")}</td>
-                  <td className={bodyCellClass}>{formatValue(row.lastYearOil)}</td>
+                  <td className={bodyCellClass}>{formatHomeReserveValue(row.oilArea)}</td>
+                  <td className={bodyCellClass}>{formatHomeReserveValue(row.producingReserve)}</td>
+                  <td className={bodyCellClass}>{formatHomeReserveValue(row.recoverableReserve)}</td>
+                  <td className={bodyCellClass}>{formatHomeReserveValue(row.recoveryRate, "%")}</td>
+                  <td className={bodyCellClass}>{formatHomeReserveValue(row.lastYearOil)}</td>
                 </tr>
               );
             })}

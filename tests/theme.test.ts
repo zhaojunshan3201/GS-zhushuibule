@@ -75,3 +75,9 @@ test("uses one blue-gray table palette for the default theme", () => {
   assert.match(css, /\.shell-app\[data-theme="default"\] \.shell-content table td[\s\S]*?border-color: #acc6de !important;[\s\S]*?background-color: #ffffff !important;/);
   assert.match(css, /\.shell-app\[data-theme="default"\] \.zonal-table-shell[\s\S]*?border-color: #acc6de !important;/);
 });
+
+test("enterprise white theme styles the reserve overview h2 heading", () => {
+  const css = fs.readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+
+  assert.match(css, /\.shell-app\[data-theme="enterprise-white"\] \.home-reserve-overview > :is\(h1, h2\)/);
+});

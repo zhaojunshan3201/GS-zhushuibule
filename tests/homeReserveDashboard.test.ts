@@ -54,6 +54,7 @@ function inspectHomePageIntegration(source: string) {
       ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === "HomeReserveAnalysisDashboard",
   );
   const dashboardRows = dashboard && getJsxAttribute(dashboard, "rows");
+  const dashboardLoading = dashboard && getJsxAttribute(dashboard, "loading");
   const section = homeNodes.find(
     (node): node is ts.JsxElement => ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === "section",
   );
@@ -73,6 +74,7 @@ function inspectHomePageIntegration(source: string) {
   return {
     dashboard,
     dashboardRows,
+    dashboardLoading,
     hasDashboardImport,
     hasApiPath: homeNodes.some((node) => ts.isStringLiteral(node) && node.text === "/api/home-reserve-overview"),
     heading,
@@ -101,6 +103,8 @@ test("home page places the reserve dashboard above the unchanged overview table"
   assert.ok(contract.dashboard.getStart() < contract.heading.getStart(), "dashboard must precede the reserve table heading");
   assert.ok(contract.dashboardRows?.initializer && ts.isJsxExpression(contract.dashboardRows.initializer));
   assert.equal(contract.dashboardRows.initializer.expression?.getText(), "rows");
+  assert.ok(contract.dashboardLoading?.initializer && ts.isJsxExpression(contract.dashboardLoading.initializer));
+  assert.equal(contract.dashboardLoading.initializer.expression?.getText(), "loading");
   assert.ok(contract.sectionLabel?.initializer && ts.isStringLiteral(contract.sectionLabel.initializer));
   assert.equal(contract.sectionLabel.initializer.text, "reserve-table-title");
   assert.ok(contract.headingId?.initializer && ts.isStringLiteral(contract.headingId.initializer));
@@ -136,12 +140,16 @@ test("home reserve analysis dashboard includes accessible, consistently colored 
   assert.match(source, /overflow-x-auto/);
   assert.match(source, /min-w-\[720px\]/);
   assert.doesNotMatch(source, /unit=" 万吨/);
+  assert.match(source, /LabelList/);
+  assert.match(source, /aria-describedby=/);
 });
 
-test("home reserve analysis dashboard renders nothing without rows", () => {
-  const markup = renderToStaticMarkup(createElement(HomeReserveAnalysisDashboard, { rows: [] }));
+test("home reserve analysis dashboard distinguishes loading from an empty result", () => {
+  const loadingMarkup = renderToStaticMarkup(createElement(HomeReserveAnalysisDashboard, { rows: [], loading: true }));
+  const emptyMarkup = renderToStaticMarkup(createElement(HomeReserveAnalysisDashboard, { rows: [], loading: false }));
 
-  assert.equal(markup, "");
+  assert.match(loadingMarkup, /正在加载储量分析数据/);
+  assert.equal(emptyMarkup, "");
 });
 
 test("home reserve analysis dashboard renders accurate totals and unit contributions", () => {
@@ -158,4 +166,14 @@ test("home reserve chart tooltip values use one precise unit suffix", () => {
   assert.equal(formatChartTooltipValue(794.5, "reserve"), "794.5 万吨");
   assert.equal(formatChartTooltipValue(25.55, "oil"), "25.55 万吨/年");
   assert.equal(formatChartTooltipValue(44.72, "percent"), "44.72%");
+});
+
+test("home reserve ranking renders exact values and accessible non-tooltip context", () => {
+  const rows = buildHomeReserveOverviewRows(buildHomeReserveOverviewSeedRows());
+  const markup = renderToStaticMarkup(createElement(HomeReserveAnalysisDashboard, { rows }));
+  const renderedText = markup.replace(/<[^>]+>/g, "");
+
+  assert.match(renderedText, /牛心坨油层[\s\S]*221\.8 万吨[\s\S]*27\.92%/);
+  assert.match(markup, /<ol[^>]+aria-label="区块动用储量精确排名"/);
+  assert.match(markup, /aria-describedby="home-reserve-ranking-list"/);
 });

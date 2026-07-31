@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   ResponsiveContainer,
@@ -14,11 +15,13 @@ import {
 } from "recharts";
 import {
   buildHomeReserveDashboardData,
+  formatHomeReserveValue,
   type HomeReserveOverviewRow,
 } from "../shared/homeReserveOverview";
 
 type HomeReserveAnalysisDashboardProps = {
   rows: HomeReserveOverviewRow[];
+  loading?: boolean;
 };
 
 type MetricCardProps = {
@@ -35,18 +38,9 @@ const CHART_COLORS = {
   oil: "#486581",
 };
 
-const numberFormatter = new Intl.NumberFormat("zh-CN", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-});
-
-function formatMetric(value: number) {
-  return numberFormatter.format(value);
-}
-
 export function formatChartTooltipValue(value: number, kind: "reserve" | "oil" | "percent") {
   const suffix = kind === "reserve" ? " 万吨" : kind === "oil" ? " 万吨/年" : "%";
-  return `${formatMetric(value)}${suffix}`;
+  return formatHomeReserveValue(value, suffix);
 }
 
 function MetricCard({ icon: Icon, label, value, unit, accent }: MetricCardProps) {
@@ -64,7 +58,7 @@ function MetricCard({ icon: Icon, label, value, unit, accent }: MetricCardProps)
       </div>
       <p className="mt-5 flex min-w-0 items-baseline gap-2">
         <span className="truncate text-3xl font-semibold tracking-tight text-slate-900">
-          {formatMetric(value)}
+          {formatHomeReserveValue(value)}
         </span>
         <span className="shrink-0 text-xs font-medium text-slate-400">{unit}</span>
       </p>
@@ -92,8 +86,46 @@ function ChartPanel({ title, description, ariaLabel, children }: {
   );
 }
 
-export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashboardProps) {
+function DashboardHeader() {
+  return (
+    <header className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold tracking-[0.2em] text-teal-700">RESERVE ANALYTICS</p>
+        <h2 id="home-reserve-dashboard-title" className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+          储量分析看板
+        </h2>
+        <p className="mt-2 text-sm text-slate-500">区块储量、采收能力与年度产油综合分析</p>
+      </div>
+      <span className="w-fit shrink-0 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-800">
+        数据口径：年度汇总
+      </span>
+    </header>
+  );
+}
+
+export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeReserveAnalysisDashboardProps) {
   const dashboard = useMemo(() => buildHomeReserveDashboardData(rows), [rows]);
+
+  if (loading && rows.length === 0) {
+    return (
+      <section
+        className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6 lg:p-8"
+        aria-labelledby="home-reserve-dashboard-title"
+        aria-busy="true"
+      >
+        <DashboardHeader />
+        <p className="mb-4 text-sm font-medium text-slate-600" role="status">正在加载储量分析数据</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-hidden="true">
+          {[0, 1, 2, 3].map((item) => (
+            <div key={item} className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white">
+              <div className="m-5 h-3 w-20 rounded bg-slate-200" />
+              <div className="mx-5 mt-8 h-7 w-28 rounded bg-slate-200" />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   if (rows.length === 0) return null;
 
@@ -109,18 +141,7 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
       className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6 lg:p-8"
       aria-labelledby="home-reserve-dashboard-title"
     >
-      <header className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-[0.2em] text-teal-700">RESERVE ANALYTICS</p>
-          <h2 id="home-reserve-dashboard-title" className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
-            储量分析看板
-          </h2>
-          <p className="mt-2 text-sm text-slate-500">区块储量、采收能力与年度产油综合分析</p>
-        </div>
-        <span className="w-fit shrink-0 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-800">
-          数据口径：年度汇总
-        </span>
-      </header>
+      <DashboardHeader />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
@@ -185,9 +206,15 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
           description="按动用储量由高到低排列"
           ariaLabel="区块动用储量排名水平条形图"
         >
-          <div className="h-[300px] min-w-0" role="img" aria-label="区块动用储量排名及总体贡献占比">
+          <div
+            className="h-[300px] min-w-0"
+            role="img"
+            aria-label="区块动用储量排名及总体贡献占比"
+            aria-describedby="home-reserve-ranking-list"
+            tabIndex={0}
+          >
             <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 400, height: 300 }}>
-              <BarChart data={dashboard.ranking} layout="vertical" margin={{ top: 0, right: 18, bottom: 24, left: 10 }}>
+              <BarChart data={dashboard.ranking} layout="vertical" margin={{ top: 10, right: 54, bottom: 24, left: 10 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" horizontal={false} />
                 <XAxis
                   type="number"
@@ -196,6 +223,7 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
                   label={{ value: "动用储量（万吨）", position: "insideBottom", fill: "#64748b", fontSize: 12 }}
                 />
                 <YAxis type="category" dataKey="block" width={84} tick={{ fill: "#475569", fontSize: 12 }} />
+                <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 8 }} />
                 <Tooltip
                   cursor={{ fill: "#f1f5f9" }}
                   formatter={(value, _name, item) => [
@@ -204,15 +232,30 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
                   ]}
                   contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
                 />
-                <Bar dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[0, 5, 5, 0]} />
+                <Bar dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[0, 5, 5, 0]}>
+                  <LabelList
+                    dataKey="producingReserve"
+                    position="right"
+                    formatter={(value) => formatHomeReserveValue(Number(value))}
+                    fill="#334155"
+                    fontSize={11}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <ol className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs sm:grid-cols-3 xl:grid-cols-2">
+          <ol
+            id="home-reserve-ranking-list"
+            className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs sm:grid-cols-2"
+            aria-label="区块动用储量精确排名"
+          >
             {dashboard.ranking.map((row, index) => (
               <li key={`${row.unit}-${row.block}`} className="flex min-w-0 items-center justify-between gap-2 text-slate-600">
                 <span className="truncate"><b className="mr-1 text-slate-400">{index + 1}</b>{row.block}</span>
-                <span className="shrink-0 font-medium text-slate-800">{formatMetric(row.contributionRate)}%</span>
+                <span className="flex shrink-0 items-center gap-2 font-medium text-slate-800">
+                  <span>{formatHomeReserveValue(row.producingReserve, " 万吨")}</span>
+                  <span>{formatHomeReserveValue(row.contributionRate, "%")}</span>
+                </span>
               </li>
             ))}
           </ol>
@@ -225,16 +268,16 @@ export function HomeReserveAnalysisDashboard({ rows }: HomeReserveAnalysisDashbo
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-slate-900">{unit.unit}</h3>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                总体贡献 {formatMetric(unit.contributionRate)}%
+                总体贡献 {formatHomeReserveValue(unit.contributionRate, "%")}
               </span>
             </div>
             <dl className="mt-5 grid grid-cols-3 gap-3">
-              <div><dt className="text-xs text-slate-500">动用储量</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatMetric(unit.producingReserve)} <small className="font-normal text-slate-400">万吨</small></dd></div>
-              <div><dt className="text-xs text-slate-500">可采储量</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatMetric(unit.recoverableReserve)} <small className="font-normal text-slate-400">万吨</small></dd></div>
-              <div><dt className="text-xs text-slate-500">采收率</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatMetric(unit.recoveryRate)}%</dd></div>
+              <div><dt className="text-xs text-slate-500">动用储量</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatHomeReserveValue(unit.producingReserve)} <small className="font-normal text-slate-400">万吨</small></dd></div>
+              <div><dt className="text-xs text-slate-500">可采储量</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatHomeReserveValue(unit.recoverableReserve)} <small className="font-normal text-slate-400">万吨</small></dd></div>
+              <div><dt className="text-xs text-slate-500">采收率</dt><dd className="mt-1 truncate text-base font-semibold text-slate-900">{formatHomeReserveValue(unit.recoveryRate, "%")}</dd></div>
             </dl>
-            <div className="mt-5" aria-label={`${unit.unit}总体贡献率 ${formatMetric(unit.contributionRate)}%`}>
-              <div className="mb-2 flex justify-between text-xs text-slate-500"><span>总体贡献</span><span>{formatMetric(unit.contributionRate)}%</span></div>
+            <div className="mt-5" aria-label={`${unit.unit}总体贡献率 ${formatHomeReserveValue(unit.contributionRate, "%")}`}>
+              <div className="mb-2 flex justify-between text-xs text-slate-500"><span>总体贡献</span><span>{formatHomeReserveValue(unit.contributionRate, "%")}</span></div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-teal-700" style={{ width: `${Math.min(100, Math.max(0, unit.contributionRate))}%` }} />
               </div>

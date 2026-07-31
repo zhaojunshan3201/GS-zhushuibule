@@ -4,7 +4,15 @@ import {
   buildHomeReserveDashboardData,
   buildHomeReserveOverviewRows,
   buildHomeReserveOverviewSeedRows,
+  formatHomeReserveValue,
 } from "../src/shared/homeReserveOverview";
+
+test("home reserve values use the shared finite, compact number format", () => {
+  assert.equal(formatHomeReserveValue(794.5), "794.5");
+  assert.equal(formatHomeReserveValue(23.5, "%"), "23.5%");
+  assert.equal(formatHomeReserveValue(1000), "1000");
+  assert.equal(formatHomeReserveValue(Number.POSITIVE_INFINITY), "");
+});
 
 test("home reserve overview seed rows cover the requested home table blocks", () => {
   const rows = buildHomeReserveOverviewRows(buildHomeReserveOverviewSeedRows());
