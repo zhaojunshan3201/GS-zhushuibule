@@ -127,6 +127,7 @@ test("home reserve analysis dashboard exposes the requested analytics content", 
 
 test("home reserve analysis dashboard includes accessible, consistently colored charts", async () => {
   const source = await readFile(componentUrl, "utf8");
+  const blockAxis = source.match(/<XAxis\s+[\s\S]*?dataKey="block"[\s\S]*?\/>/)?.[0] ?? "";
 
   for (const chartPrimitive of ["ComposedChart", "BarChart", "Line"]) {
     assert.match(source, new RegExp(chartPrimitive));
@@ -142,6 +143,11 @@ test("home reserve analysis dashboard includes accessible, consistently colored 
   assert.doesNotMatch(source, /unit=" 万吨/);
   assert.match(source, /LabelList/);
   assert.match(source, /aria-describedby=/);
+  assert.match(blockAxis, /angle=\{0\}/);
+  assert.match(blockAxis, /textAnchor="middle"/);
+  assert.match(blockAxis, /height=\{44\}/);
+  assert.match(blockAxis, /tickMargin=\{12\}/);
+  assert.doesNotMatch(blockAxis, /angle=\{-24\}/);
 });
 
 test("home reserve analysis dashboard distinguishes loading from an empty result", () => {

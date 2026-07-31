@@ -165,10 +165,11 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
                   <XAxis
                     dataKey="block"
                     interval={0}
-                    angle={-24}
-                    textAnchor="end"
-                    height={68}
-                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    angle={0}
+                    textAnchor="middle"
+                    height={44}
+                    tickMargin={12}
+                    tick={{ fill: "#64748b", fontSize: 12, fontFamily: "inherit" }}
                   />
                   <YAxis
                     yAxisId="reserve"
