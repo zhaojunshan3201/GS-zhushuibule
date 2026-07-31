@@ -15,6 +15,17 @@ export type HomeReserveOverviewRow = Omit<HomeReserveOverviewSeedRow, "unit"> & 
   rowType: "block" | "subtotal" | "total";
 };
 
+export type HomeReserveDashboardRow = HomeReserveOverviewRow & {
+  contributionRate: number;
+};
+
+export type HomeReserveDashboardData = {
+  blocks: HomeReserveDashboardRow[];
+  ranking: HomeReserveDashboardRow[];
+  units: HomeReserveDashboardRow[];
+  total: HomeReserveDashboardRow;
+};
+
 const HOME_RESERVE_OVERVIEW_ORDER = [
   { unit: "采一" as const, blocks: ["雷11", "雷04", "雷72"] },
   { unit: "采二" as const, blocks: ["牛心坨油层", "牛心坨潜山", "坨33"] },
@@ -69,6 +80,30 @@ export function buildHomeReserveOverviewRows(sourceRows: HomeReserveOverviewSeed
 
   rows.push(sumRows("合计", "", rows.filter((row) => row.rowType === "block")));
   return rows;
+}
+
+export function buildHomeReserveDashboardData(rows: HomeReserveOverviewRow[]): HomeReserveDashboardData {
+  const blockRows = rows.filter((row) => row.rowType === "block");
+  const totalRow = rows.find((row) => row.rowType === "total") ?? sumRows("合计", "", blockRows);
+  const withContributionRate = (row: HomeReserveOverviewRow): HomeReserveDashboardRow => ({
+    ...row,
+    contributionRate: totalRow.producingReserve === 0
+      ? 0
+      : round2((row.producingReserve / totalRow.producingReserve) * 100),
+  });
+  const blocks = blockRows.map(withContributionRate);
+  const units = (["采一", "采二"] as const).map((unit) => {
+    const subtotal = rows.find((row) => row.rowType === "subtotal" && row.unit === unit)
+      ?? sumRows(unit, "小计", blockRows.filter((row) => row.unit === unit));
+    return withContributionRate(subtotal);
+  });
+
+  return {
+    blocks,
+    ranking: [...blocks].sort((left, right) => right.producingReserve - left.producingReserve),
+    units,
+    total: withContributionRate(totalRow),
+  };
 }
 
 export function buildHomeReserveOverviewSeedRows(): HomeReserveOverviewSeedRow[] {

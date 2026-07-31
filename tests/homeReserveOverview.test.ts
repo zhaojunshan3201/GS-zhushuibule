@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildHomeReserveDashboardData,
   buildHomeReserveOverviewRows,
   buildHomeReserveOverviewSeedRows,
 } from "../src/shared/homeReserveOverview";
@@ -44,4 +45,32 @@ test("home reserve overview subtotals and total sum numeric mock values", () => 
       { unit: "合计", block: "", oilArea: 15, producingReserve: 180, recoverableReserve: 45, recoveryRate: 25, lastYearOil: 24 },
     ],
   );
+});
+
+test("home reserve dashboard data derives blocks, ranking, totals, and unit contributions", () => {
+  const dashboard = buildHomeReserveDashboardData(
+    buildHomeReserveOverviewRows(buildHomeReserveOverviewSeedRows()),
+  );
+
+  assert.equal(dashboard.blocks.length, 6);
+  assert.deepEqual(dashboard.ranking.map((row) => row.block), [
+    "牛心坨油层",
+    "雷11",
+    "牛心坨潜山",
+    "雷04",
+    "雷72",
+    "坨33",
+  ]);
+  assert.deepEqual(
+    {
+      producingReserve: dashboard.total.producingReserve,
+      recoverableReserve: dashboard.total.recoverableReserve,
+      recoveryRate: dashboard.total.recoveryRate,
+      lastYearOil: dashboard.total.lastYearOil,
+    },
+    { producingReserve: 794.5, recoverableReserve: 184.6, recoveryRate: 23.23, lastYearOil: 25.55 },
+  );
+  assert.deepEqual(dashboard.units.map((row) => row.unit), ["采一", "采二"]);
+  assert.equal(dashboard.ranking[0].contributionRate, 27.92);
+  assert.deepEqual(dashboard.units.map((row) => row.contributionRate), [44.72, 55.28]);
 });
