@@ -16,6 +16,31 @@ function getFunctionSource(source: string, functionName: string) {
   return source.slice(page.getStart(ast), page.getEnd());
 }
 
+type AdaptiveRequestVisualState = {
+  currentPage: number;
+  records: Array<{ id: string }>;
+  totalItems: number;
+  selectedId: string | null;
+  loading: boolean;
+  error: string;
+};
+
+function beginAdaptiveRequest(state: AdaptiveRequestVisualState, targetPage: number): AdaptiveRequestVisualState {
+  return {
+    ...state,
+    currentPage: targetPage,
+    records: [],
+    totalItems: 0,
+    selectedId: null,
+    loading: true,
+    error: "",
+  };
+}
+
+function rejectAdaptiveRequest(state: AdaptiveRequestVisualState, error: string): AdaptiveRequestVisualState {
+  return { ...state, loading: false, error };
+}
+
 function assertAdaptivePageContract(pageSource: string) {
   assert.match(pageSource, /useAdaptiveTablePagination\s*\(/, "page uses the shared adaptive pagination hook");
   assert.match(
@@ -41,6 +66,11 @@ function assertAdaptivePageContract(pageSource: string) {
   assert.match(pageSource, /const\s+recordsRef\s*=\s*useRef\(records\)/, "page keeps latest records in a ref");
   assert.match(
     pageSource,
+    /const\s+\[loading,\s*setLoading\]\s*=\s*useState\(false\)/,
+    "page tracks whether the latest request is pending",
+  );
+  assert.match(
+    pageSource,
     /useEffect\s*\(\s*\(\)\s*=>\s*\{\s*recordsRef\.current\s*=\s*records;\s*\},\s*\[\s*records\s*\]\s*\)/,
     "page synchronizes latest records after commit",
   );
@@ -51,8 +81,8 @@ function assertAdaptivePageContract(pageSource: string) {
   );
   assert.match(
     pageSource,
-    /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/,
-    "loadRecords records the target page before starting its request",
+    /\)\s*=>\s*\{\s*setCurrentPage\(page\);\s*setRecords\(\[\]\);\s*setTotalItems\(0\);\s*setSelectedId\(null\);\s*setLoading\(true\);\s*const\s+requestId\s*=\s*\+\+loadRequestIdRef\.current;[\s\S]*?await\s+axios\.get/,
+    "loadRecords clears stale visuals after recording the target page and before requesting",
   );
   assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/, "API request explicitly uses requestedPageSize");
   assert.match(pageSource, /const\s+loadRequestIdRef\s*=\s*useRef\(0\)/, "page tracks the latest load request");
@@ -65,6 +95,11 @@ function assertAdaptivePageContract(pageSource: string) {
     pageSource,
     /catch\s*\([^)]*\)\s*\{\s*if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;\s*setError\(/,
     "failure commits an error only for the latest request",
+  );
+  assert.match(
+    pageSource,
+    /finally\s*\{\s*if\s*\(requestId\s*!==\s*loadRequestIdRef\.current\)\s*return;\s*setLoading\(false\);\s*\}/,
+    "only the latest request leaves the pending state",
   );
   assert.match(
     pageSource,
@@ -97,6 +132,16 @@ function assertAdaptivePageContract(pageSource: string) {
     "delete does not derive its refresh page from stale closures",
   );
   assert.match(pageSource, /ref=\{tablePageRef\}/, "table shell is wrapped by the measurement ref");
+  assert.match(
+    pageSource,
+    /\{loading\s*&&\s*<tr><td[\s\S]*?\u52a0\u8f7d\u4e2d<\/td><\/tr>\}/,
+    "table body renders an explicit pending row",
+  );
+  assert.match(
+    pageSource,
+    /\{!loading\s*&&\s*!error\s*&&\s*!records\.length\s*&&\s*<tr><td/,
+    "table body only renders no-data state when neither loading nor failed",
+  );
   assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*\d+(?:\.\d+)?\b/, "page has no fixed numeric page size");
   assert.doesNotMatch(
     pageSource,
@@ -129,6 +174,10 @@ for (const pageName of [
 
     for (const [description, mutated] of [
       ["target-page intent", pageSource.replace("setCurrentPage(page);", "")],
+      ["pending records clear", pageSource.replace("setRecords([]);", "")],
+      ["pending total clear", pageSource.replace("setTotalItems(0);", "")],
+      ["pending selection clear", pageSource.replace("setSelectedId(null);", "")],
+      ["pending loading state", pageSource.replace("setLoading(true);", "")],
       ["applied filters", pageSource.replace("appliedFiltersRef.current = filters;", "")],
       [
         "draft filter render write",
@@ -148,3 +197,34 @@ for (const pageName of [
     }
   });
 }
+
+test("a rejected adaptive request never combines its target page with stale records", () => {
+  const existingPage = {
+    currentPage: 4,
+    records: [{ id: "old-page-record" }],
+    totalItems: 31,
+    selectedId: "old-page-record",
+    loading: false,
+    error: "",
+  };
+
+  const pending = beginAdaptiveRequest(existingPage, 7);
+  assert.deepEqual(pending, {
+    currentPage: 7,
+    records: [],
+    totalItems: 0,
+    selectedId: null,
+    loading: true,
+    error: "",
+  });
+
+  const failed = rejectAdaptiveRequest(pending, "request rejected");
+  assert.deepEqual(failed, {
+    currentPage: 7,
+    records: [],
+    totalItems: 0,
+    selectedId: null,
+    loading: false,
+    error: "request rejected",
+  });
+});

@@ -1452,6 +1452,7 @@ function ConcentricTestHistoryPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   useEffect(() => {
@@ -1464,6 +1465,10 @@ function ConcentricTestHistoryPage() {
     requestedPageSize = pageSizeRef.current,
   ) => {
     setCurrentPage(page);
+    setRecords([]);
+    setTotalItems(0);
+    setSelectedId(null);
+    setLoading(true);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -1477,6 +1482,9 @@ function ConcentricTestHistoryPage() {
     } catch (err: any) {
       if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "同心测调记录加载失败");
+    } finally {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoading(false);
     }
   }, [setCurrentPage]);
 
@@ -1599,7 +1607,8 @@ function ConcentricTestHistoryPage() {
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={18} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {loading && <tr><td colSpan={18} className={cellClass}>加载中</td></tr>}
+            {!loading && !error && !records.length && <tr><td colSpan={18} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
         </ZonalTableShell>
@@ -1723,6 +1732,7 @@ function SmartTestHistoryPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   useEffect(() => {
@@ -1735,6 +1745,10 @@ function SmartTestHistoryPage() {
     requestedPageSize = pageSizeRef.current,
   ) => {
     setCurrentPage(page);
+    setRecords([]);
+    setTotalItems(0);
+    setSelectedId(null);
+    setLoading(true);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -1748,6 +1762,9 @@ function SmartTestHistoryPage() {
     } catch (err: any) {
       if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "智能测调记录加载失败");
+    } finally {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoading(false);
     }
   }, [setCurrentPage]);
 
@@ -1882,7 +1899,8 @@ function SmartTestHistoryPage() {
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={38} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {loading && <tr><td colSpan={38} className={cellClass}>加载中</td></tr>}
+            {!loading && !error && !records.length && <tr><td colSpan={38} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
         </ZonalTableShell>
@@ -1971,6 +1989,7 @@ function SingleWellInjectionEvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   useEffect(() => {
@@ -1983,6 +2002,10 @@ function SingleWellInjectionEvaluationPage() {
     requestedPageSize = pageSizeRef.current,
   ) => {
     setCurrentPage(page);
+    setRecords([]);
+    setTotalItems(0);
+    setSelectedId(null);
+    setLoading(true);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -1996,6 +2019,9 @@ function SingleWellInjectionEvaluationPage() {
     } catch (err: any) {
       if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "单井注入评价加载失败");
+    } finally {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoading(false);
     }
   }, [setCurrentPage]);
 
@@ -2117,7 +2143,8 @@ function SingleWellInjectionEvaluationPage() {
                 <td className={selectedTableCellClass(cellClass, row.id === selectedId)}>{row.remark}</td>
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={17} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {loading && <tr><td colSpan={17} className={cellClass}>加载中</td></tr>}
+            {!loading && !error && !records.length && <tr><td colSpan={17} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
         </ZonalTableShell>
@@ -2477,6 +2504,7 @@ function SingleWellSealEvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { confirmDialog, requestConfirm } = useStyledConfirmDialog();
 
   useEffect(() => {
@@ -2489,6 +2517,10 @@ function SingleWellSealEvaluationPage() {
     requestedPageSize = pageSizeRef.current,
   ) => {
     setCurrentPage(page);
+    setRecords([]);
+    setTotalItems(0);
+    setSelectedId(null);
+    setLoading(true);
     const requestId = ++loadRequestIdRef.current;
     try {
       setError("");
@@ -2502,6 +2534,9 @@ function SingleWellSealEvaluationPage() {
     } catch (err: any) {
       if (requestId !== loadRequestIdRef.current) return;
       setError(err?.response?.data?.error || "单井密封评价加载失败");
+    } finally {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoading(false);
     }
   }, [setCurrentPage]);
 
@@ -2614,7 +2649,8 @@ function SingleWellSealEvaluationPage() {
                 ))}
               </tr>
             ))}
-            {!records.length && <tr><td colSpan={14} className={cellClass}>暂无符合条件的数据</td></tr>}
+            {loading && <tr><td colSpan={14} className={cellClass}>加载中</td></tr>}
+            {!loading && !error && !records.length && <tr><td colSpan={14} className={cellClass}>暂无符合条件的数据</td></tr>}
           </tbody>
         </table>
         </ZonalTableShell>
