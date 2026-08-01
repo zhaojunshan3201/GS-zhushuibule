@@ -218,12 +218,11 @@ test("keeps page state and refs synchronized", () => {
   assert.match(source, /setPagination/);
 });
 
-test("uses deterministic atomic initial state and only synchronizes refs after commit", () => {
+test("uses deterministic lazy initial state and only synchronizes refs after commit", () => {
   assert.match(
     source,
-    /useState\(\{\s*currentPage: initialPage,\s*pageSize: minRows,?\s*\}\)/,
+    /useState\(\(\) => \(\{\s*currentPage: initialPage,\s*pageSize: storageKey\s*\?\s*readStoredTablePageSize\(\s*getBrowserTablePageSizeStorage\(\),\s*storageKey\s*\)\s*:\s*minRows,?\s*\}\)\)/,
   );
-  assert.doesNotMatch(source, /useState\(\(\) => calculateAdaptiveTablePageSize/);
   assert.match(
     source,
     /useEffect\(\(\) => \{\s*currentPageRef\.current = pagination\.currentPage;\s*pageSizeRef\.current = pagination\.pageSize;\s*\}, \[pagination\]\)/,
@@ -327,6 +326,88 @@ test("measures, coalesces resize frames, and cleans up its real lifecycle", () =
     assert.equal(frames.size, 0);
     assert.ok(addedHandlers.length >= 2);
     assert.equal(removedHandlers.length, addedHandlers.length);
+  } finally {
+    if (renderer) act(() => renderer?.unmount());
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+    if (originalActEnvironment) {
+      Object.defineProperty(
+        actEnvironment,
+        "IS_REACT_ACT_ENVIRONMENT",
+        originalActEnvironment,
+      );
+    } else {
+      Reflect.deleteProperty(actEnvironment, "IS_REACT_ACT_ENVIRONMENT");
+    }
+  }
+});
+
+test("uses the stored page size without adaptive browser resources and persists manual changes", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const actEnvironment = globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT?: boolean;
+  };
+  const originalActEnvironment = Object.getOwnPropertyDescriptor(
+    actEnvironment,
+    "IS_REACT_ACT_ENVIRONMENT",
+  );
+  const storedValues = new Map([["users-page-size", "30"]]);
+  let setItemCalls = 0;
+  const listeners = new Set<EventListenerOrEventListenerObject>();
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storedValues.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        setItemCalls++;
+        storedValues.set(key, value);
+      },
+    },
+    addEventListener(type: string, handler: EventListenerOrEventListenerObject) {
+      if (type === "resize") listeners.add(handler);
+    },
+    removeEventListener(type: string, handler: EventListenerOrEventListenerObject) {
+      if (type === "resize") listeners.delete(handler);
+    },
+  };
+
+  let pagination: ReturnType<typeof useAdaptiveTablePagination> | undefined;
+  let renderer: ReactTestRenderer | undefined;
+  const Harness = () => {
+    pagination = useAdaptiveTablePagination({ initialPage: 4, storageKey: "users-page-size" });
+    return createElement("div", { ref: pagination.tablePageRef });
+  };
+
+  try {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+    act(() => {
+      renderer = create(createElement(StrictMode, null, createElement(Harness)));
+    });
+
+    assert.equal(pagination?.pageSize, 30);
+    assert.equal(pagination?.currentPage, 4);
+    assert.equal(pagination?.isMeasured, true);
+    assert.equal(listeners.size, 0);
+
+    act(() => pagination?.setPageSize(50));
+    assert.equal(pagination?.pageSize, 50);
+    assert.equal(pagination?.currentPage, 2);
+    assert.equal(storedValues.get("users-page-size"), "50");
+    assert.equal(setItemCalls, 1);
+
+    act(() => pagination?.setPageSize(50));
+    assert.equal(setItemCalls, 1);
+
+    act(() => pagination?.setPageSize(999));
+    assert.equal(pagination?.pageSize, 100);
+    assert.equal(pagination?.currentPage, 1);
+    assert.equal(storedValues.get("users-page-size"), "100");
+    assert.equal(setItemCalls, 2);
+
+    act(() => renderer?.unmount());
+    assert.equal(listeners.size, 0);
   } finally {
     if (renderer) act(() => renderer?.unmount());
     if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);

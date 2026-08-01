@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { calculateAdaptiveTablePageSize, mapPageForPageSizeChange } from "./secondBatchRecords";
+import {
+  getBrowserTablePageSizeStorage,
+  normalizeTablePageSizeInput,
+  readStoredTablePageSize,
+  writeStoredTablePageSize,
+} from "./tablePageSize";
 
 export type AdaptiveTablePaginationOptions = {
   initialPage?: number;
@@ -8,6 +14,7 @@ export type AdaptiveTablePaginationOptions = {
   rowHeight?: number;
   minRows?: number;
   maxRows?: number;
+  storageKey?: string;
 };
 
 export function mapAdaptiveTablePaginationState(
@@ -110,13 +117,16 @@ export function useAdaptiveTablePagination({
   rowHeight = 41,
   minRows = 10,
   maxRows = 25,
+  storageKey,
 }: AdaptiveTablePaginationOptions = {}) {
   const tablePageRef = useRef<HTMLDivElement>(null);
-  const [pagination, setPagination] = useState({
+  const [pagination, setPagination] = useState(() => ({
     currentPage: initialPage,
-    pageSize: minRows,
-  });
-  const [isMeasured, setIsMeasured] = useState(false);
+    pageSize: storageKey
+      ? readStoredTablePageSize(getBrowserTablePageSizeStorage(), storageKey)
+      : minRows,
+  }));
+  const [isMeasured, setIsMeasured] = useState(Boolean(storageKey));
   const currentPageRef = useRef(pagination.currentPage);
   const pageSizeRef = useRef(pagination.pageSize);
 
@@ -129,6 +139,27 @@ export function useAdaptiveTablePagination({
       return { ...current, currentPage: resolvedPage };
     });
   }, []);
+
+  const setPageSize = useCallback((requestedPageSize: number) => {
+    const nextPageSize = normalizeTablePageSizeInput(requestedPageSize);
+    if (nextPageSize === null || nextPageSize === pageSizeRef.current) return;
+
+    if (storageKey) {
+      writeStoredTablePageSize(
+        getBrowserTablePageSizeStorage(),
+        storageKey,
+        nextPageSize,
+      );
+    }
+
+    setPagination((current) => {
+      return mapAdaptiveTablePaginationState(
+        current.currentPage,
+        current.pageSize,
+        nextPageSize,
+      );
+    });
+  }, [storageKey]);
 
   useEffect(() => {
     currentPageRef.current = pagination.currentPage;
@@ -157,7 +188,7 @@ export function useAdaptiveTablePagination({
   }, [fallbackTableTop, maxRows, minRows, reservedHeight, rowHeight]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (storageKey || typeof window === "undefined") return;
 
     let animationFrame: number | null = null;
     const handleResize = () => {
@@ -174,7 +205,7 @@ export function useAdaptiveTablePagination({
       window.removeEventListener("resize", handleResize);
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
     };
-  }, [measurePageSize]);
+  }, [measurePageSize, storageKey]);
 
   const { currentPage, pageSize } = pagination;
 
@@ -182,6 +213,7 @@ export function useAdaptiveTablePagination({
     currentPage,
     setCurrentPage,
     pageSize,
+    setPageSize,
     isMeasured,
     tablePageRef,
     currentPageRef,
