@@ -132,10 +132,15 @@ test("home reserve analysis dashboard includes accessible, consistently colored 
   for (const chartPrimitive of ["ComposedChart", "BarChart", "Line"]) {
     assert.match(source, new RegExp(chartPrimitive));
   }
-  for (const color of ["#1d4ed8", "#6d28d9", "#b91c1c", "#486581", "#7f1d1d"]) {
-    assert.match(source, new RegExp(color));
-  }
+  assert.match(source, /producing: "#1d4ed8"/);
+  assert.match(source, /recoverable: "#6d28d9"/);
+  assert.match(source, /oil: "#b91c1c"/);
   assert.match(source, /recovery: "#486581"/);
+  assert.match(source, /contribution: "#7f1d1d"/);
+  assert.match(source, /dashboard\.total\.producingReserve, unit: "万吨", icon: Database, accent: CHART_COLORS\.producing/);
+  assert.match(source, /dashboard\.total\.recoverableReserve, unit: "万吨", icon: TrendingUp, accent: CHART_COLORS\.recoverable/);
+  assert.match(source, /dashboard\.total\.recoveryRate, unit: "%", icon: Gauge, accent: CHART_COLORS\.recovery/);
+  assert.match(source, /dashboard\.total\.lastYearOil, unit: "万吨\/年", icon: Activity, accent: CHART_COLORS\.oil/);
   assert.match(source, /backgroundColor: CHART_COLORS\.contribution/);
   assert.match(source, /rounded-full bg-slate-100 px-2\.5 py-1/);
   assert.doesNotMatch(source, /bg-teal-700/);
