@@ -166,6 +166,24 @@ function assertConfigurableZonalPageSizeContract(pageSource: string, storageKey:
   );
 }
 
+function assertConfigurableInlinePageSizeContract(pageSource: string, storageKey: string) {
+  assert.match(
+    pageSource,
+    new RegExp(`useAdaptiveTablePagination\\s*\\(\\s*\\{\\s*storageKey\\s*:\\s*TABLE_PAGE_SIZE_STORAGE_KEYS\\.${storageKey}\\s*\\}\\s*\\)`),
+    "page persists its independent page-size preference",
+  );
+  assert.match(
+    pageSource,
+    /const\s*\{[^}]*\bsetPageSize\b[^}]*\}\s*=\s*useAdaptiveTablePagination\s*\(/,
+    "page gets the shared page-size setter",
+  );
+  assert.match(
+    pageSource,
+    /<TablePageSizeControl\s+pageSize=\{pageSize\}\s+onPageSizeChange=\{setPageSize\}\s*\/>\s*<span>/,
+    "page renders the page-size control immediately before its pagination summary",
+  );
+}
+
 test("TABLE_PAGE_SIZE_STORAGE_KEYS keeps stable page-size keys for every table", async () => {
   const source = await readFile(appUrl, "utf8");
 
@@ -256,6 +274,20 @@ for (const [pageName, totalSetter] of [
       /WELL_FLUSHING_PAGE_SIZE/,
       "well-flushing no longer uses its fixed main-table page size",
     );
+  });
+}
+
+for (const [pageName, storageKey] of [
+  ["WaterCutPage", "waterCut"],
+  ["InjectionTechPage", "injectionTech"],
+  ["WellFlushingPage", "wellFlushing"],
+  ["AbnormalWellsPage", "abnormalWell"],
+  ["IndicatorCurvePage", "indicatorCurve"],
+  ["DynamicAdjustmentPage", "dynamicAdjustment"],
+] as const) {
+  test(`${pageName} persists and controls its page size`, async () => {
+    const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), pageName);
+    assertConfigurableInlinePageSizeContract(pageSource, storageKey);
   });
 }
 
@@ -363,7 +395,7 @@ test("injection-tech and water-cut main tables no longer define fixed capacities
 test("indicator curve uses adaptive race-safe server pagination without changing auxiliary limits", async () => {
   const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), "IndicatorCurvePage");
 
-  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\)/);
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\{\s*storageKey\s*:\s*TABLE_PAGE_SIZE_STORAGE_KEYS\.indicatorCurve\s*\}\s*\)/);
   assert.match(pageSource, /\bcurrentPageRef\b/);
   assert.match(pageSource, /\bpageSizeRef\b/);
   assert.match(pageSource, /\bisMeasured\b/);
@@ -412,7 +444,7 @@ test("indicator curve uses adaptive race-safe server pagination without changing
 test("dynamic adjustment uses adaptive client slicing without resize requests", async () => {
   const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), "DynamicAdjustmentPage");
 
-  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\)/);
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\{\s*storageKey\s*:\s*TABLE_PAGE_SIZE_STORAGE_KEYS\.dynamicAdjustment\s*\}\s*\)/);
   assert.match(pageSource, /const\s+appliedFiltersRef\s*=\s*useRef\(filters\)/);
   assert.match(pageSource, /const\s+loadRequestCoordinatorRef\s*=\s*useRef\(createLatestRequestCoordinator\(\)\)/);
   assert.match(pageSource, /loadRequestCoordinatorRef\.current\.run\s*\(/);

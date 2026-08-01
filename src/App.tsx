@@ -2212,7 +2212,7 @@ function AbnormalWellsPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8] disabled:cursor-not-allowed disabled:opacity-50";
   const [records, setRecords] = useState<AbnormalWellRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.abnormalWell });
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", category: "", process: "" });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
@@ -2373,6 +2373,7 @@ function AbnormalWellsPage() {
           <button type="button" disabled={!selectedId} onClick={handleDelete} className={toolButtonClass}>删除</button>
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
+          <TablePageSizeControl pageSize={pageSize} onPageSizeChange={setPageSize} />
           <span>第{displayPage}页 共{totalPages}页 共{totalItems}条</span>
           <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(1)}>首页</button>
           <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(displayPage - 1)}>上一页</button>
@@ -2872,7 +2873,7 @@ function IndicatorCurvePage() {
   const [jumpPage, setJumpPage] = useState("1");
   const [filters, setFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
   const [appliedFilters, setAppliedFilters] = useState<IndicatorCurveFilters>({ wellNo: "", testDate: "", testInterval: "" });
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.indicatorCurve });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
@@ -3288,6 +3289,7 @@ function IndicatorCurvePage() {
           {formError && !showForm && <span className="text-[12px] font-bold text-red-600">{formError}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
+          <TablePageSizeControl pageSize={pageSize} onPageSizeChange={setPageSize} />
           <span>第{displayPage}页 共{totalPages}页 共{totalRows}条</span>
           <button type="button" disabled={!canGoPrevious} onClick={() => goToPage(1)} className={pageButtonClass}>首页</button>
           <button type="button" disabled={!canGoPrevious} onClick={() => goToPage(displayPage - 1)} className={pageButtonClass}>上一页</button>
@@ -3494,7 +3496,7 @@ function WellFlushingPage() {
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [records, setRecords] = useState<WellFlushingRecord[]>([]);
   const [totalRows, setTotalRows] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.wellFlushing });
   const [jumpPage, setJumpPage] = useState("1");
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
   const appliedFiltersRef = useRef(filters);
@@ -3818,6 +3820,7 @@ function WellFlushingPage() {
           {importStatus && <span className="text-[#007a3d]">{importStatus}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
+          <TablePageSizeControl pageSize={pageSize} onPageSizeChange={setPageSize} />
           <span>第 {displayPage} 页 共 {totalPages} 页 共 {totalRows} 条</span>
           <button type="button" className={pageButtonClass} disabled={!canGoPrevious} onClick={() => goToPage(1)}>首页</button>
           <button type="button" className={pageButtonClass} disabled={!canGoPrevious} onClick={() => goToPage(displayPage - 1)}>上一页</button>
@@ -4011,7 +4014,7 @@ function InjectionTechPage() {
     runningMonths: "",
     wellNo: "",
   });
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.injectionTech });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
@@ -4222,6 +4225,7 @@ function InjectionTechPage() {
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
+          <TablePageSizeControl pageSize={pageSize} onPageSizeChange={setPageSize} />
           <span>第{displayPage}页 共{totalPages}页 共{totalRows}条</span>
           <button type="button" onClick={() => goToPage(1)} disabled={!canGoPrevious} className={pageButtonClass}>首页</button>
           <button type="button" onClick={() => goToPage(displayPage - 1)} disabled={!canGoPrevious} className={pageButtonClass}>上一页</button>
@@ -4608,7 +4612,7 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [records, setRecords] = useState<WaterCutRecord[]>([]);
   const [filters, setFilters] = useState(() => createEmptyWaterCutFilters());
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.waterCut });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
   const loadRequestIdRef = useRef(0);
@@ -5043,6 +5047,7 @@ function WaterCutPage({ currentUser }: { currentUser: AuthUser | null }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[12px] text-[#001a33]">
+          <TablePageSizeControl pageSize={pageSize} onPageSizeChange={setPageSize} />
           <span>{`第 ${displayPage} 页 共 ${totalPages} 页 共 ${totalRows} 条`}</span>
           <button type="button" onClick={() => goToPage(1)} disabled={!canGoPrevious} className={pageButtonClass}>首页</button>
           <button type="button" onClick={() => goToPage(displayPage - 1)} disabled={!canGoPrevious} className={pageButtonClass}>上一页</button>
@@ -8145,7 +8150,7 @@ function DynamicAdjustmentPage() {
   const [form, setForm] = useState<DynamicAdjustmentForm>(() => createEmptyDynamicAdjustmentForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { currentPage, setCurrentPage, pageSize, tablePageRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, tablePageRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.dynamicAdjustment });
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -8316,6 +8321,7 @@ function DynamicAdjustmentPage() {
             <button type="button" disabled={!selectedRecord} onClick={() => selectedRecord && handleDelete(selectedRecord)} className={`${toolButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}>删除</button>
           </div>
           <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
+            <TablePageSizeControl pageSize={pageSize} onPageSizeChange={setPageSize} />
             <span>第{displayPage}页 共{totalPages}页 共{totalItems}条</span>
             <button type="button" disabled={!canGoPrevious} className={pageButtonClass} onClick={() => goToPage(1)}>首页</button>
             <button type="button" disabled={!canGoPrevious} className={pageButtonClass} onClick={() => goToPage(displayPage - 1)}>上一页</button>
