@@ -132,9 +132,13 @@ test("home reserve analysis dashboard includes accessible, consistently colored 
   for (const chartPrimitive of ["ComposedChart", "BarChart", "Line"]) {
     assert.match(source, new RegExp(chartPrimitive));
   }
-  for (const color of ["#0f766e", "#d99545", "#486581"]) {
+  for (const color of ["#1d4ed8", "#6d28d9", "#b91c1c", "#486581", "#7f1d1d"]) {
     assert.match(source, new RegExp(color));
   }
+  assert.match(source, /recovery: "#486581"/);
+  assert.match(source, /backgroundColor: CHART_COLORS\.contribution/);
+  assert.match(source, /rounded-full bg-slate-100 px-2\.5 py-1/);
+  assert.doesNotMatch(source, /bg-teal-700/);
   assert.match(source, /dashboard\.ranking\.map/);
   assert.match(source, /dashboard\.units\.map/);
   assert.match(source, /aria-label=/);

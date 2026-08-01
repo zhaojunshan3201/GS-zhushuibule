@@ -33,9 +33,11 @@ type MetricCardProps = {
 };
 
 const CHART_COLORS = {
-  producing: "#0f766e",
-  recoverable: "#d99545",
-  oil: "#486581",
+  producing: "#1d4ed8",
+  recoverable: "#6d28d9",
+  oil: "#b91c1c",
+  recovery: "#486581",
+  contribution: "#7f1d1d",
 };
 
 export function formatChartTooltipValue(value: number, kind: "reserve" | "oil" | "percent") {
@@ -132,8 +134,8 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
   const metrics = [
     { label: "动用储量", value: dashboard.total.producingReserve, unit: "万吨", icon: Database, accent: CHART_COLORS.producing },
     { label: "可采储量", value: dashboard.total.recoverableReserve, unit: "万吨", icon: TrendingUp, accent: CHART_COLORS.recoverable },
-    { label: "标定采收率", value: dashboard.total.recoveryRate, unit: "%", icon: Gauge, accent: CHART_COLORS.oil },
-    { label: "上年度产油", value: dashboard.total.lastYearOil, unit: "万吨/年", icon: Activity, accent: "#64748b" },
+    { label: "标定采收率", value: dashboard.total.recoveryRate, unit: "%", icon: Gauge, accent: CHART_COLORS.recovery },
+    { label: "上年度产油", value: dashboard.total.lastYearOil, unit: "万吨/年", icon: Activity, accent: CHART_COLORS.oil },
   ];
 
   return (
@@ -280,7 +282,13 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
             <div className="mt-5" aria-label={`${unit.unit}总体贡献率 ${formatHomeReserveValue(unit.contributionRate, "%")}`}>
               <div className="mb-2 flex justify-between text-xs text-slate-500"><span>总体贡献</span><span>{formatHomeReserveValue(unit.contributionRate, "%")}</span></div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-teal-700" style={{ width: `${Math.min(100, Math.max(0, unit.contributionRate))}%` }} />
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    backgroundColor: CHART_COLORS.contribution,
+                    width: `${Math.min(100, Math.max(0, unit.contributionRate))}%`,
+                  }}
+                />
               </div>
             </div>
           </article>
