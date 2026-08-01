@@ -1012,7 +1012,9 @@ function SystemSettingsPage() {
   const [responsibilityText, setResponsibilityText] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [isSavingReserveChartColors, setIsSavingReserveChartColors] = useState(false);
   const reserveChartColorsLoadedRef = useRef(false);
+  const reserveChartColorsSaveInFlightRef = useRef(false);
   const sidebarLogoInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarLogoUploadRequestRef = useRef(0);
   const sidebarLogoConfigQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1064,16 +1066,25 @@ function SystemSettingsPage() {
   };
 
   const saveReserveChartColors = async () => {
+    if (reserveChartColorsSaveInFlightRef.current) return;
+    reserveChartColorsSaveInFlightRef.current = true;
+    setIsSavingReserveChartColors(true);
     setError("");
     setMessage("");
+    const serializedReserveChartColors = serializeHomeReserveChartColors(reserveChartColors);
     try {
       await axios.post("/api/config", {
         key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY,
-        value: serializeHomeReserveChartColors(reserveChartColors),
+        value: serializedReserveChartColors,
       });
+      setError("");
       setMessage(SETTINGS_TEXT.chartColorsSaved);
     } catch {
+      setMessage("");
       setError(SETTINGS_TEXT.chartColorsSaveFailed);
+    } finally {
+      reserveChartColorsSaveInFlightRef.current = false;
+      setIsSavingReserveChartColors(false);
     }
   };
 
@@ -1222,7 +1233,7 @@ function SystemSettingsPage() {
         </div>
         <div className="flex gap-2 border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
           <button type="button" onClick={restoreReserveChartColors} className="h-8 rounded border border-[#9eb8d4] bg-white px-4 text-xs font-bold text-slate-800">{SETTINGS_TEXT.restoreChartColors}</button>
-          <button type="button" onClick={() => void saveReserveChartColors()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{SETTINGS_TEXT.saveChartColors}</button>
+          <button type="button" disabled={isSavingReserveChartColors} onClick={() => void saveReserveChartColors()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-3.5 w-3.5" />{isSavingReserveChartColors ? "保存中..." : SETTINGS_TEXT.saveChartColors}</button>
         </div>
       </section>
 
