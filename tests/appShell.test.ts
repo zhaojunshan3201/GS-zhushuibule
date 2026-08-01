@@ -88,8 +88,12 @@ test("system settings edits, restores, and atomically saves reserve chart colors
   assert.match(saveHandler, /await axios\.post\("\/api\/config", \{[\s\S]*?key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY,[\s\S]*?value: serializeHomeReserveChartColors\(reserveChartColors\),[\s\S]*?\}\)/);
   assert.equal((saveHandler.match(/axios\.post\("\/api\/config"/g) || []).length, 1);
   assert.match(saveHandler, /setMessage\(SETTINGS_TEXT\.chartColorsSaved\)/);
-  assert.match(saveHandler, /setError\(SETTINGS_TEXT\.chartColorsSaveFailed\)/);
   assert.doesNotMatch(saveHandler, /setReserveChartColors|loadSettings|dispatchEvent/);
+  const catchStart = saveHandler.indexOf("catch");
+  assert.ok(catchStart >= 0);
+  const catchSource = saveHandler.slice(catchStart);
+  assert.match(catchSource, /setError\(SETTINGS_TEXT\.chartColorsSaveFailed\)/);
+  assert.doesNotMatch(catchSource, /setReserveChartColors|loadSettings|setMessage|axios\./);
 
   const colorSectionStart = settingsSource.indexOf('<section aria-labelledby="reserve-chart-colors-title"');
   const reserveMaintenanceStart = settingsSource.indexOf("SETTINGS_TEXT.reserveTitle", colorSectionStart);
@@ -97,6 +101,8 @@ test("system settings edits, restores, and atomically saves reserve chart colors
   const colorSectionSource = settingsSource.slice(colorSectionStart, reserveMaintenanceStart);
   assert.match(colorSectionSource, /SETTINGS_TEXT\.chartColorsTitle/);
   assert.match(colorSectionSource, /sm:grid-cols-2 lg:grid-cols-5/);
+  assert.match(colorSectionSource, /HOME_RESERVE_CHART_COLOR_ITEMS\.map\(\(item\) =>/);
+  assert.match(colorSectionSource, /key=\{item\.key\}/);
   assert.match(colorSectionSource, /type="color"/);
   assert.match(colorSectionSource, /value=\{reserveChartColors\[item\.key\]\}/);
   assert.match(colorSectionSource, /onChange=\{\(event\) => setReserveChartColors\(\(current\) => \(\{ \.\.\.current, \[item\.key\]: event\.target\.value \}\)\)\}/);
