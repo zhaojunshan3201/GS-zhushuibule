@@ -47,9 +47,16 @@ test("falls back per field for invalid and missing color values", () => {
 });
 
 test("returns defaults for absent, malformed, and array JSON values", () => {
-  assert.deepEqual(parseHomeReserveChartColors(undefined), DEFAULT_HOME_RESERVE_CHART_COLORS);
-  assert.deepEqual(parseHomeReserveChartColors("not-json"), DEFAULT_HOME_RESERVE_CHART_COLORS);
-  assert.deepEqual(parseHomeReserveChartColors("[]"), DEFAULT_HOME_RESERVE_CHART_COLORS);
+  const undefinedResult = parseHomeReserveChartColors(undefined);
+  const nullResult = parseHomeReserveChartColors(null);
+  const malformedResult = parseHomeReserveChartColors("not-json");
+  const arrayResult = parseHomeReserveChartColors("[]");
+
+  for (const result of [undefinedResult, nullResult, malformedResult, arrayResult]) {
+    assert.deepEqual(result, DEFAULT_HOME_RESERVE_CHART_COLORS);
+    assert.notStrictEqual(result, DEFAULT_HOME_RESERVE_CHART_COLORS);
+  }
+  assert.notStrictEqual(undefinedResult, malformedResult);
 });
 
 test("serializes a complete supplied palette", () => {
