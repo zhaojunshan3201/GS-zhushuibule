@@ -49,6 +49,8 @@ import {
   DEFAULT_HOME_RESERVE_CHART_COLORS,
   HOME_RESERVE_CHART_COLORS_CONFIG_KEY,
   parseHomeReserveChartColors,
+  serializeHomeReserveChartColors,
+  type HomeReserveChartColors,
 } from "./shared/homeReserveChartColors";
 import { PptxWellHistoryEditor } from "./components/PptxWellHistoryEditor";
 import { WellHistoryRichTextEditor } from "./components/WellHistoryRichTextEditor";
@@ -907,6 +909,11 @@ const SETTINGS_TEXT = {
   reserveDeleted: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u5df2\u5220\u9664",
   reserveSaveFailed: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u4fdd\u5b58\u5931\u8d25",
   reserveDeleteFailed: "\u50a8\u91cf\u6982\u89c8\u6570\u636e\u5220\u9664\u5931\u8d25",
+  chartColorsTitle: "首页储量看板颜色",
+  chartColorsSaved: "首页储量看板颜色已保存",
+  chartColorsSaveFailed: "首页储量看板颜色保存失败",
+  restoreChartColors: "恢复默认色",
+  saveChartColors: "保存颜色",
   title: "\u7cfb\u7edf\u8bbe\u7f6e",
   subtitle: "\u7ef4\u62a4\u7cfb\u7edf\u57fa\u7840\u914d\u7f6e\u3001\u5355\u4f4d\u804c\u8d23\u548c\u4e3b\u9875\u50a8\u91cf\u6982\u89c8\u6570\u636e\u3002",
   baseConfig: "\u57fa\u7840\u914d\u7f6e",
@@ -937,6 +944,14 @@ const SYSTEM_CONFIG_ITEMS = [
   { key: "dynamicOilSingleYearWaterDiffMin", label: "对比上年12月份 含水差值>=", type: "input" },
   { key: "dynamicWaterSingleMonthInjectionDiffMin", label: "水井对比上月 日注水差值>=", type: "input" },
   { key: "dynamicWaterSingleYearInjectionDiffMin", label: "水井对比上年12月份 日注水差值>=", type: "input" },
+] as const;
+
+const HOME_RESERVE_CHART_COLOR_ITEMS = [
+  { key: "oil", label: "上年度产油" },
+  { key: "producing", label: "动用储量" },
+  { key: "recoverable", label: "可采储量" },
+  { key: "recovery", label: "标定采收率" },
+  { key: "contribution", label: "总体贡献" },
 ] as const;
 
 type HomeReserveOverviewAdminRecord = {
@@ -986,6 +1001,9 @@ const toHomeReserveForm = (record: HomeReserveOverviewAdminRecord): HomeReserveO
 
 function SystemSettingsPage() {
   const [config, setConfig] = useState<Record<string, string>>({});
+  const [reserveChartColors, setReserveChartColors] = useState<HomeReserveChartColors>(() => ({
+    ...DEFAULT_HOME_RESERVE_CHART_COLORS,
+  }));
   const [responsibilities, setResponsibilities] = useState<Record<string, string>>({});
   const [reserveRecords, setReserveRecords] = useState<HomeReserveOverviewAdminRecord[]>([]);
   const [reserveForm, setReserveForm] = useState<HomeReserveOverviewAdminForm>(() => createEmptyHomeReserveForm());
@@ -1007,6 +1025,9 @@ function SystemSettingsPage() {
         axios.get<HomeReserveOverviewAdminRecord[]>("/api/home-reserve-overview-records"),
       ]);
       setConfig(configResponse.data || {});
+      setReserveChartColors(parseHomeReserveChartColors(
+        (configResponse.data || {})[HOME_RESERVE_CHART_COLORS_CONFIG_KEY],
+      ));
       setResponsibilities(responsibilityResponse.data || {});
       setReserveRecords(Array.isArray(reserveResponse.data) ? reserveResponse.data : []);
       const nextUnit = selectedUnit || UNIT_OPTIONS[0] || "";
@@ -1031,6 +1052,23 @@ function SystemSettingsPage() {
       await loadSettings();
     } catch (err) {
       setError(SETTINGS_TEXT.configSaveFailed);
+    }
+  };
+
+  const restoreReserveChartColors = () => {
+    setReserveChartColors({ ...DEFAULT_HOME_RESERVE_CHART_COLORS });
+  };
+
+  const saveReserveChartColors = async () => {
+    setError("");
+    try {
+      await axios.post("/api/config", {
+        key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY,
+        value: serializeHomeReserveChartColors(reserveChartColors),
+      });
+      setMessage(SETTINGS_TEXT.chartColorsSaved);
+    } catch {
+      setError(SETTINGS_TEXT.chartColorsSaveFailed);
     }
   };
 
@@ -1160,6 +1198,28 @@ function SystemSettingsPage() {
           </div>
         </div>
       </div>
+
+      <section aria-labelledby="reserve-chart-colors-title" className="border border-[#8fb7df] bg-white shadow-sm">
+        <h2 id="reserve-chart-colors-title" className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">{SETTINGS_TEXT.chartColorsTitle}</h2>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+          {HOME_RESERVE_CHART_COLOR_ITEMS.map((item) => (
+            <label key={item.key} className="text-xs font-bold text-slate-700">
+              {item.label}
+              <input
+                type="color"
+                aria-label={item.label}
+                value={reserveChartColors[item.key]}
+                onChange={(event) => setReserveChartColors((current) => ({ ...current, [item.key]: event.target.value }))}
+                className="mt-1 h-9 w-12 border border-[#9fc4e8] p-0.5"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2 border-t border-[#d6e8f8] bg-[#f7fbff] px-4 py-3">
+          <button type="button" onClick={restoreReserveChartColors} className="h-8 rounded border border-[#9eb8d4] bg-white px-4 text-xs font-bold text-slate-800">{SETTINGS_TEXT.restoreChartColors}</button>
+          <button type="button" onClick={() => void saveReserveChartColors()} className="inline-flex h-8 items-center gap-1 rounded border border-[#2f80ed] bg-[#2f80ed] px-4 text-xs font-bold text-white"><Save className="h-3.5 w-3.5" />{SETTINGS_TEXT.saveChartColors}</button>
+        </div>
+      </section>
 
       <div className="border border-[#8fb7df] bg-white shadow-sm">
         <div className="border-b border-[#9fc4e8] bg-[#eaf4ff] px-4 py-2 text-center text-base font-bold text-[#cc0000]">{SETTINGS_TEXT.reserveTitle}</div>

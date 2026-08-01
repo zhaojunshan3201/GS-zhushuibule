@@ -46,6 +46,54 @@ test("home page loads reserve chart colors independently from reserve data", () 
   assert.doesNotMatch(configRequest, /setError/);
 });
 
+test("system settings edits, restores, and atomically saves reserve chart colors", () => {
+  const settingsPage = findFunction("SystemSettingsPage");
+  assert.ok(settingsPage?.body);
+  const settingsSource = settingsPage.getText(appAst);
+
+  for (const item of [
+    '{ key: "oil", label: "上年度产油" }',
+    '{ key: "producing", label: "动用储量" }',
+    '{ key: "recoverable", label: "可采储量" }',
+    '{ key: "recovery", label: "标定采收率" }',
+    '{ key: "contribution", label: "总体贡献" }',
+  ]) assert.ok(appSource.includes(item), `missing color item ${item}`);
+
+  assert.match(settingsSource, /type="color"/);
+  assert.match(settingsSource, /reserveChartColors, setReserveChartColors/);
+  assert.match(settingsSource, /parseHomeReserveChartColors\(\s*\(configResponse\.data \|\| \{\}\)\[HOME_RESERVE_CHART_COLORS_CONFIG_KEY\],?\s*\)/);
+  assert.match(settingsSource, /setReserveChartColors\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\)/);
+  assert.match(settingsSource, /serializeHomeReserveChartColors\(reserveChartColors\)/);
+  assert.match(settingsSource, /key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY/);
+  assert.match(appSource, /chartColorsTitle: "首页储量看板颜色"/);
+  assert.match(appSource, /restoreChartColors: "恢复默认色"/);
+  assert.match(appSource, /saveChartColors: "保存颜色"/);
+  assert.match(settingsSource, /SETTINGS_TEXT\.chartColorsTitle/);
+  assert.match(settingsSource, /SETTINGS_TEXT\.restoreChartColors/);
+  assert.match(settingsSource, /SETTINGS_TEXT\.saveChartColors/);
+  assert.match(settingsSource, /aria-labelledby="reserve-chart-colors-title"/);
+  assert.match(settingsSource, /sm:grid-cols-2 lg:grid-cols-5/);
+
+  const systemConfigStart = appSource.indexOf("const SYSTEM_CONFIG_ITEMS =");
+  const systemConfigEnd = appSource.indexOf("] as const;", systemConfigStart);
+  assert.ok(systemConfigStart >= 0 && systemConfigEnd > systemConfigStart);
+  assert.doesNotMatch(appSource.slice(systemConfigStart, systemConfigEnd), /HOME_RESERVE_CHART_COLORS_CONFIG_KEY/);
+
+  const restoreStart = settingsSource.indexOf("const restoreReserveChartColors = () =>");
+  const saveStart = settingsSource.indexOf("const saveReserveChartColors = async () =>");
+  const uploadStart = settingsSource.indexOf("const uploadSidebarLogo = async", saveStart);
+  assert.ok(restoreStart >= 0 && saveStart > restoreStart && uploadStart > saveStart);
+  const restoreHandler = settingsSource.slice(restoreStart, saveStart);
+  const saveHandler = settingsSource.slice(saveStart, uploadStart);
+  assert.doesNotMatch(restoreHandler, /axios\./);
+  assert.match(saveHandler, /await axios\.post\("\/api\/config", \{[\s\S]*?key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY,[\s\S]*?value: serializeHomeReserveChartColors\(reserveChartColors\),[\s\S]*?\}\)/);
+  assert.equal((saveHandler.match(/axios\.post\("\/api\/config"/g) || []).length, 1);
+  assert.doesNotMatch(saveHandler, /reserve-chart-colors|dispatchEvent/);
+  const catchStart = saveHandler.indexOf("catch");
+  assert.ok(catchStart >= 0);
+  assert.doesNotMatch(saveHandler.slice(catchStart), /setReserveChartColors/);
+});
+
 test("application shell retains content mounting while exposing reference layout regions", () => {
   assert.doesNotMatch(appSource, /showWelcome/);
   assert.match(appSource, /shell-sidebar/);
