@@ -16,11 +16,13 @@ function getSmartTestHistoryPageSource(source: string) {
   return source.slice(page.getStart(ast), page.getEnd());
 }
 
-test("SmartTestHistoryPage uses viewport-adaptive server pagination", async () => {
+test("SmartTestHistoryPage uses persisted configurable server pagination", async () => {
   const pageSource = getSmartTestHistoryPageSource(await readFile(appUrl, "utf8"));
 
-  assert.match(pageSource, /useAdaptiveTablePagination\s*\(/);
+  assert.match(pageSource, /useAdaptiveTablePagination\s*\(\s*\{\s*storageKey:\s*TABLE_PAGE_SIZE_STORAGE_KEYS\.smartTest\s*\}\s*\)/);
+  assert.match(pageSource, /const\s*\{[^}]*\bsetPageSize\b[^}]*\}\s*=\s*useAdaptiveTablePagination\s*\(/);
   assert.match(pageSource, /pageSize\s*:\s*requestedPageSize/);
+  assert.match(pageSource, /<ZonalTableShell\b[\s\S]*?\bonPageSizeChange=\{setPageSize\}/);
   assert.doesNotMatch(pageSource, /const\s+pageSize\s*=\s*10\b/);
   assert.match(pageSource, /min-w-\[1820px\]/);
 });

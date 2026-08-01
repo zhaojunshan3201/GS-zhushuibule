@@ -61,6 +61,7 @@ import {
 } from "./shared/coreTableRecords";
 import { applySidebarLogoLoad, applySidebarLogoUpdate, isCurrentSidebarLogoUpload } from "./shared/sidebarLogo";
 import { buildPinnedAdaptivePage, createLatestRequestCoordinator, getAdaptivePaginationView, getZonalTablePaginationView, useAdaptiveTablePagination } from "./shared/adaptiveTablePagination";
+import { TablePageSizeControl } from "./components/TablePageSizeControl";
 import {
   createEmptyConcentricTestForm,
   createEmptySingleWellInjectionEvaluationForm,
@@ -109,6 +110,19 @@ type PageType =
   | "user-management"
   | "settings"
   | "audit-log";
+
+const TABLE_PAGE_SIZE_STORAGE_KEYS = {
+  waterCut: "table-page-size:water-cut",
+  injectionTech: "table-page-size:injection-tech",
+  concentricTest: "table-page-size:concentric-test",
+  smartTest: "table-page-size:smart-test",
+  singleWellInjection: "table-page-size:single-well-injection",
+  singleWellSeal: "table-page-size:single-well-seal",
+  wellFlushing: "table-page-size:well-flushing",
+  abnormalWell: "table-page-size:abnormal-well",
+  dynamicAdjustment: "table-page-size:dynamic-adjustment",
+  indicatorCurve: "table-page-size:indicator-curve",
+} as const;
 
 type WellHistoryPdfRecord = {
   id?: string;
@@ -1181,6 +1195,7 @@ function ZonalTableShell({
   pageSize,
   totalItems,
   onPageChange,
+  onPageSizeChange,
   toolbar,
   showFilters = true,
   showPagination = true,
@@ -1193,6 +1208,7 @@ function ZonalTableShell({
   pageSize?: number;
   totalItems?: number;
   onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
   toolbar?: React.ReactNode;
   showFilters?: boolean;
   showPagination?: boolean;
@@ -1385,6 +1401,7 @@ function ZonalTableShell({
           )}
           {showPagination && (
             <div className="flex flex-wrap items-center gap-2 whitespace-nowrap pr-2 text-[12px] text-[#001a33]">
+              {pageSize !== undefined && onPageSizeChange && <TablePageSizeControl pageSize={pageSize} onPageSizeChange={onPageSizeChange} />}
               <span>第{displayPage}页 共{totalPages}页 共{displayTotal}条</span>
               <button type="button" disabled={!canGoPrevious} className="zonal-pagination-link font-bold hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline" onClick={() => goToPage(1)}>
                 首页
@@ -1440,7 +1457,7 @@ function ConcentricTestHistoryPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const [records, setRecords] = useState<ConcentricTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.concentricTest });
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
@@ -1562,7 +1579,7 @@ function ConcentricTestHistoryPage() {
     <div>
       {confirmDialog}
       <div ref={tablePageRef}>
-        <ZonalTableShell title="同心测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+        <ZonalTableShell title="同心测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageSizeChange={setPageSize} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1320px] border-collapse bg-white">
           <thead>
             <tr>
@@ -1719,7 +1736,7 @@ function SmartTestHistoryPage() {
   const layers = ["1层", "2层", "3层", "4层", "5层"];
   const [records, setRecords] = useState<SmartTestRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.smartTest });
   const [filters, setFilters] = useState({ unit: "", block: "", wellNo: "", fromDate: "", toDate: "" });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
@@ -1845,7 +1862,7 @@ function SmartTestHistoryPage() {
     <div>
       {confirmDialog}
       <div ref={tablePageRef}>
-        <ZonalTableShell title="智能测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+        <ZonalTableShell title="智能测调井史" filterMode="concentric" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageSizeChange={setPageSize} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1820px] border-collapse bg-white">
           <thead>
             <tr>
@@ -1975,7 +1992,7 @@ function SingleWellInjectionEvaluationPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const [records, setRecords] = useState<SingleWellInjectionEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.singleWellInjection });
   const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
@@ -2096,7 +2113,7 @@ function SingleWellInjectionEvaluationPage() {
     <div>
       {confirmDialog}
       <div ref={tablePageRef}>
-        <ZonalTableShell title="单井注入评价" filterMode="single-injection" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+        <ZonalTableShell title="单井注入评价" filterMode="single-injection" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageSizeChange={setPageSize} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1320px] border-collapse bg-white">
           <thead>
             <tr>
@@ -2503,7 +2520,7 @@ function SingleWellSealEvaluationPage() {
   const toolButtonClass = "h-6 rounded border border-[#8aaed3] bg-[#e4f0fa] px-3 text-[12px] font-bold text-[#001a33] hover:bg-[#d6e8f8]";
   const [records, setRecords] = useState<SingleWellSealEvaluationRecord[]>([]);
   const [totalItems, setTotalItems] = useState(0);
-  const { currentPage, setCurrentPage, pageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination();
+  const { currentPage, setCurrentPage, pageSize, setPageSize, isMeasured, tablePageRef, currentPageRef, pageSizeRef } = useAdaptiveTablePagination({ storageKey: TABLE_PAGE_SIZE_STORAGE_KEYS.singleWellSeal });
   const [filters, setFilters] = useState({ unit: "", block: "", process: "", wellNo: "" });
   const appliedFiltersRef = useRef(filters);
   const recordsRef = useRef(records);
@@ -2624,7 +2641,7 @@ function SingleWellSealEvaluationPage() {
     <div>
       {confirmDialog}
       <div ref={tablePageRef}>
-        <ZonalTableShell title="单井密封评价" filterMode="single-seal" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageChange={(page) => loadRecords(page)}>
+        <ZonalTableShell title="单井密封评价" filterMode="single-seal" toolbar={toolbar} currentPage={currentPage} pageSize={pageSize} totalItems={totalItems} onPageSizeChange={setPageSize} onPageChange={(page) => loadRecords(page)}>
         <table className="w-full min-w-[1160px] border-collapse bg-white">
           <thead>
             <tr>

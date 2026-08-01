@@ -148,16 +148,57 @@ function assertAdaptivePageContract(pageSource: string) {
   );
 }
 
-for (const pageName of [
-  "ConcentricTestHistoryPage",
-  "SmartTestHistoryPage",
-  "SingleWellInjectionEvaluationPage",
-  "SingleWellSealEvaluationPage",
-]) {
+function assertConfigurableZonalPageSizeContract(pageSource: string, storageKey: string) {
+  assert.match(
+    pageSource,
+    new RegExp(`useAdaptiveTablePagination\\s*\\(\\s*\\{\\s*storageKey\\s*:\\s*TABLE_PAGE_SIZE_STORAGE_KEYS\\.${storageKey}\\s*\\}\\s*\\)`),
+    "page persists its independent page-size preference",
+  );
+  assert.match(
+    pageSource,
+    /const\s*\{[^}]*\bsetPageSize\b[^}]*\}\s*=\s*useAdaptiveTablePagination\s*\(/,
+    "page gets the shared page-size setter",
+  );
+  assert.match(
+    pageSource,
+    /<ZonalTableShell\b[\s\S]*?\bonPageSizeChange=\{setPageSize\}/,
+    "page connects the table-size control to the shared setter",
+  );
+}
+
+test("TABLE_PAGE_SIZE_STORAGE_KEYS keeps stable page-size keys for every table", async () => {
+  const source = await readFile(appUrl, "utf8");
+
+  const expectedEntries = {
+    waterCut: "table-page-size:water-cut",
+    injectionTech: "table-page-size:injection-tech",
+    concentricTest: "table-page-size:concentric-test",
+    smartTest: "table-page-size:smart-test",
+    singleWellInjection: "table-page-size:single-well-injection",
+    singleWellSeal: "table-page-size:single-well-seal",
+    wellFlushing: "table-page-size:well-flushing",
+    abnormalWell: "table-page-size:abnormal-well",
+    dynamicAdjustment: "table-page-size:dynamic-adjustment",
+    indicatorCurve: "table-page-size:indicator-curve",
+  } as const;
+
+  for (const [name, value] of Object.entries(expectedEntries)) {
+    assert.match(source, new RegExp(`${name}:\\s*["']${value}["']`));
+  }
+  assert.match(source, /const\s+TABLE_PAGE_SIZE_STORAGE_KEYS\s*=\s*\{[\s\S]*?\}\s+as\s+const/);
+});
+
+for (const [pageName, storageKey] of [
+  ["ConcentricTestHistoryPage", "concentricTest"],
+  ["SmartTestHistoryPage", "smartTest"],
+  ["SingleWellInjectionEvaluationPage", "singleWellInjection"],
+  ["SingleWellSealEvaluationPage", "singleWellSeal"],
+] as const) {
   test(`${pageName} uses shared adaptive server pagination`, async () => {
     const pageSource = getFunctionSource(await readFile(appUrl, "utf8"), pageName);
 
     assertAdaptivePageContract(pageSource);
+    assertConfigurableZonalPageSizeContract(pageSource, storageKey);
 
     const mutatedPageSource = pageSource.replace(
       "requestedPageSize = pageSizeRef.current",
@@ -227,6 +268,11 @@ test("ZonalTableShell uses one explicit-zero-safe pagination boundary", async ()
   assert.match(shellSource, /disabled=\{!canGoNext\}/);
   assert.doesNotMatch(shellSource, /totalItems\s*\|\|/);
   assert.doesNotMatch(shellSource, /currentPage\s*\|\|/);
+  assert.match(shellSource, /onPageSizeChange\?:\s*\(pageSize:\s*number\)\s*=>\s*void/);
+  assert.match(
+    shellSource,
+    /pageSize\s*!==\s*undefined\s*&&\s*onPageSizeChange\s*&&\s*<TablePageSizeControl\s+pageSize=\{pageSize\}\s+onPageSizeChange=\{onPageSizeChange\}\s*\/>/,
+  );
 });
 
 function assertAdaptiveOperationsPageContract(pageSource: string, pageKind: "injection" | "water-cut") {
