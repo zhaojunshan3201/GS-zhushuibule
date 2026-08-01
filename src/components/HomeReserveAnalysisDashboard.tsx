@@ -18,10 +18,15 @@ import {
   formatHomeReserveValue,
   type HomeReserveOverviewRow,
 } from "../shared/homeReserveOverview";
+import {
+  DEFAULT_HOME_RESERVE_CHART_COLORS,
+  type HomeReserveChartColors,
+} from "../shared/homeReserveChartColors";
 
 type HomeReserveAnalysisDashboardProps = {
   rows: HomeReserveOverviewRow[];
   loading?: boolean;
+  colors?: HomeReserveChartColors;
 };
 
 type MetricCardProps = {
@@ -30,14 +35,6 @@ type MetricCardProps = {
   value: number;
   unit: string;
   accent: string;
-};
-
-const CHART_COLORS = {
-  producing: "#1d4ed8",
-  recoverable: "#6d28d9",
-  oil: "#b91c1c",
-  recovery: "#486581",
-  contribution: "#7f1d1d",
 };
 
 export function formatChartTooltipValue(value: number, kind: "reserve" | "oil" | "percent") {
@@ -105,7 +102,11 @@ function DashboardHeader() {
   );
 }
 
-export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeReserveAnalysisDashboardProps) {
+export function HomeReserveAnalysisDashboard({
+  rows,
+  loading = false,
+  colors = DEFAULT_HOME_RESERVE_CHART_COLORS,
+}: HomeReserveAnalysisDashboardProps) {
   const dashboard = useMemo(() => buildHomeReserveDashboardData(rows), [rows]);
 
   if (loading && rows.length === 0) {
@@ -132,10 +133,10 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
   if (rows.length === 0) return null;
 
   const metrics = [
-    { label: "动用储量", value: dashboard.total.producingReserve, unit: "万吨", icon: Database, accent: CHART_COLORS.producing },
-    { label: "可采储量", value: dashboard.total.recoverableReserve, unit: "万吨", icon: TrendingUp, accent: CHART_COLORS.recoverable },
-    { label: "标定采收率", value: dashboard.total.recoveryRate, unit: "%", icon: Gauge, accent: CHART_COLORS.recovery },
-    { label: "上年度产油", value: dashboard.total.lastYearOil, unit: "万吨/年", icon: Activity, accent: CHART_COLORS.oil },
+    { label: "动用储量", value: dashboard.total.producingReserve, unit: "万吨", icon: Database, accent: colors.producing },
+    { label: "可采储量", value: dashboard.total.recoverableReserve, unit: "万吨", icon: TrendingUp, accent: colors.recoverable },
+    { label: "标定采收率", value: dashboard.total.recoveryRate, unit: "%", icon: Gauge, accent: colors.recovery },
+    { label: "上年度产油", value: dashboard.total.lastYearOil, unit: "万吨/年", icon: Activity, accent: colors.oil },
   ];
 
   return (
@@ -195,9 +196,9 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
                     contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
                   />
                   <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 12 }} />
-                  <Bar yAxisId="reserve" dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[4, 4, 0, 0]} />
-                  <Bar yAxisId="reserve" dataKey="recoverableReserve" name="可采储量" fill={CHART_COLORS.recoverable} radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="oil" dataKey="lastYearOil" name="上年度产油" stroke={CHART_COLORS.oil} strokeWidth={2.5} dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }} />
+                  <Bar yAxisId="reserve" dataKey="producingReserve" name="动用储量" fill={colors.producing} radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="reserve" dataKey="recoverableReserve" name="可采储量" fill={colors.recoverable} radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="oil" dataKey="lastYearOil" name="上年度产油" stroke={colors.oil} strokeWidth={2.5} dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -235,7 +236,7 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
                   ]}
                   contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 24px rgba(15,23,42,.08)" }}
                 />
-                <Bar dataKey="producingReserve" name="动用储量" fill={CHART_COLORS.producing} radius={[0, 5, 5, 0]}>
+                <Bar dataKey="producingReserve" name="动用储量" fill={colors.producing} radius={[0, 5, 5, 0]}>
                   <LabelList
                     dataKey="producingReserve"
                     position="right"
@@ -285,7 +286,7 @@ export function HomeReserveAnalysisDashboard({ rows, loading = false }: HomeRese
                 <div
                   className="h-full rounded-full"
                   style={{
-                    backgroundColor: CHART_COLORS.contribution,
+                    backgroundColor: colors.contribution,
                     width: `${Math.min(100, Math.max(0, unit.contributionRate))}%`,
                   }}
                 />

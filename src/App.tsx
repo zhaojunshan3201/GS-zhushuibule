@@ -45,6 +45,11 @@ import {
 import { cn } from "./lib/utils";
 import { HomeReserveAnalysisDashboard } from "./components/HomeReserveAnalysisDashboard";
 import { formatHomeReserveValue } from "./shared/homeReserveOverview";
+import {
+  DEFAULT_HOME_RESERVE_CHART_COLORS,
+  HOME_RESERVE_CHART_COLORS_CONFIG_KEY,
+  parseHomeReserveChartColors,
+} from "./shared/homeReserveChartColors";
 import { PptxWellHistoryEditor } from "./components/PptxWellHistoryEditor";
 import { WellHistoryRichTextEditor } from "./components/WellHistoryRichTextEditor";
 import {
@@ -558,9 +563,17 @@ function HomePage() {
   const [rows, setRows] = useState<HomeReserveOverviewRow[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [chartColors, setChartColors] = useState({ ...DEFAULT_HOME_RESERVE_CHART_COLORS });
 
   useEffect(() => {
     let active = true;
+    void axios.get<Record<string, string>>("/api/config")
+      .then(({ data }) => {
+        if (active) setChartColors(parseHomeReserveChartColors(data[HOME_RESERVE_CHART_COLORS_CONFIG_KEY]));
+      })
+      .catch(() => {
+        if (active) setChartColors({ ...DEFAULT_HOME_RESERVE_CHART_COLORS });
+      });
     axios.get<{ rows: HomeReserveOverviewRow[] }>("/api/home-reserve-overview")
       .then(({ data }) => {
         if (active) {
@@ -585,7 +598,7 @@ function HomePage() {
 
   return (
     <div className="space-y-5">
-      <HomeReserveAnalysisDashboard rows={rows} loading={loading} />
+      <HomeReserveAnalysisDashboard rows={rows} loading={loading} colors={chartColors} />
       <section className="home-reserve-overview border border-[#8ebdff] bg-white" aria-labelledby="reserve-table-title">
         <h2 id="reserve-table-title" className="border-b border-[#8ebdff] bg-[#f8fbff] py-1 text-center text-[22px] font-bold leading-tight text-[#d40000]">
           储量概览列表

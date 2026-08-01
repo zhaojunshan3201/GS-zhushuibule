@@ -24,6 +24,21 @@ function findFunction(name: string) {
   );
 }
 
+test("home page loads reserve chart colors independently from reserve data", () => {
+  const homePage = findFunction("HomePage");
+  assert.ok(homePage?.body);
+  const homePageSource = homePage.getText(appAst);
+
+  assert.match(homePageSource, /useState\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\)/);
+  assert.match(homePageSource, /axios\.get<Record<string, string>>\("\/api\/config"\)/);
+  assert.match(homePageSource, /parseHomeReserveChartColors\(data\[HOME_RESERVE_CHART_COLORS_CONFIG_KEY\]\)/);
+  assert.match(homePageSource, /setChartColors\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\)/);
+  assert.match(homePageSource, /<HomeReserveAnalysisDashboard rows=\{rows\} loading=\{loading\} colors=\{chartColors\}/);
+
+  const configRequest = homePageSource.match(/void axios\.get<Record<string, string>>\("\/api\/config"\)[\s\S]*?\.catch\(\(\) => \{[\s\S]*?\}\);/)?.[0] ?? "";
+  assert.doesNotMatch(configRequest, /setError/);
+});
+
 test("application shell retains content mounting while exposing reference layout regions", () => {
   assert.doesNotMatch(appSource, /showWelcome/);
   assert.match(appSource, /shell-sidebar/);

@@ -12,6 +12,7 @@ import {
   buildHomeReserveOverviewRows,
   buildHomeReserveOverviewSeedRows,
 } from "../src/shared/homeReserveOverview";
+import type { HomeReserveChartColors } from "../src/shared/homeReserveChartColors";
 
 const componentUrl = new URL("../src/components/HomeReserveAnalysisDashboard.tsx", import.meta.url);
 const appUrl = new URL("../src/App.tsx", import.meta.url);
@@ -132,16 +133,16 @@ test("home reserve analysis dashboard includes accessible, consistently colored 
   for (const chartPrimitive of ["ComposedChart", "BarChart", "Line"]) {
     assert.match(source, new RegExp(chartPrimitive));
   }
-  assert.match(source, /producing: "#1d4ed8"/);
-  assert.match(source, /recoverable: "#6d28d9"/);
-  assert.match(source, /oil: "#b91c1c"/);
-  assert.match(source, /recovery: "#486581"/);
-  assert.match(source, /contribution: "#7f1d1d"/);
-  assert.match(source, /dashboard\.total\.producingReserve, unit: "万吨", icon: Database, accent: CHART_COLORS\.producing/);
-  assert.match(source, /dashboard\.total\.recoverableReserve, unit: "万吨", icon: TrendingUp, accent: CHART_COLORS\.recoverable/);
-  assert.match(source, /dashboard\.total\.recoveryRate, unit: "%", icon: Gauge, accent: CHART_COLORS\.recovery/);
-  assert.match(source, /dashboard\.total\.lastYearOil, unit: "万吨\/年", icon: Activity, accent: CHART_COLORS\.oil/);
-  assert.match(source, /backgroundColor: CHART_COLORS\.contribution/);
+  assert.doesNotMatch(source, /const CHART_COLORS =/);
+  assert.match(source, /colors = DEFAULT_HOME_RESERVE_CHART_COLORS/);
+  assert.match(source, /accent: colors\.producing/);
+  assert.match(source, /accent: colors\.recoverable/);
+  assert.match(source, /accent: colors\.recovery/);
+  assert.match(source, /accent: colors\.oil/);
+  assert.match(source, /backgroundColor: colors\.contribution/);
+  assert.match(source, /fill=\{colors\.producing\}/);
+  assert.match(source, /fill=\{colors\.recoverable\}/);
+  assert.match(source, /stroke=\{colors\.oil\}/);
   assert.match(source, /rounded-full bg-slate-100 px-2\.5 py-1/);
   assert.doesNotMatch(source, /bg-teal-700/);
   assert.match(source, /dashboard\.ranking\.map/);
@@ -157,6 +158,20 @@ test("home reserve analysis dashboard includes accessible, consistently colored 
   assert.match(blockAxis, /height=\{44\}/);
   assert.match(blockAxis, /tickMargin=\{12\}/);
   assert.doesNotMatch(blockAxis, /angle=\{-24\}/);
+});
+
+test("home reserve analysis dashboard renders every supplied custom color", () => {
+  const rows = buildHomeReserveOverviewRows(buildHomeReserveOverviewSeedRows());
+  const colors: HomeReserveChartColors = {
+    oil: "#ff1111",
+    producing: "#00aa00",
+    recoverable: "#ffff00",
+    recovery: "#123456",
+    contribution: "#654321",
+  };
+  const markup = renderToStaticMarkup(createElement(HomeReserveAnalysisDashboard, { rows, colors }));
+
+  for (const color of Object.values(colors)) assert.match(markup, new RegExp(color, "i"));
 });
 
 test("home reserve analysis dashboard distinguishes loading from an empty result", () => {
