@@ -51,28 +51,26 @@ test("system settings edits, restores, and atomically saves reserve chart colors
   assert.ok(settingsPage?.body);
   const settingsSource = settingsPage.getText(appAst);
 
+  const colorItemsStart = appSource.indexOf("const HOME_RESERVE_CHART_COLOR_ITEMS =");
+  const colorItemsEnd = appSource.indexOf("] as const;", colorItemsStart);
+  assert.ok(colorItemsStart >= 0 && colorItemsEnd > colorItemsStart);
+  const colorItemsSource = appSource.slice(colorItemsStart, colorItemsEnd);
+  assert.equal((colorItemsSource.match(/\{ key:/g) || []).length, 5);
   for (const item of [
     '{ key: "oil", label: "上年度产油" }',
     '{ key: "producing", label: "动用储量" }',
     '{ key: "recoverable", label: "可采储量" }',
     '{ key: "recovery", label: "标定采收率" }',
     '{ key: "contribution", label: "总体贡献" }',
-  ]) assert.ok(appSource.includes(item), `missing color item ${item}`);
+  ]) assert.ok(colorItemsSource.includes(item), `missing color item ${item}`);
 
-  assert.match(settingsSource, /type="color"/);
-  assert.match(settingsSource, /reserveChartColors, setReserveChartColors/);
+  assert.match(settingsSource, /const \[reserveChartColors, setReserveChartColors\] = useState<HomeReserveChartColors>\(\(\) => \(\{\s*\.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS,?\s*\}\)\)/);
   assert.match(settingsSource, /parseHomeReserveChartColors\(\s*\(configResponse\.data \|\| \{\}\)\[HOME_RESERVE_CHART_COLORS_CONFIG_KEY\],?\s*\)/);
-  assert.match(settingsSource, /setReserveChartColors\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\)/);
-  assert.match(settingsSource, /serializeHomeReserveChartColors\(reserveChartColors\)/);
-  assert.match(settingsSource, /key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY/);
   assert.match(appSource, /chartColorsTitle: "首页储量看板颜色"/);
+  assert.match(appSource, /chartColorsSaved: "首页储量看板颜色已保存"/);
+  assert.match(appSource, /chartColorsSaveFailed: "首页储量看板颜色保存失败"/);
   assert.match(appSource, /restoreChartColors: "恢复默认色"/);
   assert.match(appSource, /saveChartColors: "保存颜色"/);
-  assert.match(settingsSource, /SETTINGS_TEXT\.chartColorsTitle/);
-  assert.match(settingsSource, /SETTINGS_TEXT\.restoreChartColors/);
-  assert.match(settingsSource, /SETTINGS_TEXT\.saveChartColors/);
-  assert.match(settingsSource, /aria-labelledby="reserve-chart-colors-title"/);
-  assert.match(settingsSource, /sm:grid-cols-2 lg:grid-cols-5/);
 
   const systemConfigStart = appSource.indexOf("const SYSTEM_CONFIG_ITEMS =");
   const systemConfigEnd = appSource.indexOf("] as const;", systemConfigStart);
@@ -85,13 +83,25 @@ test("system settings edits, restores, and atomically saves reserve chart colors
   assert.ok(restoreStart >= 0 && saveStart > restoreStart && uploadStart > saveStart);
   const restoreHandler = settingsSource.slice(restoreStart, saveStart);
   const saveHandler = settingsSource.slice(saveStart, uploadStart);
-  assert.doesNotMatch(restoreHandler, /axios\./);
+  assert.match(restoreHandler, /setReserveChartColors\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\)/);
+  assert.doesNotMatch(restoreHandler, /axios\.|\.post\(|saveReserveChartColors/);
   assert.match(saveHandler, /await axios\.post\("\/api\/config", \{[\s\S]*?key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY,[\s\S]*?value: serializeHomeReserveChartColors\(reserveChartColors\),[\s\S]*?\}\)/);
   assert.equal((saveHandler.match(/axios\.post\("\/api\/config"/g) || []).length, 1);
-  assert.doesNotMatch(saveHandler, /reserve-chart-colors|dispatchEvent/);
-  const catchStart = saveHandler.indexOf("catch");
-  assert.ok(catchStart >= 0);
-  assert.doesNotMatch(saveHandler.slice(catchStart), /setReserveChartColors/);
+  assert.match(saveHandler, /setMessage\(SETTINGS_TEXT\.chartColorsSaved\)/);
+  assert.match(saveHandler, /setError\(SETTINGS_TEXT\.chartColorsSaveFailed\)/);
+  assert.doesNotMatch(saveHandler, /setReserveChartColors|loadSettings|dispatchEvent/);
+
+  const colorSectionStart = settingsSource.indexOf('<section aria-labelledby="reserve-chart-colors-title"');
+  const reserveMaintenanceStart = settingsSource.indexOf("SETTINGS_TEXT.reserveTitle", colorSectionStart);
+  assert.ok(colorSectionStart >= 0 && reserveMaintenanceStart > colorSectionStart);
+  const colorSectionSource = settingsSource.slice(colorSectionStart, reserveMaintenanceStart);
+  assert.match(colorSectionSource, /SETTINGS_TEXT\.chartColorsTitle/);
+  assert.match(colorSectionSource, /sm:grid-cols-2 lg:grid-cols-5/);
+  assert.match(colorSectionSource, /type="color"/);
+  assert.match(colorSectionSource, /value=\{reserveChartColors\[item\.key\]\}/);
+  assert.match(colorSectionSource, /onChange=\{\(event\) => setReserveChartColors\(\(current\) => \(\{ \.\.\.current, \[item\.key\]: event\.target\.value \}\)\)\}/);
+  assert.equal((colorSectionSource.match(/<input/g) || []).length, 1);
+  assert.doesNotMatch(colorSectionSource, /type="text"/);
 });
 
 test("application shell retains content mounting while exposing reference layout regions", () => {
