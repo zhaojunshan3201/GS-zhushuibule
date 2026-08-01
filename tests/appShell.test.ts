@@ -66,6 +66,7 @@ test("system settings edits, restores, and atomically saves reserve chart colors
 
   assert.match(settingsSource, /const \[reserveChartColors, setReserveChartColors\] = useState<HomeReserveChartColors>\(\(\) => \(\{\s*\.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS,?\s*\}\)\)/);
   assert.match(settingsSource, /parseHomeReserveChartColors\(\s*\(configResponse\.data \|\| \{\}\)\[HOME_RESERVE_CHART_COLORS_CONFIG_KEY\],?\s*\)/);
+  assert.match(settingsSource, /const reserveChartColorsLoadedRef = useRef\(false\)/);
   assert.match(appSource, /chartColorsTitle: "首页储量看板颜色"/);
   assert.match(appSource, /chartColorsSaved: "首页储量看板颜色已保存"/);
   assert.match(appSource, /chartColorsSaveFailed: "首页储量看板颜色保存失败"/);
@@ -76,6 +77,18 @@ test("system settings edits, restores, and atomically saves reserve chart colors
   const systemConfigEnd = appSource.indexOf("] as const;", systemConfigStart);
   assert.ok(systemConfigStart >= 0 && systemConfigEnd > systemConfigStart);
   assert.doesNotMatch(appSource.slice(systemConfigStart, systemConfigEnd), /HOME_RESERVE_CHART_COLORS_CONFIG_KEY/);
+
+  const loadSettingsStart = settingsSource.indexOf("const loadSettings = useCallback(async () =>");
+  const loadSettingsEnd = settingsSource.indexOf("useEffect(() => { void loadSettings(); }", loadSettingsStart);
+  assert.ok(loadSettingsStart >= 0 && loadSettingsEnd > loadSettingsStart);
+  const loadSettingsSource = settingsSource.slice(loadSettingsStart, loadSettingsEnd);
+  const hydrationGuardStart = loadSettingsSource.indexOf("if (!reserveChartColorsLoadedRef.current) {");
+  const hydrationGuardEnd = loadSettingsSource.indexOf("setResponsibilities", hydrationGuardStart);
+  assert.ok(hydrationGuardStart >= 0 && hydrationGuardEnd > hydrationGuardStart);
+  const hydrationGuardSource = loadSettingsSource.slice(hydrationGuardStart, hydrationGuardEnd);
+  assert.match(hydrationGuardSource, /setReserveChartColors\(parseHomeReserveChartColors\(/);
+  assert.match(hydrationGuardSource, /reserveChartColorsLoadedRef\.current = true/);
+  assert.equal((loadSettingsSource.match(/setReserveChartColors\(parseHomeReserveChartColors/g) || []).length, 1);
 
   const restoreStart = settingsSource.indexOf("const restoreReserveChartColors = () =>");
   const saveStart = settingsSource.indexOf("const saveReserveChartColors = async () =>");
@@ -89,6 +102,12 @@ test("system settings edits, restores, and atomically saves reserve chart colors
   assert.equal((saveHandler.match(/axios\.post\("\/api\/config"/g) || []).length, 1);
   assert.match(saveHandler, /setMessage\(SETTINGS_TEXT\.chartColorsSaved\)/);
   assert.doesNotMatch(saveHandler, /setReserveChartColors|loadSettings|dispatchEvent/);
+  const tryStart = saveHandler.indexOf("try {");
+  const postStart = saveHandler.indexOf('await axios.post("/api/config"');
+  assert.ok(tryStart >= 0 && postStart > tryStart);
+  const savePreamble = saveHandler.slice(0, tryStart);
+  assert.match(savePreamble, /setError\(""\)/);
+  assert.match(savePreamble, /setMessage\(""\)/);
   const catchStart = saveHandler.indexOf("catch");
   assert.ok(catchStart >= 0);
   const catchSource = saveHandler.slice(catchStart);

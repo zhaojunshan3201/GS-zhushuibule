@@ -1012,6 +1012,7 @@ function SystemSettingsPage() {
   const [responsibilityText, setResponsibilityText] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const reserveChartColorsLoadedRef = useRef(false);
   const sidebarLogoInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarLogoUploadRequestRef = useRef(0);
   const sidebarLogoConfigQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1025,9 +1026,12 @@ function SystemSettingsPage() {
         axios.get<HomeReserveOverviewAdminRecord[]>("/api/home-reserve-overview-records"),
       ]);
       setConfig(configResponse.data || {});
-      setReserveChartColors(parseHomeReserveChartColors(
-        (configResponse.data || {})[HOME_RESERVE_CHART_COLORS_CONFIG_KEY],
-      ));
+      if (!reserveChartColorsLoadedRef.current) {
+        setReserveChartColors(parseHomeReserveChartColors(
+          (configResponse.data || {})[HOME_RESERVE_CHART_COLORS_CONFIG_KEY],
+        ));
+        reserveChartColorsLoadedRef.current = true;
+      }
       setResponsibilities(responsibilityResponse.data || {});
       setReserveRecords(Array.isArray(reserveResponse.data) ? reserveResponse.data : []);
       const nextUnit = selectedUnit || UNIT_OPTIONS[0] || "";
@@ -1061,6 +1065,7 @@ function SystemSettingsPage() {
 
   const saveReserveChartColors = async () => {
     setError("");
+    setMessage("");
     try {
       await axios.post("/api/config", {
         key: HOME_RESERVE_CHART_COLORS_CONFIG_KEY,
