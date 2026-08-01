@@ -35,7 +35,14 @@ test("home page loads reserve chart colors independently from reserve data", () 
   assert.match(homePageSource, /setChartColors\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\)/);
   assert.match(homePageSource, /<HomeReserveAnalysisDashboard rows=\{rows\} loading=\{loading\} colors=\{chartColors\}/);
 
-  const configRequest = homePageSource.match(/void axios\.get<Record<string, string>>\("\/api\/config"\)[\s\S]*?\.catch\(\(\) => \{[\s\S]*?\}\);/)?.[0] ?? "";
+  const configStart = homePageSource.indexOf('void axios.get<Record<string, string>>("/api/config")');
+  const reserveRequestStart = homePageSource.indexOf('axios.get<{ rows: HomeReserveOverviewRow[] }>("/api/home-reserve-overview")', configStart);
+  assert.ok(configStart >= 0);
+  assert.ok(reserveRequestStart > configStart);
+  const configRequest = homePageSource.slice(configStart, reserveRequestStart);
+  assert.notEqual(configRequest, "");
+  assert.match(configRequest, /\.then\(\(\{ data \}\) => \{\s*if \(active\) setChartColors\(parseHomeReserveChartColors\(data\[HOME_RESERVE_CHART_COLORS_CONFIG_KEY\]\)\);/);
+  assert.match(configRequest, /\.catch\(\(\) => \{\s*if \(active\) setChartColors\(\{ \.\.\.DEFAULT_HOME_RESERVE_CHART_COLORS \}\);/);
   assert.doesNotMatch(configRequest, /setError/);
 });
 
